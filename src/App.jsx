@@ -10074,7 +10074,8 @@ export default function App(){
       <div style={{padding:"14px 16px 12px",borderBottom:`1px solid ${B.borderLight}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
         <div style={{flex:1}}>
           <PCMLogo compact/>
-          <div style={{fontSize:8,color:B.textMute,letterSpacing:"0.18em",marginTop:8}}>{BRAND.tagline}</div>
+          {/* SIDEBAR_TAGLINE_REMOVED — the lockup artwork already contains
+              the tagline, so a text line here printed it twice. */}
         </div>
         {isMobile&&<button onClick={()=>setSidebarOpen(false)} style={{background:"none",border:"none",color:B.textMute,fontSize:22,cursor:"pointer",padding:4,marginTop:-2}}>✕</button>}
       </div>
