@@ -9894,12 +9894,12 @@ const NAV_SECTIONS=[
     {id:"cm-notes", label:"Notes",    icon:"◧"},
     {id:"cm-tasks", label:"Tasks",    icon:"◻"},
   ]},
-  {section:"PROSPECTING",items:[
-    {id:"p-contacts",label:"Contacts", icon:"◉"},
-    {id:"p-pipeline",label:"Pipeline", icon:"◆"},
-    {id:"p-notes",   label:"Notes",    icon:"◧"},
-    {id:"p-tasks",   label:"Tasks",    icon:"◻"},
-  ]},
+  // PROSPECTING_REMOVED
+  // The Prospecting section (Contacts / Pipeline / Notes / Tasks) is gone for
+  // every role, admins included. It was previously admin-only, which meant the
+  // product looked like it had a prospecting CRM or not depending on who was
+  // signed in. Ordanis is a family office administrative platform; lead
+  // management belongs in whatever CRM the firm already runs.
   {section:"RESOURCES",items:[
     {id:"resources",label:"Resources",icon:"▥"},
   ]},
