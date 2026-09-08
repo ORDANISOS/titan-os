@@ -6136,17 +6136,9 @@ function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
     </div>
     <ReviewQueue families={families} toast={toast} userProfile={userProfile}/>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(280px,100%),1fr))",gap:18,marginBottom:18}}>
-      {isAdmin&&<div style={{background:B.bgCard,borderRadius:12,padding:24,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow}}>
-        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600,marginBottom:4}}>Pipeline by Stage</div>
-        <GoldLine/>
-        {stageCounts.map(({stage,count,value})=><div key={stage} style={{marginBottom:11}}>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-            <div style={{display:"flex",alignItems:"center",gap:7}}><span style={{width:7,height:7,borderRadius:"50%",background:STAGE_COLORS[stage].dot}}/><span style={{fontSize:12,color:B.textMid,fontWeight:600}}>{stage}</span></div>
-            <div style={{display:"flex",gap:10}}><span style={{fontSize:11,color:B.textMute}}>{count}</span>{value>0&&<span style={{fontSize:11,color:B.textSoft,fontWeight:700}}>{fmtMoney(value)}</span>}</div>
-          </div>
-          <div style={{height:5,background:B.borderLight,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${(count/maxC)*100}%`,background:`linear-gradient(90deg,${STAGE_COLORS[stage].dot}88,${STAGE_COLORS[stage].dot})`,borderRadius:3}}/></div>
-        </div>)}
-      </div>}
+      {/* PIPELINE_CARD_REMOVED — the deal pipeline card was admin-only, so the
+          dashboard showed a prospecting CRM to admins and not to anyone else.
+          Ordanis does not sell pipeline management. */}
       {bills.length>0&&<div style={{background:B.bgCard,borderRadius:12,padding:24,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,marginBottom:18}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:4,gap:12,flexWrap:"wrap"}}>
           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Bills Due</div>
@@ -8049,7 +8041,6 @@ function FillClientDocModal({docId,family,contact,userProfile,bankAccount,onClos
 const PROMPT_TEMPLATES=[
   {key:"overdue_tasks",label:"Overdue & Upcoming Tasks",desc:"Every open task overdue or due in the next 14 days."},
   {key:"upcoming_deadlines",label:"Upcoming Deadlines",desc:"Loan maturities & insurance expirations in the next 60 days."},
-  {key:"pipeline_summary",label:"Pipeline Summary",desc:"Open deal pipeline by stage and total value."},
   {key:"portfolio_snapshot",label:"Portfolio Snapshot",desc:"Family count, real estate value, and portfolio value."},
 ];
 const PROMPT_TEMPLATE_MAP=Object.fromEntries(PROMPT_TEMPLATES.map(t=>[t.key,t]));
