@@ -159,6 +159,18 @@ function UpdateBanner(){
 // Deployments without the flag (i.e. PCM production) never query for it and
 // behave exactly as before.
 const RUNTIME_BRAND = String(import.meta.env.VITE_BRAND_RUNTIME||"")==="1";
+
+// Whether the Branding SWITCHER is offered, which is a separate question from
+// whether branding is read at runtime.
+//
+// Every client instance needs RUNTIME_BRAND: without it the app falls back to the
+// bundled defaults and serves the vendor's own logo to the client's families. But
+// none of them should get the admin screen — branding is applied by us at
+// provisioning, and a firm that can change its own skin can set an unreadable
+// palette or another firm's identity on its own production instance.
+//
+// Set VITE_BRAND_ADMIN=1 on the demo only.
+const BRAND_ADMIN = String(import.meta.env.VITE_BRAND_ADMIN||"")==="1";
 // BRAND and B are plain objects referenced by identity throughout the app, so
 // applying a profile is an in-place merge — no re-plumbing of the hundreds of
 // existing B.navy / BRAND.name references, and one re-render picks it all up.
@@ -9895,7 +9907,7 @@ const NAV_SECTIONS=[
     {id:"users",label:"Users",icon:"⊕"},
     // Only surfaced on instances running database-driven branding (the demo /
     // pitch instance); a normal tenant deploy has no use for it.
-    ...(RUNTIME_BRAND?[{id:"branding",label:"Branding",icon:"◐"}]:[]),
+    ...(BRAND_ADMIN?[{id:"branding",label:"Branding",icon:"◐"}]:[]),
   ]},
 ];
 const ALL_NAV=NAV_SECTIONS.flatMap(s=>s.items);
@@ -10134,7 +10146,7 @@ export default function App(){
               next user would otherwise land on whatever the previous one had
               open. */}
           {tab==="users"       &&isAdminRole&&<UserManagementView key={navNonce} userProfile={userProfile} data={data} toast={showToast}/>}
-          {tab==="branding"    &&isAdminRole&&RUNTIME_BRAND&&<BrandingView key={navNonce} toast={showToast}/>}
+          {tab==="branding"    &&isAdminRole&&BRAND_ADMIN&&<BrandingView key={navNonce} toast={showToast}/>}
           {tab==="resources"   &&<ResourcesView key={navNonce} data={data} userProfile={userProfile} toast={showToast}/>}
           {tab==="p-contacts"  &&<ProspectContactsView key={navNonce} data={data} reload={reload} toast={showToast} userProfile={userProfile}/>}
           {tab==="p-pipeline"  &&<ProspectPipelineView key={navNonce} data={data} reload={reload} toast={showToast} userProfile={userProfile}/>}
