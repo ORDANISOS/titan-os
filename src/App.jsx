@@ -9213,6 +9213,10 @@ function WorkflowTemplatesSection({userProfile,toast}){
   const[openKey,setOpenKey]=useState(null);
   const[editing,setEditing]=useState(null);  // {template, steps:[…]}
   const[saving,setSaving]=useState(false);
+  // WORKFLOW_FILTERS — the library outgrew a flat grid at ~20 templates.
+  const[q,setQ]=useState("");
+  const[cat,setCat]=useState("");
+  const[trig,setTrig]=useState("");
 
   const load=async()=>{
     setLoading(true);
@@ -9241,6 +9245,22 @@ function WorkflowTemplatesSection({userProfile,toast}){
     {key:`step_${Date.now().toString(36)}`,title:"",offset_days:-30,actor:"expert",kind:"draft_email",recipient:"",note:""}]}));
   const removeStep=i=>setEditing(e=>({...e,steps:e.steps.filter((_,j)=>j!==i)}));
 
+  // Categories with counts, so a pill can say how much is behind it.
+  const cats=[...rows.reduce((m,t)=>m.set(t.category,(m.get(t.category)||0)+1),new Map())]
+    .sort((a,b)=>b[1]-a[1]||String(a[0]).localeCompare(String(b[0])));
+
+  // Match name, description AND tags. The word someone types is rarely the word in
+  // the title — "payroll" should find household staff compliance, "lapse" should
+  // find every workflow where something can quietly expire.
+  const needle=q.trim().toLowerCase();
+  const shown=rows.filter(t=>{
+    if(cat&&t.category!==cat)return false;
+    if(trig&&t.trigger_kind!==trig)return false;
+    if(!needle)return true;
+    const tags=Array.isArray(t.tags)?t.tags.join(" "):"";
+    return `${t.name} ${t.description||""} ${t.category} ${tags}`.toLowerCase().includes(needle);
+  });
+
   if(loading)return null;
 
   return <div style={{marginTop:34}}>
@@ -9256,8 +9276,40 @@ function WorkflowTemplatesSection({userProfile,toast}){
     </div>
     <GoldLine/>
 
+    <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginTop:14}}>
+      <input value={q} onChange={e=>setQ(e.target.value)}
+        placeholder="Search playbooks — try payroll, lapse, trust, death"
+        style={{flex:"1 1 260px",minWidth:0,padding:"8px 12px",fontSize:13,
+          border:`1px solid ${B.border}`,borderRadius:8,background:B.white,color:B.navy}}/>
+      <select value={trig} onChange={e=>setTrig(e.target.value)}
+        style={{padding:"8px 10px",fontSize:12.5,border:`1px solid ${B.border}`,
+          borderRadius:8,background:B.white,color:B.navy}}>
+        <option value="">Any trigger</option>
+        <option value="obligation_date">Runs from a date on file</option>
+        <option value="manual">You start it</option>
+      </select>
+      {(q||cat||trig)&&<Btn small variant="ghost" onClick={()=>{setQ("");setCat("");setTrig("");}}>Clear</Btn>}
+    </div>
+
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:9}}>
+      {[["",`All ${rows.length}`],...cats.map(([c,n])=>[c,`${c} ${n}`])].map(([val,lbl])=>
+        <button key={val||"all"} onClick={()=>setCat(val)}
+          style={{fontSize:11,padding:"4px 11px",borderRadius:20,cursor:"pointer",
+            border:`1px solid ${cat===val?B.navy:B.borderLight}`,
+            background:cat===val?B.navy:B.white,
+            color:cat===val?B.white:B.navyMid}}>{lbl}</button>)}
+    </div>
+
+    {/* An empty result should read as an empty result, not a broken screen. */}
+    <div style={{fontSize:11.5,color:B.textMute,marginTop:9}}>
+      {shown.length===rows.length
+        ? `${rows.length} playbooks`
+        : `${shown.length} of ${rows.length} playbooks`}
+      {shown.length===0&&" — nothing matches. Try a broader word, or clear the filters."}
+    </div>
+
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(320px,100%),1fr))",gap:14,marginTop:14}}>
-      {rows.map(t=>{
+      {shown.map(t=>{
         const steps=Array.isArray(t.steps)?t.steps:[];
         const earliest=steps.reduce((m,s)=>Math.min(m,Number(s.offset_days)||0),0);
         const conditional=steps.filter(s=>s.requires).length;
