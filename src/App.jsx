@@ -6,7 +6,7 @@ import { PDFDocument } from "pdf-lib";
 import { buildActivityReportPdf, AR_PERIODS, fig as arFig } from "./activityReport.js";
 import { derivePropertyEvents, findProbableDuplicates } from "./propertyCashFlow.js";
 import { validateFolderName, buildFolderRows, folderSummary, canDeleteFolder } from "./vaultFolders.js";
-import { PLANS, PLAN_BLURB, planAllows, planLabel } from "./plans.js";
+import { PLANS, PLAN_BLURB, planAllows, planLabel, planIsSelfServe } from "./plans.js";
 // PCM Platform v5.0 — build 20260429
 //
 // Nothing PCM-specific is imported here any more, and that is deliberate.
@@ -5987,11 +5987,13 @@ function ReviewQueue({families,toast,userProfile}){
     // RLS already limits this to the caller's own families, so no client-side
     // filtering is needed — and none should be relied on.
     //
-    // No plan filter either, and that is not an oversight. Core households cannot hold workflow
-    // instances (the trigger refuses the insert) and a household holding instances cannot be moved
-    // to Core (the downgrade trigger refuses that too), so no step reaching this query can belong
-    // to a Core family. Filtering here would need an extra instance -> family lookup that could
-    // never remove a row. See the note at the foot of src/plans.js.
+    // No plan filter either, and that is not an oversight. A household on a plan without workflow
+    // support can still have workflow_instance rows on file (a downgrade pauses them rather than
+    // being refused), but pausing an instance also pauses its still-open steps to 'paused' -- a
+    // status this query's .in(...) list does not include -- so no step reaching this query can
+    // belong to such a household. Filtering here would need an extra instance -> family lookup
+    // that could never remove a row. See the note at the foot of src/plans.js, and the
+    // sync_plan_capabilities_on_change DB trigger.
     const{data}=await sb.from("workflow_instance_steps")
       .select("*")
       // 'approved' belongs here: approving no longer means sent, so an approved
@@ -6719,6 +6721,333 @@ function UserManagementView({userProfile,data={},toast}){
   </div>;
 }
 
+// ── SIGNUPS & REVENUE (admin) ────────────────────────────────────────────────
+// Tracks households created by the public self-serve sign-up flow (SignupFlow.jsx ->
+// public-signup -> stripe-webhook's createFamilyFromSignup), separately from households an
+// advisor/admin created for an existing relationship. Distinguished by families.acquisition_channel
+// (not remapped by toClient, so it reads here as the raw column name), which the webhook sets to
+// "self_serve" -- everything else defaults to "advisor". plan_features and user_profiles are not
+// in the app's global TABLES fetch (data.*), so this view does its own small reads on mount, the
+// same pattern UserManagementView already uses.
+const SIGNUP_PLAN_ORDER=["basic","core","premier"];
+const SIGNUP_PLAN_COLOR={basic:B.textSoft,core:B.gold,premier:B.navy};
+// Blended activity score bucketing -- three bands, always shown with the number and the word
+// (never the dot alone), per the house rule that identity/state is never color-only.
+const UTIL_SCHEME={
+  High:  {bg:"#e0f5e9",text:"#0d5c2b",dot:"#18a850"},
+  Medium:{bg:"#fef3e2",text:"#8a5c00",dot:"#d4900a"},
+  Low:   {bg:"#fde8e8",text:"#8b1a1a",dot:"#d43030"},
+};
+function SignupsRevenueView({data,toast}){
+  const isMobile=useIsMobile();
+  const families=data.families||[];
+  const[planFeatures,setPlanFeatures]=useState([]);
+  const[contacts,setContacts]=useState({}); // family_id -> {id, email, fullName}
+  const[workflowByFamily,setWorkflowByFamily]=useState({}); // family_id -> {total, completed}
+  const[lastSignInByUser,setLastSignInByUser]=useState({}); // auth user id -> ISO timestamp | null
+  const[loading,setLoading]=useState(true);
+  // Drill-down state, entirely local to this view: null (the dashboard), a plan's household
+  // list, or one household's detail. Nothing here is routed -- clicking through and back never
+  // leaves the Signups & Revenue tab, matching how the rest of the admin shell navigates.
+  const[drill,setDrill]=useState(null); // {type:"plan",plan} | {type:"user",familyId}
+
+  useEffect(()=>{
+    let stopped=false;
+    (async()=>{
+      const selfServeIds=(data.families||[]).filter(f=>f.acquisition_channel==="self_serve").map(f=>f.id);
+      const[{data:pf,error:pfErr},{data:up,error:upErr},{data:wf,error:wfErr},{data:act,error:actErr}]=await Promise.all([
+        sb.from("plan_features").select("plan,label,monthly_price,sort_order").order("sort_order"),
+        sb.from("user_profiles").select("id,family_id,email,full_name").eq("role","client"),
+        selfServeIds.length
+          ? sb.from("workflow_instances").select("family_id,status").in("family_id",selfServeIds)
+          : Promise.resolve({data:[],error:null}),
+        // Admin-gated RPC (see admin_user_activity_rpc migration) -- the browser client has no
+        // other way to read auth.users.last_sign_in_at for the utilization score below.
+        sb.rpc("admin_user_activity"),
+      ]);
+      if(stopped)return;
+      if(pfErr&&toast)toast(pfErr.message||"Could not load plan pricing","error");
+      if(upErr&&toast)toast(upErr.message||"Could not load signup contacts","error");
+      if(wfErr&&toast)toast(wfErr.message||"Could not load workflow activity","error");
+      if(actErr&&toast)toast(actErr.message||"Could not load sign-in activity","error");
+      setPlanFeatures(pf||[]);
+      const byFamily={};
+      (up||[]).forEach(u=>{ if(u.family_id) byFamily[u.family_id]={id:u.id,email:u.email,fullName:u.full_name}; });
+      setContacts(byFamily);
+      const wfByFamily={};
+      (wf||[]).forEach(w=>{
+        const b=wfByFamily[w.family_id]||(wfByFamily[w.family_id]={total:0,completed:0});
+        b.total++; if(w.status==="completed")b.completed++;
+      });
+      setWorkflowByFamily(wfByFamily);
+      const lastSignIn={};
+      (act||[]).forEach(r=>{ lastSignIn[r.user_id]=r.last_sign_in_at; });
+      setLastSignInByUser(lastSignIn);
+      setLoading(false);
+    })();
+    return()=>{stopped=true;};
+  },[]);
+
+  if(loading)return <Spinner/>;
+
+  const priceOf=plan=>Number(planFeatures.find(p=>p.plan===plan)?.monthly_price)||0;
+  const labelOf=plan=>planFeatures.find(p=>p.plan===plan)?.label||plan||"—";
+
+  // Blended activity score (0-100): login recency + breadth of modules with any data on file +
+  // workflow (or, on a plan with no workflows, task) completion. Each component is a fixed,
+  // documented weight rather than something tuned by eye, so the number means the same thing for
+  // every household it's shown for.
+  const scoreBand=s=>s>=70?"High":s>=40?"Medium":"Low";
+  const utilizationFor=f=>{
+    const contact=contacts[f.id];
+    const lastSignIn=contact?.id?(lastSignInByUser[contact.id]||null):null;
+    let loginPts=0;
+    if(lastSignIn){
+      const days=(Date.now()-new Date(lastSignIn).getTime())/86400000;
+      loginPts=days<=7?40:days<=30?28:days<=90?14:0;
+    }
+    const modules=[
+      (data.properties||[]).some(p=>p.familyId===f.id),
+      (data.portfolio_accounts||[]).some(a=>a.familyId===f.id),
+      (data.valuables||[]).some(v=>v.familyId===f.id),
+      (data.documents||[]).some(d=>d.familyId===f.id),
+      (data.tasks||[]).some(t=>t.familyId===f.id),
+    ];
+    const moduleCount=modules.filter(Boolean).length;
+    const modulePts=(moduleCount/modules.length)*30;
+    // Neutral half-credit when there's nothing yet to grade (a brand-new household with no
+    // workflows or tasks on file shouldn't score as "unengaged" for having nothing due yet).
+    let enginePts=15;
+    if(planAllows(f.plan,"workflows")){
+      const wf=workflowByFamily[f.id];
+      if(wf&&wf.total>0)enginePts=(wf.completed/wf.total)*30;
+    }else{
+      const famTasks=(data.tasks||[]).filter(t=>t.familyId===f.id);
+      if(famTasks.length>0)enginePts=(famTasks.filter(t=>t.done).length/famTasks.length)*30;
+    }
+    const score=Math.max(0,Math.min(100,Math.round(loginPts+modulePts+enginePts)));
+    return{score,band:scoreBand(score),lastSignIn,moduleCount,moduleTotal:modules.length};
+  };
+  const UtilBadge=({f})=>{
+    const u=utilizationFor(f);
+    return <Badge scheme={UTIL_SCHEME[u.band]}>{u.band} · {u.score}</Badge>;
+  };
+
+  const selfServe=families.filter(f=>f.acquisition_channel==="self_serve");
+  // Counted toward MRR: still paying (active), or Stripe is actively trying to collect (past_due).
+  // final_notice / archived / cancelled households are not generating revenue right now.
+  const BILLING_STATES=new Set(["active","past_due"]);
+  const mrrOf=list=>list.filter(f=>BILLING_STATES.has(f.subscription_state)).reduce((s,f)=>s+priceOf(f.plan),0);
+
+  const totalSelfServe=selfServe.length;
+  const selfServeMRR=mrrOf(selfServe);
+  const platformMRR=mrrOf(families);
+
+  const byPlan=SIGNUP_PLAN_ORDER.map(plan=>{
+    const inPlan=selfServe.filter(f=>f.plan===plan);
+    return{plan,label:labelOf(plan),count:inPlan.length,mrr:mrrOf(inPlan)};
+  });
+  const maxByPlan=Math.max(1,...byPlan.map(p=>p.count));
+
+  // Last 8 ISO (Mon-start) weeks of self-serve signups, oldest first, by createdAt (mapped from
+  // families.created_at -- see toClient).
+  const weekStart=d=>{const x=new Date(d);const day=(x.getUTCDay()+6)%7;x.setUTCDate(x.getUTCDate()-day);x.setUTCHours(0,0,0,0);return x;};
+  const thisWeekStart=weekStart(new Date());
+  const weeks=[...Array(8)].map((_,i)=>{
+    const start=new Date(thisWeekStart);
+    start.setUTCDate(start.getUTCDate()-7*(7-i));
+    const end=new Date(start);end.setUTCDate(end.getUTCDate()+7);
+    const count=selfServe.filter(f=>{const c=f.createdAt?new Date(f.createdAt):null;return c&&c>=start&&c<end;}).length;
+    return{start,count};
+  });
+  const maxWeek=Math.max(1,...weeks.map(w=>w.count));
+
+  const recent=[...selfServe].sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0)).slice(0,10);
+
+  const fmtWeek=d=>d.toLocaleDateString(undefined,{month:"short",day:"numeric"});
+  const fmtDate=d=>d?new Date(d).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}):"—";
+  const backBtnStyle={background:"none",border:`1px solid ${B.border}`,color:B.textSoft,cursor:"pointer",fontSize:12,fontFamily:"inherit",display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:6,marginBottom:16};
+
+  // ── Plan drill-down: households on one plan ─────────────────────────────
+  if(drill?.type==="plan"){
+    const plan=drill.plan;
+    const rows=selfServe.filter(f=>f.plan===plan).sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
+    return <div style={{overflowY:"auto",height:"100%",padding:isMobile?"18px 14px 32px":"26px 30px 48px"}}>
+      <button onClick={()=>setDrill(null)} style={backBtnStyle}>← Back to Signups & Revenue</button>
+      <div style={{marginBottom:isMobile?16:24}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{width:11,height:11,borderRadius:3,background:SIGNUP_PLAN_COLOR[plan],display:"inline-block"}}/>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?22:28,color:B.navy,fontWeight:600}}>{labelOf(plan)} Households</div>
+        </div>
+        <div style={{color:B.textSoft,fontSize:isMobile?12:14,marginTop:4}}>{rows.length} self-serve household{rows.length===1?"":"s"} on {labelOf(plan)}</div>
+        <div style={{height:2,width:56,background:B.gold,marginTop:10,borderRadius:2}}/>
+      </div>
+      {rows.length===0?<div style={{padding:22,color:B.textSoft,fontSize:13,background:B.bgCard,borderRadius:12,border:`1px solid ${B.borderLight}`}}>No self-serve households on this plan yet.</div>:
+      <div style={{background:B.bgCard,borderRadius:12,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,overflow:"hidden"}}>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+            <thead><tr style={{textAlign:"left",color:B.textMute,fontSize:10,letterSpacing:"0.06em",textTransform:"uppercase"}}>
+              <th style={{padding:"12px 22px"}}>Customer #</th><th style={{padding:"12px 12px"}}>Username</th><th style={{padding:"12px 12px"}}>Household</th><th style={{padding:"12px 12px"}}>Signed Up</th><th style={{padding:"12px 12px"}}>Status</th><th style={{padding:"12px 22px"}}>Utilization</th>
+            </tr></thead>
+            <tbody>
+              {rows.map(f=>{const c=contacts[f.id]||{};return <tr key={f.id} onClick={()=>setDrill({type:"user",familyId:f.id})} style={{borderTop:`1px solid ${B.borderLight}`,cursor:"pointer"}}>
+                <td style={{padding:"10px 22px",color:B.navy,fontWeight:700,fontFamily:"monospace"}}>{f.customer_number??"—"}</td>
+                <td style={{padding:"10px 12px",color:B.navy,fontWeight:600,textDecoration:"underline",textDecorationColor:B.borderLight}}>{c.fullName||c.email||"—"}</td>
+                <td style={{padding:"10px 12px",color:B.textSoft}}>{f.name}</td>
+                <td style={{padding:"10px 12px",color:B.textSoft}}>{fmtDate(f.createdAt)}</td>
+                <td style={{padding:"10px 12px",color:B.textSoft,textTransform:"capitalize"}}>{(f.subscription_state||"—").replace("_"," ")}</td>
+                <td style={{padding:"10px 22px"}}><UtilBadge f={f}/></td>
+              </tr>;})}
+            </tbody>
+          </table>
+        </div>
+      </div>}
+    </div>;
+  }
+
+  // ── User drill-down: one household's payment info + utilization ─────────
+  if(drill?.type==="user"){
+    const family=families.find(f=>f.id===drill.familyId);
+    if(!family)return <div style={{padding:isMobile?"18px 14px":"26px 30px"}}>
+      <button onClick={()=>setDrill(null)} style={backBtnStyle}>← Back to Signups & Revenue</button>
+      <div style={{marginTop:16,color:B.textSoft}}>That household could no longer be found.</div>
+    </div>;
+    const c=contacts[family.id]||{};
+    const u=utilizationFor(family);
+    const wfStats=workflowByFamily[family.id];
+    const familyTasks=(data.tasks||[]).filter(t=>t.familyId===family.id);
+    const usesWorkflows=planAllows(family.plan,"workflows");
+    const engineLabel=usesWorkflows?"Workflow Completion":"Task Completion";
+    const engineValue=usesWorkflows
+      ? (wfStats&&wfStats.total>0?`${wfStats.completed} of ${wfStats.total} complete`:"None on file yet")
+      : (familyTasks.length>0?`${familyTasks.filter(x=>x.done).length} of ${familyTasks.length} complete`:"None on file yet");
+    const enginePct=usesWorkflows
+      ? (wfStats&&wfStats.total>0?(wfStats.completed/wfStats.total)*100:50)
+      : (familyTasks.length>0?(familyTasks.filter(x=>x.done).length/familyTasks.length)*100:50);
+    const signInPct=u.lastSignIn?Math.max(6,100-Math.min(100,((Date.now()-new Date(u.lastSignIn).getTime())/86400000/90)*100)):0;
+    return <div style={{overflowY:"auto",height:"100%",padding:isMobile?"18px 14px 32px":"26px 30px 48px"}}>
+      <button onClick={()=>setDrill({type:"plan",plan:family.plan})} style={backBtnStyle}>← Back to {labelOf(family.plan)} Households</button>
+      <div style={{marginBottom:isMobile?16:24}}>
+        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?22:28,color:B.navy,fontWeight:600,marginBottom:4}}>{family.name}{family.customer_number!=null&&<span style={{fontFamily:"monospace",fontSize:isMobile?14:16,color:B.textSoft,marginLeft:10,fontWeight:600}}>#{family.customer_number}</span>}</div>
+        <div style={{color:B.textSoft,fontSize:isMobile?12:14}}>{c.fullName||c.email||"No client contact on file"}{c.fullName&&c.email?` · ${c.email}`:""}</div>
+        <div style={{height:2,width:56,background:B.gold,marginTop:10,borderRadius:2}}/>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:18,marginBottom:18,alignItems:"start"}}>
+        {/* Payment info */}
+        <div style={{background:B.bgCard,borderRadius:12,padding:"20px 22px",border:`1px solid ${B.borderLight}`,boxShadow:B.shadow}}>
+          <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:14}}>Payment Info</div>
+          {[
+            ["Customer #",family.customer_number??"—"],
+            ["Plan",labelOf(family.plan)],
+            ["Monthly Price",fmtMoney(priceOf(family.plan))],
+            ["Status",(family.subscription_state||"—").replace("_"," ")],
+            ["Signed Up",fmtDate(family.createdAt)],
+            ...(family.pending_plan?[["Scheduled Change",`→ ${labelOf(family.pending_plan)} on ${fmtDate(family.pending_plan_effective_at)}`]]:[]),
+            ["Stripe Customer",family.stripe_customer_id||"—"],
+          ].map(([l,v])=><div key={l} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${B.borderLight}`,fontSize:13,gap:12}}>
+            <span style={{color:B.textMute}}>{l}</span><span style={{color:B.text,fontWeight:600,textAlign:"right"}}>{v}</span>
+          </div>)}
+        </div>
+
+        {/* Utilization breakdown */}
+        <div style={{background:B.bgCard,borderRadius:12,padding:"20px 22px",border:`1px solid ${B.borderLight}`,boxShadow:B.shadow}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+            <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>Utilization of the Platform</div>
+            <UtilBadge f={family}/>
+          </div>
+          {[
+            {l:"Last Sign-In",v:u.lastSignIn?fmtDate(u.lastSignIn):"Never signed in",pct:signInPct},
+            {l:"Platform Modules Used",v:`${u.moduleCount} of ${u.moduleTotal}`,pct:(u.moduleCount/u.moduleTotal)*100},
+            {l:engineLabel,v:engineValue,pct:enginePct},
+          ].map(row=><div key={row.l} style={{marginBottom:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:B.text,marginBottom:4}}>
+              <span>{row.l}</span><span style={{color:B.textSoft}}>{row.v}</span>
+            </div>
+            <div style={{height:8,background:B.borderLight,borderRadius:4,overflow:"hidden"}}>
+              <div title={`${row.l}: ${row.v}`} style={{width:`${Math.max(4,Math.min(100,row.pct))}%`,height:"100%",background:B.gold,borderRadius:4}}/>
+            </div>
+          </div>)}
+        </div>
+      </div>
+    </div>;
+  }
+
+  return <div style={{overflowY:"auto",height:"100%",padding:isMobile?"18px 14px 32px":"26px 30px 48px"}}>
+    <div style={{marginBottom:isMobile?16:24}}>
+      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?22:28,color:B.navy,fontWeight:600,marginBottom:4}}>Signups & Revenue</div>
+      <div style={{color:B.textSoft,fontSize:isMobile?12:14}}>Households created through the public self-serve sign-up flow</div>
+      <div style={{height:2,width:56,background:B.gold,marginTop:10,borderRadius:2}}/>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(180px,100%),1fr))",gap:14,marginBottom:24}}>
+      <StatBox label="Self-Serve Signups" value={totalSelfServe} accent={B.navy}/>
+      <StatBox label="Self-Serve MRR" value={fmtMoney(selfServeMRR)} accent={B.gold}/>
+      <StatBox label="Platform MRR (all households)" value={fmtMoney(platformMRR)} accent={B.navyMid}/>
+      <StatBox label="Total Households" value={families.length} accent={B.textSoft}/>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1.1fr 1fr",gap:18,marginBottom:18,alignItems:"start"}}>
+      {/* Weekly signups -- a single series, so no legend is needed (the title names it). */}
+      <div style={{background:B.bgCard,borderRadius:12,padding:"20px 22px",border:`1px solid ${B.borderLight}`,boxShadow:B.shadow}}>
+        <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:14}}>Self-Serve Signups — Last 8 Weeks</div>
+        <div style={{display:"flex",alignItems:"flex-end",gap:10,height:140,borderBottom:`1px solid ${B.borderLight}`,paddingBottom:2}}>
+          {weeks.map((w,i)=>{
+            const h=w.count===0?0:Math.max(6,Math.round((w.count/maxWeek)*120));
+            return <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%"}}>
+              <div style={{fontSize:11,color:B.navy,fontWeight:700,marginBottom:4,visibility:w.count?"visible":"hidden"}}>{w.count}</div>
+              <div title={`Week of ${fmtWeek(w.start)}: ${w.count} signup${w.count===1?"":"s"}`} style={{width:"100%",maxWidth:28,height:h,background:B.gold,borderRadius:"4px 4px 0 0"}}/>
+            </div>;
+          })}
+        </div>
+        <div style={{display:"flex",gap:10,marginTop:6}}>
+          {weeks.map((w,i)=><div key={i} style={{flex:1,textAlign:"center",fontSize:9,color:B.textMute}}>{fmtWeek(w.start)}</div>)}
+        </div>
+      </div>
+
+      {/* Plan breakdown -- fixed 3-category order and color, never derived from data order.
+          Each row drills into that plan's household list (see the drill==="plan" branch above). */}
+      <div style={{background:B.bgCard,borderRadius:12,padding:"20px 22px",border:`1px solid ${B.borderLight}`,boxShadow:B.shadow}}>
+        <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:14}}>Self-Serve Signups by Plan</div>
+        {byPlan.map(p=><div key={p.plan} onClick={()=>setDrill({type:"plan",plan:p.plan})} role="button" tabIndex={0}
+          onKeyDown={e=>{if(e.key==="Enter"||e.key===" ")setDrill({type:"plan",plan:p.plan});}}
+          style={{marginBottom:14,cursor:"pointer",borderRadius:6,padding:"4px 6px",margin:"-4px -6px 10px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:B.text,marginBottom:4}}>
+            <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:9,height:9,borderRadius:2,background:SIGNUP_PLAN_COLOR[p.plan],display:"inline-block"}}/>{p.label}</span>
+            <span style={{color:B.textSoft,display:"flex",alignItems:"center",gap:4}}>{p.count} · {fmtMoney(p.mrr)}/mo
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={B.textMute} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+            </span>
+          </div>
+          <div style={{height:8,background:B.borderLight,borderRadius:4,overflow:"hidden"}}>
+            <div title={`${p.label}: ${p.count} signup${p.count===1?"":"s"}, ${fmtMoney(p.mrr)}/mo -- click for the household list`} style={{width:`${p.count?Math.max(4,(p.count/maxByPlan)*100):0}%`,height:"100%",background:SIGNUP_PLAN_COLOR[p.plan],borderRadius:4}}/>
+          </div>
+        </div>)}
+      </div>
+    </div>
+
+    <div style={{background:B.bgCard,borderRadius:12,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,overflow:"hidden"}}>
+      <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",padding:"16px 22px 0"}}>Recent Self-Serve Signups</div>
+      {recent.length===0?<div style={{padding:22,color:B.textSoft,fontSize:13}}>No self-serve signups yet.</div>:
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,marginTop:10}}>
+          <thead><tr style={{textAlign:"left",color:B.textMute,fontSize:10,letterSpacing:"0.06em",textTransform:"uppercase"}}>
+            <th style={{padding:"8px 22px"}}>Household</th><th style={{padding:"8px 12px"}}>Contact</th><th style={{padding:"8px 12px"}}>Plan</th><th style={{padding:"8px 12px"}}>Status</th><th style={{padding:"8px 22px"}}>Signed Up</th>
+          </tr></thead>
+          <tbody>
+            {recent.map(f=>{const c=contacts[f.id]||{};return <tr key={f.id} onClick={()=>setDrill({type:"user",familyId:f.id})} style={{borderTop:`1px solid ${B.borderLight}`,cursor:"pointer"}}>
+              <td style={{padding:"10px 22px",color:B.navy,fontWeight:600,textDecoration:"underline",textDecorationColor:B.borderLight}}>{f.name}</td>
+              <td style={{padding:"10px 12px",color:B.textSoft}}>{c.fullName||c.email||"—"}</td>
+              <td style={{padding:"10px 12px"}}><span style={{display:"inline-flex",alignItems:"center",gap:6}}><span style={{width:8,height:8,borderRadius:2,background:SIGNUP_PLAN_COLOR[f.plan]||B.textMute,display:"inline-block"}}/>{labelOf(f.plan)}</span></td>
+              <td style={{padding:"10px 12px",color:B.textSoft,textTransform:"capitalize"}}>{(f.subscription_state||"—").replace("_"," ")}</td>
+              <td style={{padding:"10px 22px",color:B.textSoft}}>{fmtDate(f.createdAt)}</td>
+            </tr>;})}
+          </tbody>
+        </table>
+      </div>}
+    </div>
+  </div>;
+}
+
 // ── DOCUMENTS VIEW ────────────────────────────────────────────────────────────
 const DOC_CATEGORIES = ["General","Tax","Legal","Insurance","Investment","Real Estate","Estate Planning","Other"];
 // A document may be pinned to one specific section of a property (or to the
@@ -7371,6 +7700,79 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   // email to the wrong person.
   const clientPlan=fam.plan;
   const clientHasExpert=planAllows(clientPlan,"assignedExpert");
+
+  // ── Billing (upgrade / downgrade) ──────────────────────────────────────
+  // Only Basic <-> Core is ever self-serve here (plan_features.self_serve / plans.js
+  // PLAN_SELF_SERVE) -- Premier is advisor-provisioned, so a move to or from Premier is always
+  // "contact your Ordanis Expert" copy, never a button that calls Stripe directly. Enforcement
+  // still lives server-side in change-subscription-plan; this just decides what to draw.
+  const[billingPlans,setBillingPlans]=useState([]); // plan_features: plan,label,monthly_price,sort_order
+  useEffect(()=>{
+    let stopped=false;
+    sb.from("plan_features").select("plan,label,monthly_price,sort_order").order("sort_order").then(({data:rows,error})=>{
+      if(!stopped&&!error&&rows)setBillingPlans(rows);
+    });
+    return()=>{stopped=true;};
+  },[]);
+  const billingLabelOf=p=>billingPlans.find(x=>x.plan===p)?.label||planLabel(p);
+  const billingPriceOf=p=>Number(billingPlans.find(x=>x.plan===p)?.monthly_price)||0;
+  const[billingBusy,setBillingBusy]=useState(false);
+  const[billingMsg,setBillingMsg]=useState(null); // {type:"success"|"error", text}
+  const[confirmDowngrade,setConfirmDowngrade]=useState(null); // {plan, count} of open workflows
+  // Households are warned before a downgrade (the confirm dialog below), but the move can land
+  // long after that click (a scheduled downgrade applies at the end of the billing period) --
+  // this is what makes sure they're still told, in the app itself, once it actually happens. The
+  // hard block that used to prevent this move outright is gone; pausing (never deleting) plus
+  // this banner is what replaced it. See the sync_plan_capabilities_on_change DB trigger.
+  const[pausedWorkflowCount,setPausedWorkflowCount]=useState(0);
+  useEffect(()=>{
+    let stopped=false;
+    sb.from("workflow_instances").select("id",{count:"exact",head:true}).eq("family_id",family.id).eq("status","paused").then(({count,error})=>{
+      if(!stopped&&!error)setPausedWorkflowCount(count||0);
+    });
+    return()=>{stopped=true;};
+  },[family.id,fam.plan]);
+  // The sync_plan_capabilities_on_change DB trigger actually clears pcm_responsible (not just a
+  // notice) the moment a downgrade removes bill pay, and stamps pcm_responsible_cleared_by_downgrade
+  // on exactly the rows it cleared so it -- and only it -- can restore them if bill pay comes back.
+  // So this counts THAT column, not pcmResponsible (which is already false by the time this
+  // renders). Reads straight from data already loaded for this dashboard rather than a fresh
+  // query, same as everywhere else in ClientDashboard that filters data.* by family.id.
+  const billPayLostCount=(data.cash_flow_events||[]).filter(e=>e.familyId===family.id&&e.pcm_responsible_cleared_by_downgrade).length;
+  const requestPlanChange=async newPlan=>{
+    setBillingBusy(true); setBillingMsg(null);
+    try{
+      const{data:resp,error}=await sb.functions.invoke("change-subscription-plan",{body:{family_id:family.id,new_plan:newPlan}});
+      if(error)throw new Error(error.message||"Could not change your plan.");
+      if(resp&&resp.error)throw new Error(resp.error);
+      setBillingMsg({type:"success",text:resp.message
+        ? resp.message
+        : resp.pending_plan
+          ? `Scheduled — you'll move to ${billingLabelOf(resp.pending_plan)} on ${fmt(resp.effective_at)}. Your current plan stays active, with no proration, until then.`
+          : `Done — you're now on ${billingLabelOf(resp.plan)}${resp.prorated_charge?" (a prorated charge for the difference was applied today)":""}.`});
+      if(reload)await reload("families");
+    }catch(e){ setBillingMsg({type:"error",text:e&&e.message?e.message:"Could not change your plan."}); }
+    finally{ setBillingBusy(false); }
+  };
+  const requestDowngrade=async newPlan=>{
+    setBillingBusy(true); setBillingMsg(null);
+    try{
+      // Warn, but let them proceed: this is a courtesy check on the client side so the person
+      // sees it before confirming -- change-subscription-plan itself never blocks on open work,
+      // and neither does the database any more (families_refuse_downgrade was removed). "paused"
+      // is excluded too, since those were already paused by an earlier plan change and aren't
+      // newly-at-risk work this particular click would affect.
+      const{count,error}=await sb.from("workflow_instances").select("id",{count:"exact",head:true}).eq("family_id",family.id).not("status","in","(completed,paused)");
+      if(error)throw new Error(error.message||"Could not check in-progress workflows.");
+      if(count>0){ setConfirmDowngrade({plan:newPlan,count}); setBillingBusy(false); return; }
+      await requestPlanChange(newPlan);
+    }catch(e){ setBillingMsg({type:"error",text:e&&e.message?e.message:"Could not change your plan."}); setBillingBusy(false); }
+  };
+  const cancelPendingChange=()=>requestPlanChange(clientPlan);
+  const planSelfServe=planIsSelfServe(clientPlan);
+  const upgradeTargets=planSelfServe?SIGNUP_PLAN_ORDER.filter(p=>p!==clientPlan&&planIsSelfServe(p)&&SIGNUP_PLAN_ORDER.indexOf(p)>SIGNUP_PLAN_ORDER.indexOf(clientPlan)):[];
+  const downgradeTargets=planSelfServe?SIGNUP_PLAN_ORDER.filter(p=>p!==clientPlan&&planIsSelfServe(p)&&SIGNUP_PLAN_ORDER.indexOf(p)<SIGNUP_PLAN_ORDER.indexOf(clientPlan)):[];
+
   // Supporting document behind a figure on a property card, and the family's
   // scheduled-personal-property endorsement linked from Valuables.
   const docForSection=(pid,section)=>(data.documents||[]).find(d=>d.propertyId===pid&&d.propertySection===section);
@@ -7414,6 +7816,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     {id:"valuables", label:"Valuables",  icon:"◆"},
     {id:"tasks",     label:"Tasks",      icon:"◻"},
     {id:"documents", label:"Vault",  icon:"📁"},
+    {id:"billing",   label:"Billing",   icon:"💳"},
     // Last in the row on purpose, and flagged so the renderer can mark it with a star: the
     // other tabs are ledgers, this one is the assistant.
     {id:"assistant", label:"Ask "+assistantName,   icon:"✦", assistant:true},
@@ -7686,6 +8089,91 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
       {activeTab==="documents"&&<div style={{height:"calc(100vh - 200px)"}}>
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:20}}>Vault</div>
         <DocumentsView familyId={family.id} canUpload={true} canDelete={false} canScan={false} toast={toast||(()=>{})} reload={reload}/>
+      </div>}
+
+      {/* BILLING */}
+      {activeTab==="billing"&&<div style={{maxWidth:640}}>
+        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:8}}>Billing & Plan</div>
+        <div style={{fontSize:14,color:B.textSoft,marginBottom:20}}>Manage your Ordanis subscription.</div>
+
+        {billingMsg&&<div style={{background:billingMsg.type==="error"?"#fde8e8":"#e0f5e9",border:`1px solid ${billingMsg.type==="error"?"#f5c6c6":"#bfe8cf"}`,color:billingMsg.type==="error"?"#8b1a1a":"#0d5c2b",borderRadius:10,padding:"12px 16px",marginBottom:16,fontSize:13,lineHeight:1.5}}>{billingMsg.text}</div>}
+
+        {/* Current plan */}
+        <div style={{background:B.white,border:`1px solid ${B.borderLight}`,borderTop:`4px solid ${B.gold}`,borderRadius:14,padding:"22px 24px",marginBottom:16,boxShadow:B.shadow}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
+            <div>
+              <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:6}}>Current Plan</div>
+              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,color:B.navy,fontWeight:600}}>{billingLabelOf(clientPlan)}</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:B.navy,fontWeight:600}}>{fmtMoney(billingPriceOf(clientPlan))}<span style={{fontSize:12,color:B.textSoft,fontWeight:400}}>/mo</span></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Pending scheduled change */}
+        {fam.pending_plan&&<div style={{background:"#fef3e2",border:"1px solid #fcd97d",borderRadius:10,padding:"14px 18px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+          <div style={{fontSize:13,color:"#8a5c00"}}>Scheduled: moving to <strong>{billingLabelOf(fam.pending_plan)}</strong> on <strong>{fmt(fam.pending_plan_effective_at)}</strong>. No charge until then.</div>
+          <Btn variant="ghost" small onClick={cancelPendingChange} disabled={billingBusy}>{billingBusy?"Working…":"Cancel scheduled change"}</Btn>
+        </div>}
+
+        {/* Paused workflows -- see the effort comment on pausedWorkflowCount above. */}
+        {pausedWorkflowCount>0&&<div style={{background:"#e8f0f8",border:"1px solid #c7dcef",borderRadius:10,padding:"14px 18px",marginBottom:16,fontSize:13,color:"#1d3a5c",lineHeight:1.55}}>
+          <strong>{pausedWorkflowCount} workflow{pausedWorkflowCount===1?"":"s"} paused</strong> — {planLabel(clientPlan)} doesn't include workflows, so {pausedWorkflowCount===1?"it was":"they were"} paused, not deleted, when your plan changed. {pausedWorkflowCount===1?"It":"They"} will resume automatically if you move back to a plan that includes them.
+        </div>}
+
+        {/* Bill pay loss -- the sync_plan_capabilities_on_change DB trigger actually unmarks these
+            expenses as ours to pay the moment a downgrade removes bill pay (not just a notice left
+            over an unchanged flag), and re-marks them if the household moves back to a plan that
+            includes it. See notifyOfBillPayTransition in the stripe-webhook function for the email
+            side of this. */}
+        {billPayLostCount>0&&<div style={{background:"#fde8e8",border:"1px solid #f5c6c6",borderRadius:10,padding:"14px 18px",marginBottom:16,fontSize:13,color:"#8b1a1a",lineHeight:1.55}}>
+          <strong>Action needed — {billPayLostCount} bill{billPayLostCount===1?"":"s"} no longer paid for you.</strong> {planLabel(clientPlan)} doesn't include bill pay, so {billPayLostCount===1?"this recurring expense has":"these recurring expenses have"} been unmarked as ours to pay — {billPayLostCount===1?"it will":"they will"} not be paid on your behalf going forward. Please arrange payment yourself so nothing is missed. This reverses automatically if you move back to a plan that includes bill pay.
+        </div>}
+
+        {/* Self-serve upgrade / downgrade -- Basic <-> Core only; Premier is always Expert-led. */}
+        {planSelfServe&&!fam.pending_plan&&<>
+          {upgradeTargets.length>0&&<div style={{marginBottom:16}}>
+            <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>Upgrade</div>
+            {upgradeTargets.map(p=><div key={p} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:12,padding:"16px 18px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+              <div>
+                <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{billingLabelOf(p)} — {fmtMoney(billingPriceOf(p))}/mo</div>
+                <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>{PLAN_BLURB[p]}</div>
+                <div style={{fontSize:11,color:B.textMute,marginTop:4}}>Takes effect immediately, prorated for the rest of this billing period.</div>
+              </div>
+              <Btn small onClick={()=>requestPlanChange(p)} disabled={billingBusy}>{billingBusy?"Working…":`Upgrade to ${billingLabelOf(p)}`}</Btn>
+            </div>)}
+          </div>}
+          {downgradeTargets.length>0&&<div style={{marginBottom:16}}>
+            <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>Downgrade</div>
+            {downgradeTargets.map(p=><div key={p} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:12,padding:"16px 18px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+              <div>
+                <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{billingLabelOf(p)} — {fmtMoney(billingPriceOf(p))}/mo</div>
+                <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>{PLAN_BLURB[p]}</div>
+                <div style={{fontSize:11,color:B.textMute,marginTop:4}}>Takes effect at the end of your current billing period. No refund for the difference.</div>
+              </div>
+              <Btn small variant="ghost" onClick={()=>requestDowngrade(p)} disabled={billingBusy}>{billingBusy?"Working…":`Move to ${billingLabelOf(p)}`}</Btn>
+            </div>)}
+          </div>}
+          <div style={{fontSize:12,color:B.textSoft,padding:"10px 0"}}>
+            Want a dedicated Ordanis Expert, priority workflows, and bill pay? <a href={`mailto:${BRAND.contactEmail}?subject=${encodeURIComponent("Interested in Premier — "+family.name)}`} style={{color:B.navy,fontWeight:600}}>Ask us about Premier</a>.
+          </div>
+        </>}
+
+        {/* Premier — advisor-led, no self-serve plan change */}
+        {!planSelfServe&&<div style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:12,padding:"18px 20px",fontSize:13,color:B.textSoft,lineHeight:1.6}}>
+          Premier is managed by your Ordanis Expert. {clientHasExpert&&<>To change your plan, <button onClick={()=>setEmailAdvisorOpen(true)} style={{background:"none",border:"none",color:B.navy,fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,fontSize:13,textDecoration:"underline"}}>email your Ordanis Expert</button>.</>}
+        </div>}
+
+        {confirmDowngrade&&<Modal title="Confirm downgrade" onClose={()=>setConfirmDowngrade(null)}>
+          <div style={{fontSize:14,color:B.text,lineHeight:1.6,marginBottom:18}}>
+            This household has <strong>{confirmDowngrade.count} workflow{confirmDowngrade.count===1?"":"s"}</strong> still in progress. You can still move to {billingLabelOf(confirmDowngrade.plan)} — the change takes effect at the end of your current billing period, so there's time to finish or hand those off first.
+          </div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <Btn variant="ghost" onClick={()=>setConfirmDowngrade(null)}>Cancel</Btn>
+            <Btn onClick={()=>{const p=confirmDowngrade.plan;setConfirmDowngrade(null);requestPlanChange(p);}} disabled={billingBusy}>{billingBusy?"Working…":"Continue with downgrade"}</Btn>
+          </div>
+        </Modal>}
       </div>}
 
       {/* ASK AI */}
@@ -8678,11 +9166,16 @@ const STEP_STATUS_TINT={
   approved:{bg:"#e0f0e6",text:"#1d5c34"}, sent:{bg:"#e0f5e9",text:"#0d5c2b"},
   done:{bg:"#e0f5e9",text:"#0d5c2b"}, skipped:{bg:"#f1f1ee",text:"#8a8a80"},
   blocked:{bg:"#fde8e8",text:"#8b1a1a"},
+  // Set by the sync_plan_capabilities_on_change DB trigger when a household's plan
+  // stops including workflows -- deliberately the same neutral gray as a paused instance
+  // (not blocked's red), since nothing is wrong, the plan just changed.
+  paused:{bg:"#eef0f4",text:"#6b7280"},
 };
 const statusWord=s=>({awaiting_approval:"Needs approval",ready:"Ready",pending:"Upcoming",
   // Approved is not finished. It is approved and still sitting there unsent, and the
   // label has to say so or a clear-looking queue will be hiding outstanding work.
-  approved:"Approved — not sent",sent:"Sent",done:"Done",skipped:"Not required",blocked:"Blocked"}[s]||s);
+  approved:"Approved — not sent",sent:"Sent",done:"Done",skipped:"Not required",blocked:"Blocked",
+  paused:"Paused — plan change"}[s]||s);
 
 // Builds one cycle from a playbook. Conditional steps whose flag isn't set are
 // written as 'skipped' rather than omitted, so the record shows they were
@@ -9074,9 +9567,9 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
                 <div style={{fontSize:12.5,color:B.text,fontWeight:600}}>
                   {inst.cycle_label}
                   <span style={{marginLeft:8,fontSize:10.5,fontWeight:600,borderRadius:20,padding:"2px 9px",
-                    background:inst.status==="at_risk"?"#fde8e8":inst.status==="completed"?"#e0f5e9":"#e8f0f8",
-                    color:inst.status==="at_risk"?"#8b1a1a":inst.status==="completed"?"#0d5c2b":"#293d5c"}}>
-                    {inst.status==="at_risk"?"At risk":inst.status==="completed"?"Complete":"In progress"}
+                    background:inst.status==="at_risk"?"#fde8e8":inst.status==="completed"?"#e0f5e9":inst.status==="paused"?B.borderLight:"#e8f0f8",
+                    color:inst.status==="at_risk"?"#8b1a1a":inst.status==="completed"?"#0d5c2b":inst.status==="paused"?B.textMute:"#293d5c"}}>
+                    {inst.status==="at_risk"?"At risk":inst.status==="completed"?"Complete":inst.status==="paused"?"Paused — plan change":"In progress"}
                   </span>
                   <span style={{marginLeft:8,fontSize:11,color:B.textMute}}>{doneCount}/{mine.length} steps</span>
                 </div>
@@ -9948,6 +10441,7 @@ const NAV_SECTIONS=[
   ]},
   {section:"ADMIN",items:[
     {id:"users",label:"Users",icon:"⊕"},
+    {id:"signups",label:"Signups",icon:"◈"},
     // Only surfaced on instances running database-driven branding (the demo /
     // pitch instance); a normal tenant deploy has no use for it.
     ...(BRAND_ADMIN?[{id:"branding",label:"Branding",icon:"◐"}]:[]),
@@ -10190,6 +10684,7 @@ export default function App(){
               next user would otherwise land on whatever the previous one had
               open. */}
           {tab==="users"       &&isAdminRole&&<UserManagementView key={navNonce} userProfile={userProfile} data={data} toast={showToast}/>}
+          {tab==="signups"     &&isAdminRole&&<SignupsRevenueView key={navNonce} data={data} toast={showToast}/>}
           {tab==="branding"    &&isAdminRole&&BRAND_ADMIN&&<BrandingView key={navNonce} toast={showToast}/>}
           {tab==="resources"   &&<ResourcesView key={navNonce} data={data} userProfile={userProfile} toast={showToast}/>}
           {tab==="p-contacts"  &&<ProspectContactsView key={navNonce} data={data} reload={reload} toast={showToast} userProfile={userProfile}/>}

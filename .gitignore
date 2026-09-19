@@ -34,3 +34,7 @@ src/App.jsx.bak
 
 # Python bytecode from the docs/ generators
 __pycache__/
+.vercel
+.env*
+dist-verify-signup/
+dist-verify-dashboard/
