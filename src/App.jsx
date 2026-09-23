@@ -6744,6 +6744,7 @@ function SignupsRevenueView({data,toast}){
   const[planFeatures,setPlanFeatures]=useState([]);
   const[contacts,setContacts]=useState({}); // family_id -> {id, email, fullName}
   const[workflowByFamily,setWorkflowByFamily]=useState({}); // family_id -> {total, completed}
+  const[obligationFamilyIds,setObligationFamilyIds]=useState(()=>new Set()); // family_ids with >=1 obligation on file
   const[lastSignInByUser,setLastSignInByUser]=useState({}); // auth user id -> ISO timestamp | null
   const[loading,setLoading]=useState(true);
   // Drill-down state, entirely local to this view: null (the dashboard), a plan's household
@@ -6754,12 +6755,20 @@ function SignupsRevenueView({data,toast}){
   useEffect(()=>{
     let stopped=false;
     (async()=>{
-      const selfServeIds=(data.families||[]).filter(f=>f.acquisition_channel==="self_serve").map(f=>f.id);
-      const[{data:pf,error:pfErr},{data:up,error:upErr},{data:wf,error:wfErr},{data:act,error:actErr}]=await Promise.all([
+      // Platform Utilization (below) covers every household, not just self-serve ones, so both
+      // plan-gated tables are fetched for the whole book now -- this also makes each individual
+      // household's own utilization score (further down) accurate for admin-provisioned
+      // households, which previously always fell back to the neutral default because
+      // workflowByFamily was never populated for them.
+      const allFamilyIds=(data.families||[]).map(f=>f.id);
+      const[{data:pf,error:pfErr},{data:up,error:upErr},{data:wf,error:wfErr},{data:obl,error:oblErr},{data:act,error:actErr}]=await Promise.all([
         sb.from("plan_features").select("plan,label,monthly_price,sort_order").order("sort_order"),
         sb.from("user_profiles").select("id,family_id,email,full_name").eq("role","client"),
-        selfServeIds.length
-          ? sb.from("workflow_instances").select("family_id,status").in("family_id",selfServeIds)
+        allFamilyIds.length
+          ? sb.from("workflow_instances").select("family_id,status").in("family_id",allFamilyIds)
+          : Promise.resolve({data:[],error:null}),
+        allFamilyIds.length
+          ? sb.from("obligations").select("family_id").in("family_id",allFamilyIds)
           : Promise.resolve({data:[],error:null}),
         // Admin-gated RPC (see admin_user_activity_rpc migration) -- the browser client has no
         // other way to read auth.users.last_sign_in_at for the utilization score below.
@@ -6769,6 +6778,7 @@ function SignupsRevenueView({data,toast}){
       if(pfErr&&toast)toast(pfErr.message||"Could not load plan pricing","error");
       if(upErr&&toast)toast(upErr.message||"Could not load signup contacts","error");
       if(wfErr&&toast)toast(wfErr.message||"Could not load workflow activity","error");
+      if(oblErr&&toast)toast(oblErr.message||"Could not load obligation activity","error");
       if(actErr&&toast)toast(actErr.message||"Could not load sign-in activity","error");
       setPlanFeatures(pf||[]);
       const byFamily={};
@@ -6780,6 +6790,7 @@ function SignupsRevenueView({data,toast}){
         b.total++; if(w.status==="completed")b.completed++;
       });
       setWorkflowByFamily(wfByFamily);
+      setObligationFamilyIds(new Set((obl||[]).map(o=>o.family_id)));
       const lastSignIn={};
       (act||[]).forEach(r=>{ lastSignIn[r.user_id]=r.last_sign_in_at; });
       setLastSignInByUser(lastSignIn);
@@ -6798,6 +6809,11 @@ function SignupsRevenueView({data,toast}){
   // documented weight rather than something tuned by eye, so the number means the same thing for
   // every household it's shown for.
   const scoreBand=s=>s>=70?"High":s>=40?"Medium":"Low";
+  // Two scoring formulas, chosen by plan. Core & Premier run workflows, so their score blends
+  // login recency + module breadth + workflow completion. Basic has no workflow engine and
+  // nothing meaningfully fills that slot, so its score is login recency + module breadth only,
+  // reweighted so the two components still total 100 rather than being diluted by a neutral
+  // placeholder for a feature the plan doesn't include.
   const utilizationFor=f=>{
     const contact=contacts[f.id];
     const lastSignIn=contact?.id?(lastSignInByUser[contact.id]||null):null;
@@ -6814,17 +6830,19 @@ function SignupsRevenueView({data,toast}){
       (data.tasks||[]).some(t=>t.familyId===f.id),
     ];
     const moduleCount=modules.filter(Boolean).length;
-    const modulePts=(moduleCount/modules.length)*30;
-    // Neutral half-credit when there's nothing yet to grade (a brand-new household with no
-    // workflows or tasks on file shouldn't score as "unengaged" for having nothing due yet).
-    let enginePts=15;
-    if(planAllows(f.plan,"workflows")){
-      const wf=workflowByFamily[f.id];
-      if(wf&&wf.total>0)enginePts=(wf.completed/wf.total)*30;
-    }else{
-      const famTasks=(data.tasks||[]).filter(t=>t.familyId===f.id);
-      if(famTasks.length>0)enginePts=(famTasks.filter(t=>t.done).length/famTasks.length)*30;
+    const moduleFrac=moduleCount/modules.length;
+
+    if(f.plan==="basic"){
+      const score=Math.max(0,Math.min(100,Math.round(loginPts+moduleFrac*60)));
+      return{score,band:scoreBand(score),lastSignIn,moduleCount,moduleTotal:modules.length};
     }
+
+    const modulePts=moduleFrac*30;
+    // Neutral half-credit when there's nothing yet to grade (a brand-new household with no
+    // workflows on file shouldn't score as "unengaged" for having nothing due yet).
+    let enginePts=15;
+    const wf=workflowByFamily[f.id];
+    if(wf&&wf.total>0)enginePts=(wf.completed/wf.total)*30;
     const score=Math.max(0,Math.min(100,Math.round(loginPts+modulePts+enginePts)));
     return{score,band:scoreBand(score),lastSignIn,moduleCount,moduleTotal:modules.length};
   };
@@ -6832,6 +6850,33 @@ function SignupsRevenueView({data,toast}){
     const u=utilizationFor(f);
     return <Badge scheme={UTIL_SCHEME[u.band]}>{u.band} · {u.score}</Badge>;
   };
+
+  // ── Platform Utilization: adoption of every feature area, across ALL households ───────────
+  // Plan-gated areas (workflows, obligations, bill pay) are measured only against households
+  // whose plan actually includes them -- a Basic household that can never have bill pay at any
+  // price isn't "lacking" it, it was never offered it, so counting it against the total would
+  // make a gate working exactly as designed look like a utilization problem.
+  const hasFamilyIn=list=>{
+    const ids=new Set((list||[]).map(r=>r.familyId).filter(Boolean));
+    return id=>ids.has(id);
+  };
+  const PLATFORM_AREAS=[
+    {key:"properties",label:"Properties",eligible:families,has:hasFamilyIn(data.properties)},
+    {key:"portfolio",label:"Portfolio Accounts",eligible:families,has:hasFamilyIn(data.portfolio_accounts)},
+    {key:"valuables",label:"Valuables",eligible:families,has:hasFamilyIn(data.valuables)},
+    {key:"documents",label:"Vault Documents",eligible:families,has:hasFamilyIn(data.documents)},
+    {key:"tasks",label:"Tasks",eligible:families,has:hasFamilyIn(data.tasks)},
+    {key:"notes",label:"Notes",eligible:families,has:hasFamilyIn(data.notes)},
+    {key:"deals",label:"Deals",eligible:families,has:hasFamilyIn(data.deals)},
+    {key:"workflows",label:"Workflows",gateLabel:"Core & Premier",eligible:families.filter(f=>planAllows(f.plan,"workflows")),has:id=>!!(workflowByFamily[id]&&workflowByFamily[id].total>0)},
+    {key:"obligations",label:"Obligations",gateLabel:"Core & Premier",eligible:families.filter(f=>planAllows(f.plan,"obligations")),has:id=>obligationFamilyIds.has(id)},
+    {key:"billpay",label:"Bill Pay",gateLabel:"Premier",eligible:families.filter(f=>planAllows(f.plan,"billPay")),has:hasFamilyIn((data.cash_flow_events||[]).filter(e=>e.pcmResponsible))},
+  ].map(a=>{
+    const total=a.eligible.length;
+    const adopted=a.eligible.filter(f=>a.has(f.id)).length;
+    const pct=total?Math.round((adopted/total)*100):0;
+    return{...a,total,adopted,pct,band:scoreBand(pct)};
+  }).sort((a,b)=>a.pct-b.pct);
 
   const selfServe=families.filter(f=>f.acquisition_channel==="self_serve");
   // Counted toward MRR: still paying (active), or Stripe is actively trying to collect (past_due).
@@ -6915,15 +6960,10 @@ function SignupsRevenueView({data,toast}){
     const c=contacts[family.id]||{};
     const u=utilizationFor(family);
     const wfStats=workflowByFamily[family.id];
-    const familyTasks=(data.tasks||[]).filter(t=>t.familyId===family.id);
-    const usesWorkflows=planAllows(family.plan,"workflows");
-    const engineLabel=usesWorkflows?"Workflow Completion":"Task Completion";
-    const engineValue=usesWorkflows
-      ? (wfStats&&wfStats.total>0?`${wfStats.completed} of ${wfStats.total} complete`:"None on file yet")
-      : (familyTasks.length>0?`${familyTasks.filter(x=>x.done).length} of ${familyTasks.length} complete`:"None on file yet");
-    const enginePct=usesWorkflows
-      ? (wfStats&&wfStats.total>0?(wfStats.completed/wfStats.total)*100:50)
-      : (familyTasks.length>0?(familyTasks.filter(x=>x.done).length/familyTasks.length)*100:50);
+    const isBasic=family.plan==="basic";
+    const engineLabel="Workflow Completion";
+    const engineValue=wfStats&&wfStats.total>0?`${wfStats.completed} of ${wfStats.total} complete`:"None on file yet";
+    const enginePct=wfStats&&wfStats.total>0?(wfStats.completed/wfStats.total)*100:50;
     const signInPct=u.lastSignIn?Math.max(6,100-Math.min(100,((Date.now()-new Date(u.lastSignIn).getTime())/86400000/90)*100)):0;
     return <div style={{overflowY:"auto",height:"100%",padding:isMobile?"18px 14px 32px":"26px 30px 48px"}}>
       <button onClick={()=>setDrill({type:"plan",plan:family.plan})} style={backBtnStyle}>← Back to {labelOf(family.plan)} Households</button>
@@ -6956,10 +6996,11 @@ function SignupsRevenueView({data,toast}){
             <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>Utilization of the Platform</div>
             <UtilBadge f={family}/>
           </div>
+          {isBasic&&<div style={{fontSize:11,color:B.textMute,marginBottom:12,fontStyle:"italic"}}>Basic has no workflow engine — this score is login recency and module breadth only.</div>}
           {[
             {l:"Last Sign-In",v:u.lastSignIn?fmtDate(u.lastSignIn):"Never signed in",pct:signInPct},
             {l:"Platform Modules Used",v:`${u.moduleCount} of ${u.moduleTotal}`,pct:(u.moduleCount/u.moduleTotal)*100},
-            {l:engineLabel,v:engineValue,pct:enginePct},
+            ...(isBasic?[]:[{l:engineLabel,v:engineValue,pct:enginePct}]),
           ].map(row=><div key={row.l} style={{marginBottom:14}}>
             <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:B.text,marginBottom:4}}>
               <span>{row.l}</span><span style={{color:B.textSoft}}>{row.v}</span>
@@ -6973,11 +7014,41 @@ function SignupsRevenueView({data,toast}){
     </div>;
   }
 
+  // ── Platform Utilization drill-down: every area, all households, gaps sorted to the top ─────
+  if(drill?.type==="utilization"){
+    return <div style={{overflowY:"auto",height:"100%",padding:isMobile?"18px 14px 32px":"26px 30px 48px"}}>
+      <button onClick={()=>setDrill(null)} style={backBtnStyle}>← Back to Signups & Revenue</button>
+      <div style={{marginBottom:isMobile?16:24}}>
+        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?22:28,color:B.navy,fontWeight:600,marginBottom:4}}>Platform Utilization by Area</div>
+        <div style={{color:B.textSoft,fontSize:isMobile?12:14,maxWidth:640}}>Every household on the platform, sorted lowest-adoption first so the gaps surface at the top. Plan-gated areas are measured only against households whose plan actually includes them.</div>
+        <div style={{height:2,width:56,background:B.gold,marginTop:10,borderRadius:2}}/>
+      </div>
+      <div style={{background:B.bgCard,borderRadius:12,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,padding:isMobile?"16px 18px":"22px 26px"}}>
+        {PLATFORM_AREAS.map(a=><div key={a.key} style={{marginBottom:20}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",fontSize:13,color:B.text,marginBottom:5,flexWrap:"wrap",gap:6}}>
+            <span style={{fontWeight:600}}>{a.label}{a.gateLabel&&<span style={{color:B.textMute,fontWeight:400}}> · {a.gateLabel} only</span>}</span>
+            <Badge scheme={UTIL_SCHEME[a.band]}>{a.band} · {a.pct}%</Badge>
+          </div>
+          <div style={{fontSize:12,color:B.textSoft,marginBottom:6}}>{a.adopted} of {a.total} eligible household{a.total===1?"":"s"} have at least one on file</div>
+          <div style={{height:8,background:B.borderLight,borderRadius:4,overflow:"hidden"}}>
+            <div title={`${a.label}: ${a.pct}% adoption`} style={{width:`${a.pct?Math.max(4,Math.min(100,a.pct)):0}%`,height:"100%",background:UTIL_SCHEME[a.band].dot,borderRadius:4}}/>
+          </div>
+        </div>)}
+      </div>
+    </div>;
+  }
+
   return <div style={{overflowY:"auto",height:"100%",padding:isMobile?"18px 14px 32px":"26px 30px 48px"}}>
     <div style={{marginBottom:isMobile?16:24}}>
       <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?22:28,color:B.navy,fontWeight:600,marginBottom:4}}>Signups & Revenue</div>
       <div style={{color:B.textSoft,fontSize:isMobile?12:14}}>Households created through the public self-serve sign-up flow</div>
       <div style={{height:2,width:56,background:B.gold,marginTop:10,borderRadius:2}}/>
+      <div onClick={()=>setDrill({type:"utilization"})} role="button" tabIndex={0}
+        onKeyDown={e=>{if(e.key==="Enter"||e.key===" ")setDrill({type:"utilization"});}}
+        style={{display:"inline-flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12.5,fontWeight:600,color:B.gold,marginTop:14}}>
+        View Platform Utilization by Area
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={B.gold} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+      </div>
     </div>
 
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(180px,100%),1fr))",gap:14,marginBottom:24}}>
