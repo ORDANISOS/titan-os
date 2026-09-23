@@ -6891,7 +6891,7 @@ function SignupsRevenueView({data,toast}){
             </tr></thead>
             <tbody>
               {rows.map(f=>{const c=contacts[f.id]||{};return <tr key={f.id} onClick={()=>setDrill({type:"user",familyId:f.id})} style={{borderTop:`1px solid ${B.borderLight}`,cursor:"pointer"}}>
-                <td style={{padding:"10px 22px",color:B.navy,fontWeight:700,fontFamily:"monospace"}}>{f.customer_number??"—"}</td>
+                <td style={{padding:"10px 22px",color:B.navy,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>{f.customer_number??"—"}</td>
                 <td style={{padding:"10px 12px",color:B.navy,fontWeight:600,textDecoration:"underline",textDecorationColor:B.borderLight}}>{c.fullName||c.email||"—"}</td>
                 <td style={{padding:"10px 12px",color:B.textSoft}}>{f.name}</td>
                 <td style={{padding:"10px 12px",color:B.textSoft}}>{fmtDate(f.createdAt)}</td>
@@ -6928,7 +6928,7 @@ function SignupsRevenueView({data,toast}){
     return <div style={{overflowY:"auto",height:"100%",padding:isMobile?"18px 14px 32px":"26px 30px 48px"}}>
       <button onClick={()=>setDrill({type:"plan",plan:family.plan})} style={backBtnStyle}>← Back to {labelOf(family.plan)} Households</button>
       <div style={{marginBottom:isMobile?16:24}}>
-        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?22:28,color:B.navy,fontWeight:600,marginBottom:4}}>{family.name}{family.customer_number!=null&&<span style={{fontFamily:"monospace",fontSize:isMobile?14:16,color:B.textSoft,marginLeft:10,fontWeight:600}}>#{family.customer_number}</span>}</div>
+        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?22:28,color:B.navy,fontWeight:600,marginBottom:4}}>{family.name}{family.customer_number!=null&&<span style={{fontFamily:"'DM Sans',sans-serif",fontSize:isMobile?14:16,color:B.textSoft,marginLeft:10,fontWeight:600}}>#{family.customer_number}</span>}</div>
         <div style={{color:B.textSoft,fontSize:isMobile?12:14}}>{c.fullName||c.email||"No client contact on file"}{c.fullName&&c.email?` · ${c.email}`:""}</div>
         <div style={{height:2,width:56,background:B.gold,marginTop:10,borderRadius:2}}/>
       </div>

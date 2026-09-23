@@ -42,6 +42,19 @@ const C = {
 // (fetched below) overrides them whenever that fetch succeeds, and that same column is what
 // public-signup actually bills, so the two can't quietly drift apart for long even if this fetch
 // fails once.
+// Feature lists mirror the marketing site's tier cards exactly (see ordanis-site
+// preview/index.html): each tier lists everything the tier below it has, plus its own
+// additions flagged `isNew` -- no crossed-out/excluded items anywhere, so the growth
+// reads as purely additive going up in price.
+const BASE_FEATURES = [
+  { text: "Client portal access" },
+  { text: "Properties, portfolio and balance history" },
+  { text: "Cash flow and projections" },
+  { text: "Vault: documents, folders, expiry tracking" },
+  { text: "Valuables, tasks, notes and deals" },
+  { text: "AI assistant over the household's own record" },
+];
+
 const PLAN_COPY = {
   basic: {
     label: "Basic",
@@ -49,15 +62,10 @@ const PLAN_COPY = {
     tagline: "Everything in one place, properly.",
     price: 15,
     features: [
-      { ok: true, text: "Vault and household record" },
-      { ok: true, text: "AI assistant" },
-      { ok: true, text: "Properties, entities, accounts" },
-      { ok: true, text: "5 GB of documents" },
-      { ok: false, text: "No workflows" },
-      { ok: false, text: "No Ordanis Expert" },
+      ...BASE_FEATURES,
+      { text: "Complimentary 30-day Onboarding Assistant", isNew: true },
     ],
     cta: "Choose Basic",
-    highlight: false,
   },
   core: {
     label: "Core",
@@ -65,15 +73,13 @@ const PLAN_COPY = {
     tagline: "Self-directed, with the work running.",
     price: 100,
     features: [
-      { ok: true, text: "Everything in Basic" },
-      { ok: true, text: "10 workflows a month, then $8 each" },
-      { ok: true, text: "Obligations and deadline tracking" },
-      { ok: true, text: "Digests and document generation" },
-      { ok: true, text: "15 GB of documents" },
-      { ok: false, text: "No Expert, at any price" },
+      ...BASE_FEATURES,
+      { text: "Complimentary 30-day Onboarding Assistant" },
+      { text: "Scheduled prompts", isNew: true },
+      { text: "10 workflows and obligations included", isNew: true },
+      { text: "Add up to 40 additional workflows anytime", isNew: true },
     ],
     cta: "Choose Core",
-    highlight: true,
   },
   premier: {
     label: "Premier",
@@ -81,15 +87,16 @@ const PLAN_COPY = {
     tagline: "Someone who knows the household.",
     price: 500,
     features: [
-      { ok: true, text: "Everything in Core" },
-      { ok: true, text: "A named Ordanis Expert" },
-      { ok: true, text: "3 Expert hours a month, $250 after" },
-      { ok: true, text: "Bill pay execution" },
-      { ok: true, text: "Unlimited workflows · 25 GB" },
-      { ok: true, text: "Crisis workflows never metered" },
+      ...BASE_FEATURES,
+      { text: "Complimentary 30-day Onboarding Assistant" },
+      { text: "Named ORDANIS Expert leads the household", isNew: true },
+      { text: "Scheduled prompts and concierge research", isNew: true },
+      { text: "Workflows and obligations, run end to end", isNew: true },
+      { text: "Property management oversight", isNew: true },
+      { text: "Bill pay with a per-period payment register", isNew: true },
+      { text: "Client activity reporting", isNew: true },
     ],
     cta: "Choose Premier",
-    highlight: false,
   },
 };
 const PLAN_ORDER = ["basic", "core", "premier"];
@@ -105,12 +112,24 @@ function EyebrowLine({ children }) {
   );
 }
 
+// Ordanis_Lockup_Stacked, on-white variant (see the brand Logo Kit): centred wordmark,
+// gold dividing rule, tagline below. Built as inline SVG (not an image asset) so it
+// stays crisp at any size and follows BRAND_NAME/BRAND_TAGLINE for white-label tenants.
+function StackedLogo({ width = 220 }) {
+  return (
+    <svg viewBox="0 0 760 200" width={width} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND_NAME}>
+      <text x="380" y="105" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="bold" fontSize="70" letterSpacing="9" fill={C.navy}>{BRAND_NAME.toUpperCase()}</text>
+      <line x1="280" y1="133" x2="480" y2="133" stroke={C.gold} strokeWidth="2" />
+      <text x="380" y="160" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="14" letterSpacing="5" fill={C.slate} fontWeight="bold">{BRAND_TAGLINE.toUpperCase()}</text>
+    </svg>
+  );
+}
+
 function Header({ onBack, backLabel }) {
   return (
     <div style={{ padding: "14px 32px", borderBottom: `1px solid ${C.rule}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
       <div style={{ textAlign: "center" }}>
-        <div style={{ fontFamily: "Georgia,serif", fontWeight: "bold", fontSize: "1.3rem", letterSpacing: 2, color: C.navy }}>{BRAND_NAME.toUpperCase()}</div>
-        <div style={{ fontWeight: 600, fontSize: 10, letterSpacing: ".22em", textTransform: "uppercase", color: C.slate, marginTop: 5 }}>{BRAND_TAGLINE}</div>
+        <StackedLogo width={220} />
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 26 }}>
         {onBack && (
@@ -126,8 +145,8 @@ function Header({ onBack, backLabel }) {
 
 function PlanCard({ planKey, plan, price, onChoose }) {
   return (
-    <div style={{ background: "#fff", border: `1px solid ${plan.highlight ? C.gold : C.rule}`, borderRadius: 3, padding: "34px 30px", display: "flex", flexDirection: "column" }}>
-      <div style={{ fontSize: ".72rem", fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: plan.highlight ? C.gold : C.muted, marginBottom: 8 }}>{plan.eyebrow}</div>
+    <div style={{ background: "#fff", border: `1px solid ${C.gold}`, borderRadius: 3, padding: "34px 30px", display: "flex", flexDirection: "column" }}>
+      <div style={{ fontSize: ".72rem", fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>{plan.eyebrow}</div>
       <h4 style={{ fontFamily: "Georgia,serif", fontWeight: 500, fontSize: "1.4rem", color: C.navy, margin: "0 0 6px" }}>{plan.label}</h4>
       <div style={{ fontFamily: "Georgia,serif", fontStyle: "italic", color: C.slate, fontSize: ".92rem", marginBottom: 14 }}>{plan.tagline}</div>
       <div style={{ fontFamily: "Georgia,serif", fontSize: "2.4rem", fontWeight: 460, color: C.navy, letterSpacing: "-.01em", marginBottom: 16 }}>
@@ -135,17 +154,24 @@ function PlanCard({ planKey, plan, price, onChoose }) {
       </div>
       <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
         {plan.features.map((f, i) => (
-          <li key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: ".88rem", color: f.ok ? C.slate : C.muted, padding: "9px 0", borderTop: i === 0 ? "none" : `1px solid ${C.rule}` }}>
-            <span style={{ flex: "none", width: 14, fontWeight: 700, lineHeight: 1.6, color: f.ok ? C.gold : C.muted }}>{f.ok ? "✓" : "—"}</span>{f.text}
+          <li key={i} style={{
+            display: "flex", gap: 10, alignItems: "flex-start", fontSize: ".88rem", color: C.slate,
+            padding: f.isNew ? "9px 12px" : "9px 0",
+            margin: f.isNew ? "0 -12px" : 0,
+            borderRadius: f.isNew ? 4 : 0,
+            background: f.isNew ? "rgba(201,169,97,0.10)" : "transparent",
+            borderTop: i === 0 ? "none" : (f.isNew ? "1px solid transparent" : `1px solid ${C.rule}`),
+          }}>
+            <span style={{ flex: "none", width: 14, fontWeight: 700, lineHeight: 1.6, color: C.gold }}>✓</span>{f.text}
           </li>
         ))}
       </ul>
       <button
         onClick={() => onChoose(planKey)}
         style={{
-          display: "flex", alignItems: "center", justifyContent: "center", marginTop: 22, padding: "16px 30px",
-          borderRadius: 2, border: plan.highlight ? "none" : "1px solid rgba(10,37,64,0.3)",
-          background: plan.highlight ? C.gold : "transparent", color: plan.highlight ? "#051423" : C.navy,
+          display: "flex", alignItems: "center", justifyContent: "center", marginTop: "auto",
+          padding: "16px 30px", borderRadius: 2, border: "none",
+          background: C.gold, color: "#051423",
           fontWeight: 500, fontSize: ".78rem", letterSpacing: ".11em", textTransform: "uppercase",
           fontFamily: "inherit", cursor: "pointer",
         }}
@@ -165,32 +191,12 @@ function PlansStep({ prices, onChoose }) {
         <p style={{ color: C.slate, fontSize: "1rem", maxWidth: 640, margin: "10px auto 0" }}>Every plan sees all 49 workflows. What differs is how many run, and who does the work.</p>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 24, alignItems: "stretch" }}>
         {PLAN_ORDER.map((key) => (
           <PlanCard key={key} planKey={key} plan={PLAN_COPY[key]} price={prices[key] ?? PLAN_COPY[key].price} onChoose={onChoose} />
         ))}
       </div>
 
-      <div style={{ display: "flex", gap: 24, marginTop: 26, alignItems: "stretch", flexWrap: "wrap" }}>
-        <div style={{ flex: "1.6 1 320px", borderLeft: `1px solid ${C.gold}`, background: "rgba(201,169,97,0.08)", padding: "22px 26px" }}>
-          <div style={{ fontSize: ".72rem", fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: C.gold, marginBottom: 8 }}>Not sure which?</div>
-          <div style={{ fontSize: ".9rem", color: C.slate }}>
-            Most households with a property or two and nothing complicated start on <strong style={{ color: C.navy, fontWeight: 600 }}>Basic</strong>. If you have entities, trusts or several properties and nobody is watching the dates, <strong style={{ color: C.navy, fontWeight: 600 }}>Core</strong> is the one. Move up or down at any time — the platform will tell you when you are on the wrong one.
-          </div>
-        </div>
-        <div style={{ flex: "1 1 260px", border: `1px solid ${C.rule}`, borderRadius: 3, padding: "20px 24px" }}>
-          <div style={{ fontSize: ".72rem", fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: C.muted }}>What Core actually costs</div>
-          <div style={{ display: "flex", gap: 22, marginTop: 12, flexWrap: "wrap" }}>
-            {[["6 / month", "$100"], ["10 / month", "$100"], ["15 / month", "$140"], ["25 / month", "$220"]].map(([label, val]) => (
-              <div key={label}>
-                <div style={{ fontSize: ".78rem", color: C.muted }}>{label}</div>
-                <div style={{ fontFamily: "Georgia,serif", fontSize: "1.3rem", fontWeight: 460, color: C.navy }}>{val}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{ fontSize: ".8rem", color: C.muted, marginTop: 9 }}>You set a monthly ceiling. Reach it and workflows pause for your confirmation.</div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -315,7 +321,7 @@ function AccountStep({ planKey, prices, onBack, onDone }) {
           <div style={{ marginTop: 16, fontSize: ".88rem" }}>
             {plan.features.slice(0, 4).map((f, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderTop: `1px solid ${C.rule}` }}>
-                <span>{f.text}</span><span style={{ color: C.muted }}>{f.ok ? "included" : "—"}</span>
+                <span>{f.text}</span><span style={{ color: C.muted }}>included</span>
               </div>
             ))}
           </div>
