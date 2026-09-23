@@ -6860,7 +6860,10 @@ function SignupsRevenueView({data,toast}){
     const ids=new Set((list||[]).map(r=>r.familyId).filter(Boolean));
     return id=>ids.has(id);
   };
-  const PLATFORM_AREAS=[
+  // Stable, logical order -- used as-is for a single household's own module breakdown. The
+  // aggregate dashboard below re-sorts a copy of this worst-adoption-first; the per-household
+  // view stays in this natural order so it reads the same every time you open a profile.
+  const PLATFORM_AREA_DEFS=[
     {key:"properties",label:"Properties",eligible:families,has:hasFamilyIn(data.properties)},
     {key:"portfolio",label:"Portfolio Accounts",eligible:families,has:hasFamilyIn(data.portfolio_accounts)},
     {key:"valuables",label:"Valuables",eligible:families,has:hasFamilyIn(data.valuables)},
@@ -6876,7 +6879,8 @@ function SignupsRevenueView({data,toast}){
     const adopted=a.eligible.filter(f=>a.has(f.id)).length;
     const pct=total?Math.round((adopted/total)*100):0;
     return{...a,total,adopted,pct,band:scoreBand(pct)};
-  }).sort((a,b)=>a.pct-b.pct);
+  });
+  const PLATFORM_AREAS=[...PLATFORM_AREA_DEFS].sort((a,b)=>a.pct-b.pct);
 
   const selfServe=families.filter(f=>f.acquisition_channel==="self_serve");
   // Counted toward MRR: still paying (active), or Stripe is actively trying to collect (past_due).
@@ -7009,6 +7013,23 @@ function SignupsRevenueView({data,toast}){
               <div title={`${row.l}: ${row.v}`} style={{width:`${Math.max(4,Math.min(100,row.pct))}%`,height:"100%",background:B.gold,borderRadius:4}}/>
             </div>
           </div>)}
+        </div>
+      </div>
+
+      {/* Exactly which modules/features this household has touched */}
+      <div style={{background:B.bgCard,borderRadius:12,padding:isMobile?"18px 16px":"20px 22px",border:`1px solid ${B.borderLight}`,boxShadow:B.shadow}}>
+        <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:14}}>Modules & Features Used</div>
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:"2px 28px"}}>
+          {PLATFORM_AREA_DEFS.map(a=>{
+            const eligible=a.eligible.some(ff=>ff.id===family.id);
+            const used=eligible&&a.has(family.id);
+            const scheme=eligible?(used?UTIL_SCHEME.High:UTIL_SCHEME.Low):undefined;
+            const status=eligible?(used?"In use":"Not started"):`Not on ${labelOf(family.plan)}`;
+            return <div key={a.key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${B.borderLight}`,opacity:eligible?1:0.55}}>
+              <span style={{fontSize:13,color:B.text}}>{a.label}{a.gateLabel&&<span style={{color:B.textMute,fontWeight:400,fontSize:11}}> · {a.gateLabel}</span>}</span>
+              <Badge scheme={scheme}>{status}</Badge>
+            </div>;
+          })}
         </div>
       </div>
     </div>;
