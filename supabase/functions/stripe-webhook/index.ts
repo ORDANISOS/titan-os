@@ -247,15 +247,19 @@ async function sendWelcomeEmail(familyId: string, email: string, fullName: strin
     ? `Welcome to ${sender.label} -- your Expert will be in touch`
     : `Welcome to ${sender.label}`;
 
-  const expertParagraph = hasExpert
-    ? `<p>A named ${esc(sender.label)} Expert has been assigned to the <strong>${esc(householdName)}</strong> household and will reach out directly within <strong>24-48 hours</strong> to get everything set up.</p>`
-    : `<p>You can sign in now to start setting up the <strong>${esc(householdName)}</strong> household.</p>`;
+  // Premier gets a named human (the Expert) and is invited to poke around on their own in the
+  // meantime. Basic & Core have no Expert, so the thing to lead with is the complimentary 30-day
+  // Onboarding Assistant every plan tier includes -- a real person will still reach out to help,
+  // just not a permanently-assigned one -- alongside the standing invitation to sign in now.
+  const onboardingParagraph = hasExpert
+    ? `<p>A named ${esc(sender.label)} Expert has been assigned to the <strong>${esc(householdName)}</strong> household and will reach out directly within <strong>24-48 hours</strong> to get everything set up. In the meantime, feel free to sign in and start exploring the platform and its capabilities.</p>`
+    : `<p>Your plan includes a complimentary <strong>30-day Onboarding Assistant</strong> -- someone from our team will be in touch shortly to help you get the <strong>${esc(householdName)}</strong> household fully set up. In the meantime, you're welcome to sign in and start exploring the platform on your own.</p>`;
 
   const html =
     `<div style="font-family:Arial,sans-serif;font-size:14px;color:#0A2540;line-height:1.6">` +
     `<p>Hi ${esc(name)},</p>` +
     `<p>Welcome to ${esc(sender.label)}. Your <strong>${esc(planLabel)}</strong> plan for ${esc(householdName)} is now active.</p>` +
-    `${expertParagraph}` +
+    `${onboardingParagraph}` +
     `<hr style="border:none;border-top:1px solid #E2E0D8;margin:20px 0">` +
     `<div style="font-size:12px;color:#8A94A3">${esc(sender.label)} -- Private Wealth Administration</div>` +
     `</div>`;
