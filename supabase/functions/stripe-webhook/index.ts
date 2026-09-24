@@ -366,8 +366,19 @@ Deno.serve(async (req) => {
       case "customer.subscription.deleted": {
         const sub = event.data.object as Stripe.Subscription;
         const familyId = sub.metadata?.family_id;
+        // A Stripe cancellation lands here whether it came from the household's own churn, a
+        // dunning process finally giving up, OR from archive-family cancelling billing on a
+        // household that just asked to be removed from the platform. That last case must not be
+        // clobbered back to "cancelled" -- "archived" is a deliberate, human-initiated deletion
+        // request and is meant to stick, on the same principle already applied to
+        // invoice.payment_succeeded below (a routine Stripe event should never silently undo a
+        // firm decision like archiving).
         if (familyId) {
-          await admin.from("families").update({ subscription_state: "cancelled" }).eq("id", familyId);
+          const { data: fam } = await admin.from("families")
+            .select("subscription_state").eq("id", familyId).maybeSingle();
+          if (fam?.subscription_state !== "archived") {
+            await admin.from("families").update({ subscription_state: "cancelled" }).eq("id", familyId);
+          }
         }
         break;
       }
