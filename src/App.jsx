@@ -1337,6 +1337,10 @@ function LoginScreen(){
             <div style={{textAlign:"center"}}>
               {mode==="login"?<button onClick={()=>{setMode("reset");setError("");}} style={{background:"none",border:"none",color:B.textSoft,fontSize:12,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>Forgot your password?</button>:<button onClick={()=>{setMode("login");setError("");}} style={{background:"none",border:"none",color:B.textSoft,fontSize:12,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>Back to sign in</button>}
             </div>
+            {mode==="login"&&<div style={{textAlign:"center",marginTop:16,paddingTop:16,borderTop:`1px solid ${B.borderLight}`}}>
+              <span style={{fontSize:12,color:B.textMute}}>New to {BRAND.name}? </span>
+              <a href="/signup" style={{fontSize:12,color:B.navy,fontWeight:700,textDecoration:"underline"}}>Create an Account</a>
+            </div>}
           </>
         ))}
         {introDone&&<div style={{textAlign:"center",marginTop:24,fontSize:11,color:B.textMute}}>{BRAND.name} · {BRAND.tagline}</div>}
