@@ -6738,7 +6738,7 @@ const UTIL_SCHEME={
   Medium:{bg:"#fef3e2",text:"#8a5c00",dot:"#d4900a"},
   Low:   {bg:"#fde8e8",text:"#8b1a1a",dot:"#d43030"},
 };
-function SignupsRevenueView({data,toast}){
+function SignupsRevenueView({data,toast,userProfile,reload}){
   const isMobile=useIsMobile();
   const families=data.families||[];
   const[planFeatures,setPlanFeatures]=useState([]);
@@ -6751,6 +6751,7 @@ function SignupsRevenueView({data,toast}){
   // list, or one household's detail. Nothing here is routed -- clicking through and back never
   // leaves the Signups & Revenue tab, matching how the rest of the admin shell navigates.
   const[drill,setDrill]=useState(null); // {type:"plan",plan} | {type:"user",familyId}
+  const[savingContactId,setSavingContactId]=useState(null); // family_id currently being marked contacted, or null
 
   useEffect(()=>{
     let stopped=false;
@@ -6892,11 +6893,46 @@ function SignupsRevenueView({data,toast}){
   const selfServeMRR=mrrOf(selfServe);
   const platformMRR=mrrOf(families);
 
+  // Onboarding follow-up: has anyone internally actually reached out to this self-serve household
+  // yet? families.onboarding_contacted_at/_by (set only by the "Mark as Contacted" button below)
+  // are the sole source of truth -- the automated welcome email, and for Premier the internal
+  // Expert-assignment notification, both fire regardless of whether a human ever actually follows
+  // up, so this is tracked separately and confirmed by hand. Every self-serve plan is tracked the
+  // same way, Premier included -- the Expert notification is a promise to assign someone, not
+  // proof that outreach happened.
+  const ONBOARDING_SLA_HOURS=48;
+  const daysSinceSignup=f=>f.createdAt?Math.floor((Date.now()-new Date(f.createdAt).getTime())/86400000):null;
+  const onboardingStatusFor=f=>{
+    if(f.onboarding_contacted_at)return{state:"contacted"};
+    const hours=f.createdAt?(Date.now()-new Date(f.createdAt).getTime())/3600000:0;
+    return{state:hours>=ONBOARDING_SLA_HOURS?"overdue":"new",days:daysSinceSignup(f)};
+  };
+  const ONBOARDING_SCHEME={
+    new:{bg:"#e7f0fb",text:"#1a4c8b",dot:"#2f6fc4"},
+    overdue:UTIL_SCHEME.Low,
+    contacted:{bg:B.borderLight,text:B.textSoft,dot:B.textSoft},
+  };
+  const markContacted=async familyId=>{
+    setSavingContactId(familyId);
+    const{error}=await sb.from("families").update({
+      onboarding_contacted_at:new Date().toISOString(),
+      onboarding_contacted_by:userProfile?.email||null,
+    }).eq("id",familyId);
+    setSavingContactId(null);
+    if(error){toast&&toast(error.message||"Could not save","error");return;}
+    toast&&toast("Marked as contacted");
+    if(reload)await reload("families");
+  };
+
   const byPlan=SIGNUP_PLAN_ORDER.map(plan=>{
     const inPlan=selfServe.filter(f=>f.plan===plan);
-    return{plan,label:labelOf(plan),count:inPlan.length,mrr:mrrOf(inPlan)};
+    const pending=inPlan.filter(f=>onboardingStatusFor(f).state!=="contacted");
+    const overdue=pending.filter(f=>onboardingStatusFor(f).state==="overdue");
+    return{plan,label:labelOf(plan),count:inPlan.length,mrr:mrrOf(inPlan),pendingCount:pending.length,overdueCount:overdue.length};
   });
   const maxByPlan=Math.max(1,...byPlan.map(p=>p.count));
+  const allPendingOnboarding=selfServe.filter(f=>onboardingStatusFor(f).state!=="contacted");
+  const overdueOnboarding=allPendingOnboarding.filter(f=>onboardingStatusFor(f).state==="overdue").sort((a,b)=>new Date(a.createdAt||0)-new Date(b.createdAt||0));
 
   // Last 8 ISO (Mon-start) weeks of self-serve signups, oldest first, by createdAt (mapped from
   // families.created_at -- see toClient).
@@ -6936,15 +6972,16 @@ function SignupsRevenueView({data,toast}){
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
             <thead><tr style={{textAlign:"left",color:B.textMute,fontSize:10,letterSpacing:"0.06em",textTransform:"uppercase"}}>
-              <th style={{padding:"12px 22px"}}>Customer #</th><th style={{padding:"12px 12px"}}>Username</th><th style={{padding:"12px 12px"}}>Household</th><th style={{padding:"12px 12px"}}>Signed Up</th><th style={{padding:"12px 12px"}}>Status</th><th style={{padding:"12px 22px"}}>Utilization</th>
+              <th style={{padding:"12px 22px"}}>Customer #</th><th style={{padding:"12px 12px"}}>Username</th><th style={{padding:"12px 12px"}}>Household</th><th style={{padding:"12px 12px"}}>Signed Up</th><th style={{padding:"12px 12px"}}>Status</th><th style={{padding:"12px 12px"}}>Onboarding</th><th style={{padding:"12px 22px"}}>Utilization</th>
             </tr></thead>
             <tbody>
-              {rows.map(f=>{const c=contacts[f.id]||{};return <tr key={f.id} onClick={()=>setDrill({type:"user",familyId:f.id})} style={{borderTop:`1px solid ${B.borderLight}`,cursor:"pointer"}}>
+              {rows.map(f=>{const c=contacts[f.id]||{};const ob=onboardingStatusFor(f);return <tr key={f.id} onClick={()=>setDrill({type:"user",familyId:f.id})} style={{borderTop:`1px solid ${B.borderLight}`,cursor:"pointer"}}>
                 <td style={{padding:"10px 22px",color:B.navy,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>{f.customer_number??"—"}</td>
                 <td style={{padding:"10px 12px",color:B.navy,fontWeight:600,textDecoration:"underline",textDecorationColor:B.borderLight}}>{c.fullName||c.email||"—"}</td>
                 <td style={{padding:"10px 12px",color:B.textSoft}}>{f.name}</td>
                 <td style={{padding:"10px 12px",color:B.textSoft}}>{fmtDate(f.createdAt)}</td>
                 <td style={{padding:"10px 12px",color:B.textSoft,textTransform:"capitalize"}}>{(f.subscription_state||"—").replace("_"," ")}</td>
+                <td style={{padding:"10px 12px"}}>{ob.state==="contacted"?<Badge scheme={ONBOARDING_SCHEME.contacted}>Contacted</Badge>:<Badge scheme={ob.state==="overdue"?ONBOARDING_SCHEME.overdue:ONBOARDING_SCHEME.new}>{ob.state==="overdue"?"Overdue":"New"} · {ob.days}d</Badge>}</td>
                 <td style={{padding:"10px 22px"}}><UtilBadge f={f}/></td>
               </tr>;})}
             </tbody>
@@ -6969,6 +7006,8 @@ function SignupsRevenueView({data,toast}){
     const engineValue=wfStats&&wfStats.total>0?`${wfStats.completed} of ${wfStats.total} complete`:"None on file yet";
     const enginePct=wfStats&&wfStats.total>0?(wfStats.completed/wfStats.total)*100:50;
     const signInPct=u.lastSignIn?Math.max(6,100-Math.min(100,((Date.now()-new Date(u.lastSignIn).getTime())/86400000/90)*100)):0;
+    const ob=onboardingStatusFor(family);
+    const respondedDays=family.onboarding_contacted_at?Math.max(0,Math.floor((new Date(family.onboarding_contacted_at)-new Date(family.createdAt))/86400000)):null;
     return <div style={{overflowY:"auto",height:"100%",padding:isMobile?"18px 14px 32px":"26px 30px 48px"}}>
       <button onClick={()=>setDrill({type:"plan",plan:family.plan})} style={backBtnStyle}>← Back to {labelOf(family.plan)} Households</button>
       <div style={{marginBottom:isMobile?16:24}}>
@@ -6976,6 +7015,22 @@ function SignupsRevenueView({data,toast}){
         <div style={{color:B.textSoft,fontSize:isMobile?12:14}}>{c.fullName||c.email||"No client contact on file"}{c.fullName&&c.email?` · ${c.email}`:""}</div>
         <div style={{height:2,width:56,background:B.gold,marginTop:10,borderRadius:2}}/>
       </div>
+
+      {family.acquisition_channel==="self_serve"&&<div style={{background:ob.state==="overdue"?UTIL_SCHEME.Low.bg:B.bgCard,borderRadius:12,padding:"16px 22px",border:`1px solid ${ob.state==="overdue"?UTIL_SCHEME.Low.text+"33":B.borderLight}`,boxShadow:B.shadow,marginBottom:18,display:"flex",flexWrap:"wrap",justifyContent:"space-between",alignItems:"center",gap:14}}>
+        <div>
+          <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:6}}>Onboarding Outreach</div>
+          {ob.state==="contacted"
+            ? <div style={{fontSize:13,color:B.text}}>Contacted {fmtDate(family.onboarding_contacted_at)}{family.onboarding_contacted_by?` by ${family.onboarding_contacted_by}`:""} — {respondedDays===0?"same day as signup":`${respondedDays} day${respondedDays===1?"":"s"} after signup`}</div>
+            : <div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:8,fontSize:13,color:ob.state==="overdue"?UTIL_SCHEME.Low.text:B.text,fontWeight:ob.state==="overdue"?700:400}}>
+                <Badge scheme={ob.state==="overdue"?UTIL_SCHEME.Low:ONBOARDING_SCHEME.new}>{ob.state==="overdue"?"Overdue":"New"}</Badge>
+                Signed up {ob.days} day{ob.days===1?"":"s"} ago — {ob.state==="overdue"?"past the 48-hour contact window":"within the 48-hour contact window"}
+              </div>}
+        </div>
+        {ob.state!=="contacted"&&<button onClick={()=>markContacted(family.id)} disabled={savingContactId===family.id}
+          style={{background:B.gold,color:"#051423",border:"none",borderRadius:8,padding:"9px 18px",fontSize:12.5,fontWeight:700,cursor:savingContactId===family.id?"default":"pointer",opacity:savingContactId===family.id?0.6:1,fontFamily:"inherit"}}>
+          {savingContactId===family.id?"Saving…":"Mark as Contacted"}
+        </button>}
+      </div>}
 
       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:18,marginBottom:18,alignItems:"start"}}>
         {/* Payment info */}
@@ -7072,11 +7127,27 @@ function SignupsRevenueView({data,toast}){
       </div>
     </div>
 
+    {overdueOnboarding.length>0&&<div style={{background:UTIL_SCHEME.Low.bg,border:`1px solid ${UTIL_SCHEME.Low.text}33`,borderRadius:10,padding:"14px 18px",marginBottom:20}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,fontSize:13,fontWeight:700,color:UTIL_SCHEME.Low.text,marginBottom:8}}>
+        <span style={{width:8,height:8,borderRadius:"50%",background:UTIL_SCHEME.Low.dot,display:"inline-block"}}/>
+        {overdueOnboarding.length} household{overdueOnboarding.length===1?"":"s"} past the 48-hour onboarding contact window
+      </div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+        {overdueOnboarding.map(f=><span key={f.id} onClick={()=>setDrill({type:"user",familyId:f.id})} role="button" tabIndex={0}
+          onKeyDown={e=>{if(e.key==="Enter"||e.key===" ")setDrill({type:"user",familyId:f.id});}}
+          style={{cursor:"pointer",fontSize:12,color:UTIL_SCHEME.Low.text,background:"#fff",border:`1px solid ${UTIL_SCHEME.Low.text}33`,borderRadius:20,padding:"4px 10px"}}>
+          {f.name} · {labelOf(f.plan)} · {daysSinceSignup(f)}d
+        </span>)}
+      </div>
+    </div>}
+
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(180px,100%),1fr))",gap:14,marginBottom:24}}>
       <StatBox label="Self-Serve Signups" value={totalSelfServe} accent={B.navy}/>
       <StatBox label="Self-Serve MRR" value={fmtMoney(selfServeMRR)} accent={B.gold}/>
       <StatBox label="Platform MRR (all households)" value={fmtMoney(platformMRR)} accent={B.navyMid}/>
       <StatBox label="Total Households" value={families.length} accent={B.textSoft}/>
+      <StatBox label="Pending Onboarding Contact" value={allPendingOnboarding.length} accent={ONBOARDING_SCHEME.new.dot}/>
+      <StatBox label="Overdue (48h+)" value={overdueOnboarding.length} accent={UTIL_SCHEME.Low.dot}/>
     </div>
 
     <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1.1fr 1fr",gap:18,marginBottom:18,alignItems:"start"}}>
@@ -7104,10 +7175,13 @@ function SignupsRevenueView({data,toast}){
         {byPlan.map(p=><div key={p.plan} onClick={()=>setDrill({type:"plan",plan:p.plan})} role="button" tabIndex={0}
           onKeyDown={e=>{if(e.key==="Enter"||e.key===" ")setDrill({type:"plan",plan:p.plan});}}
           style={{marginBottom:14,cursor:"pointer",borderRadius:6,padding:"4px 6px",margin:"-4px -6px 10px"}}>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:B.text,marginBottom:4}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12,color:B.text,marginBottom:4,flexWrap:"wrap",gap:6}}>
             <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:9,height:9,borderRadius:2,background:SIGNUP_PLAN_COLOR[p.plan],display:"inline-block"}}/>{p.label}</span>
-            <span style={{color:B.textSoft,display:"flex",alignItems:"center",gap:4}}>{p.count} · {fmtMoney(p.mrr)}/mo
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={B.textMute} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+            <span style={{display:"flex",alignItems:"center",gap:8}}>
+              {p.pendingCount>0&&<Badge scheme={p.overdueCount>0?UTIL_SCHEME.Low:ONBOARDING_SCHEME.new}>{p.pendingCount} new</Badge>}
+              <span style={{color:B.textSoft,display:"flex",alignItems:"center",gap:4}}>{p.count} · {fmtMoney(p.mrr)}/mo
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={B.textMute} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+              </span>
             </span>
           </div>
           <div style={{height:8,background:B.borderLight,borderRadius:4,overflow:"hidden"}}>
@@ -7123,14 +7197,15 @@ function SignupsRevenueView({data,toast}){
       <div style={{overflowX:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,marginTop:10}}>
           <thead><tr style={{textAlign:"left",color:B.textMute,fontSize:10,letterSpacing:"0.06em",textTransform:"uppercase"}}>
-            <th style={{padding:"8px 22px"}}>Household</th><th style={{padding:"8px 12px"}}>Contact</th><th style={{padding:"8px 12px"}}>Plan</th><th style={{padding:"8px 12px"}}>Status</th><th style={{padding:"8px 22px"}}>Signed Up</th>
+            <th style={{padding:"8px 22px"}}>Household</th><th style={{padding:"8px 12px"}}>Contact</th><th style={{padding:"8px 12px"}}>Plan</th><th style={{padding:"8px 12px"}}>Status</th><th style={{padding:"8px 12px"}}>Onboarding</th><th style={{padding:"8px 22px"}}>Signed Up</th>
           </tr></thead>
           <tbody>
-            {recent.map(f=>{const c=contacts[f.id]||{};return <tr key={f.id} onClick={()=>setDrill({type:"user",familyId:f.id})} style={{borderTop:`1px solid ${B.borderLight}`,cursor:"pointer"}}>
+            {recent.map(f=>{const c=contacts[f.id]||{};const ob=onboardingStatusFor(f);return <tr key={f.id} onClick={()=>setDrill({type:"user",familyId:f.id})} style={{borderTop:`1px solid ${B.borderLight}`,cursor:"pointer"}}>
               <td style={{padding:"10px 22px",color:B.navy,fontWeight:600,textDecoration:"underline",textDecorationColor:B.borderLight}}>{f.name}</td>
               <td style={{padding:"10px 12px",color:B.textSoft}}>{c.fullName||c.email||"—"}</td>
               <td style={{padding:"10px 12px"}}><span style={{display:"inline-flex",alignItems:"center",gap:6}}><span style={{width:8,height:8,borderRadius:2,background:SIGNUP_PLAN_COLOR[f.plan]||B.textMute,display:"inline-block"}}/>{labelOf(f.plan)}</span></td>
               <td style={{padding:"10px 12px",color:B.textSoft,textTransform:"capitalize"}}>{(f.subscription_state||"—").replace("_"," ")}</td>
+              <td style={{padding:"10px 12px"}}>{ob.state==="contacted"?<Badge scheme={ONBOARDING_SCHEME.contacted}>Contacted</Badge>:<Badge scheme={ob.state==="overdue"?ONBOARDING_SCHEME.overdue:ONBOARDING_SCHEME.new}>{ob.state==="overdue"?"Overdue":"New"} · {ob.days}d</Badge>}</td>
               <td style={{padding:"10px 22px",color:B.textSoft}}>{fmtDate(f.createdAt)}</td>
             </tr>;})}
           </tbody>
@@ -10776,7 +10851,7 @@ export default function App(){
               next user would otherwise land on whatever the previous one had
               open. */}
           {tab==="users"       &&isAdminRole&&<UserManagementView key={navNonce} userProfile={userProfile} data={data} toast={showToast}/>}
-          {tab==="signups"     &&isAdminRole&&<SignupsRevenueView key={navNonce} data={data} toast={showToast}/>}
+          {tab==="signups"     &&isAdminRole&&<SignupsRevenueView key={navNonce} data={data} toast={showToast} userProfile={userProfile} reload={reload}/>}
           {tab==="branding"    &&isAdminRole&&BRAND_ADMIN&&<BrandingView key={navNonce} toast={showToast}/>}
           {tab==="resources"   &&<ResourcesView key={navNonce} data={data} userProfile={userProfile} toast={showToast}/>}
           {tab==="p-contacts"  &&<ProspectContactsView key={navNonce} data={data} reload={reload} toast={showToast} userProfile={userProfile}/>}
