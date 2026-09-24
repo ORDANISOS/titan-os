@@ -6265,6 +6265,23 @@ function UserManagementView({userProfile,data={},toast}){
     const{data:rows}=await sb.from("family_partners").select("*");
     if(rows)setFamilyPartners(rows);
   };
+
+  // Household name alone isn't always enough to tell two families apart (similar names, a
+  // household renamed, etc.) -- when linking a partner to families, or assigning a client to one,
+  // the admin needs the client's own name and the family's customer number to be sure they're
+  // connecting the correct household. family_id -> the client user_profiles row for that family
+  // (role="client"), built from users already loaded above rather than a second query.
+  const clientByFamily=useMemo(()=>{
+    const m={};
+    users.forEach(u=>{ if(u.role==="client"&&u.family_id&&!m[u.family_id])m[u.family_id]=u; });
+    return m;
+  },[users]);
+  const familyIdentity=f=>{
+    const c=clientByFamily[f.id];
+    const clientName=c?.full_name||c?.email||"no client on file";
+    return `#${f.customer_number??"—"} · ${clientName}`;
+  };
+  const familyOptionLabel=f=>`${f.name} — ${familyIdentity(f)}`;
   // ADMIN_CAPACITY_PATCH
   const[platformCfg,setPlatformCfg]=useState(null);
   const loadPlatformCfg=async()=>{
@@ -6465,7 +6482,7 @@ function UserManagementView({userProfile,data={},toast}){
               {u.role==="client"
                 ?<select value={u.family_id||""} onChange={e=>assignFamily(u,e.target.value)} style={{background:B.bg,border:`1px solid ${B.border}`,borderRadius:6,padding:"4px 8px",fontSize:11,color:B.text,outline:"none",fontFamily:"inherit",cursor:"pointer",width:"100%"}}>
                   <option value="">— Assign Family —</option>
-                  {families.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
+                  {families.map(f=><option key={f.id} value={f.id}>{familyOptionLabel(f)}</option>)}
                 </select>
                 :u.role==="partner"
                 ?<Btn small variant="ghost" onClick={()=>setModal({type:"managePartner",user:u})}>{pFamilyIds.length>0?`${pFamilyIds.length} linked`:"Link families"}</Btn>
@@ -6629,7 +6646,7 @@ function UserManagementView({userProfile,data={},toast}){
               {newRole==="client"&&<Field label="Assign to Family">
                 <Sel value={newFamily} onChange={e=>setNewFamily(e.target.value)}>
                   <option value="">— Select family —</option>
-                  {families.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
+                  {families.map(f=><option key={f.id} value={f.id}>{familyOptionLabel(f)}</option>)}
                 </Sel>
               </Field>}
             </Grid2>
@@ -6641,7 +6658,10 @@ function UserManagementView({userProfile,data={},toast}){
                   const checked=newPartnerFamilies.includes(f.id);
                   return <label key={f.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",fontSize:13,color:B.text,cursor:"pointer"}}>
                     <input type="checkbox" checked={checked} onChange={()=>setNewPartnerFamilies(checked?newPartnerFamilies.filter(id=>id!==f.id):[...newPartnerFamilies,f.id])}/>
-                    {f.name}
+                    <span style={{minWidth:0}}>
+                      <div style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.name}</div>
+                      <div style={{fontSize:11,color:B.textMute}}>{familyIdentity(f)}</div>
+                    </span>
                   </label>;
                 })}
               </div>
@@ -6674,7 +6694,10 @@ function UserManagementView({userProfile,data={},toast}){
             return <div key={f.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",fontSize:13,color:B.text}}>
               <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",flex:1,minWidth:0}}>
                 <input type="checkbox" checked={linked} onChange={()=>togglePartnerFamily(modal.user,f.id,linked)}/>
-                <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.name}</span>
+                <span style={{minWidth:0}}>
+                  <div style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.name}</div>
+                  <div style={{fontSize:11,color:B.textMute}}>{familyIdentity(f)}</div>
+                </span>
               </label>
               {linked&&<button
                 onClick={()=>setLeadAdvisor(modal.user,f.id,!isLead)}
