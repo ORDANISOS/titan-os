@@ -10760,6 +10760,17 @@ export default function App(){
   const profileRef=useRef(null);
   const allowedFamilyIdsRef=useRef(null); // null = unrestricted (admin)
 
+  // Detect the redirect Stripe sends the browser back to right after a self-serve signup pays
+  // (see SignupFlow.jsx's success_url: `${origin}/?welcome=1`). The families row for a brand-new
+  // household is NOT created by this app -- it's created by stripe-webhook's
+  // createFamilyFromSignup, fired by Stripe's own checkout.session.completed webhook, which is a
+  // separate async server-to-server call that can (and often does) land a beat after Stripe's
+  // client-side redirect already brought the browser back here. Without accounting for that, a
+  // brand-new client who just paid seconds ago hit a dead-end "contact your Expert" screen for
+  // what is normally a few seconds of ordinary webhook lag, not a real problem.
+  const isWelcomeRedirect=typeof window!=="undefined"&&new URLSearchParams(window.location.search).get("welcome")==="1";
+  const[welcomeWaitElapsed,setWelcomeWaitElapsed]=useState(false);
+
   const loadProfile=useCallback(async userId=>{
     const{data:d}=await sb.from("user_profiles").select("*").eq("id",userId).single();
     if(d){
@@ -10847,6 +10858,42 @@ export default function App(){
     })();
   },[authed,userProfile]);
 
+  // While isWelcomeRedirect and this client's family hasn't shown up yet, re-check every couple
+  // of seconds instead of leaving them stuck on a dead-end screen the instant they land here.
+  // Gives up after ~40s (comfortably past normal webhook delivery) and lets the existing "contact
+  // your Expert" message take over -- at that point something has genuinely gone wrong and is
+  // worth a human looking at, rather than ordinary async lag.
+  useEffect(()=>{
+    if(!isWelcomeRedirect||welcomeWaitElapsed)return;
+    if(userProfile?.role!=="client"||userProfile.familyId)return;
+    let cancelled=false;
+    let tries=0;
+    let timer=null;
+    const MAX_TRIES=20;
+    const poll=async()=>{
+      if(cancelled)return;
+      tries++;
+      await loadProfile(userProfile.id);
+      await fetchTable("families");
+      if(cancelled)return;
+      if(tries>=MAX_TRIES){setWelcomeWaitElapsed(true);return;}
+      timer=setTimeout(poll,2000);
+    };
+    timer=setTimeout(poll,2000);
+    return()=>{cancelled=true;if(timer)clearTimeout(timer);};
+  },[isWelcomeRedirect,welcomeWaitElapsed,userProfile?.role,userProfile?.familyId,userProfile?.id,loadProfile,fetchTable]);
+
+  // Once this client's family has actually shown up, the ?welcome=1 marker has done its job --
+  // drop it so a later refresh or a bookmarked/shared link doesn't carry it around forever.
+  useEffect(()=>{
+    if(!isWelcomeRedirect||userProfile?.role!=="client"||!userProfile.familyId)return;
+    try{
+      const url=new URL(window.location.href);
+      url.searchParams.delete("welcome");
+      window.history.replaceState({},"",url.pathname+url.search+url.hash);
+    }catch(_e){}
+  },[isWelcomeRedirect,userProfile?.role,userProfile?.familyId]);
+
   const _isAdmin=userProfile?.role==="admin";
   const _myEmail=(userProfile?.email||"").toLowerCase();
   const _contactAdv=id=>{const c=data.contacts.find(x=>x.id===id);return (c?.advisorEmail||"").toLowerCase();};
@@ -10869,7 +10916,13 @@ export default function App(){
   if(userProfile.role==="client"){
     const clientFamily=data.families.find(f=>f.id===userProfile.familyId);
     if(loading)return <div style={{minHeight:"100vh",background:B.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><Spinner/></div>;
-    if(!clientFamily)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:B.bg,flexDirection:"column",gap:12,color:B.navy,fontFamily:"'DM Sans',sans-serif"}}><PCMLogo/><div style={{marginTop:20,fontSize:16}}>No family assigned to your account. Contact your Ordanis Expert.</div><button onClick={logout} style={{marginTop:12,background:"none",border:`1px solid ${B.border}`,borderRadius:8,padding:"8px 16px",cursor:"pointer",fontFamily:"inherit",color:B.textSoft}}>Sign Out</button></div>;
+    if(!clientFamily){
+      // Fresh from Stripe Checkout and the webhook hasn't created the family yet -- see the
+      // polling effect above. Show a normal "getting things ready" screen instead of the
+      // dead-end message while that's still plausible.
+      if(isWelcomeRedirect&&!welcomeWaitElapsed)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:B.bg,flexDirection:"column",gap:16,color:B.navy,fontFamily:"'DM Sans',sans-serif"}}><PCMLogo/><Spinner/><div style={{marginTop:4,fontSize:15,textAlign:"center",maxWidth:360,color:B.textSoft,lineHeight:1.5}}>Finishing setting up your account — this usually takes just a few seconds…</div></div>;
+      return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:B.bg,flexDirection:"column",gap:12,color:B.navy,fontFamily:"'DM Sans',sans-serif"}}><PCMLogo/><div style={{marginTop:20,fontSize:16}}>No family assigned to your account. Contact your Ordanis Expert.</div><button onClick={logout} style={{marginTop:12,background:"none",border:`1px solid ${B.border}`,borderRadius:8,padding:"8px 16px",cursor:"pointer",fontFamily:"inherit",color:B.textSoft}}>Sign Out</button></div>;
+    }
     return <><ClientDashboard family={clientFamily} data={data} userProfile={userProfile} logout={logout} toast={showToast} reload={reload}/><FloatingAssistant family={clientFamily} data={data} reload={reload} toast={showToast} userProfile={userProfile}/>{toastState&&<Toast msg={toastState.msg} type={toastState.type}/>}<UpdateBanner/></>;
   }
 

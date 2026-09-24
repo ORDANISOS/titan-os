@@ -1,0 +1,26 @@
+project_id = "xreeruxuwtmjhvvxvjts"
+
+# JWT verification is Supabase's platform-level check that the caller sent a valid Supabase
+# session token -- it happens before the function's own code runs at all. Two functions here are
+# NOT called by a signed-in Supabase user, so they must have it turned off or every real caller
+# gets rejected with a 401 before the function itself ever sees the request:
+#
+#   - stripe-webhook: called directly by Stripe's servers, authenticated by its own
+#     Stripe-Signature header (checked in the function code via STRIPE_WEBHOOK_SECRET), not a
+#     Supabase JWT. This is documented at the top of that function's own index.ts.
+#   - public-signup: called from the public /signup page before the visitor has an account or a
+#     session to hold a JWT.
+#
+# Without this file, `supabase functions deploy <name>` defaults verify_jwt back to true on every
+# deploy unless --no-verify-jwt is remembered by hand on that exact command -- which is exactly
+# what silently broke self-serve signups on 2026-09-24 (every Stripe webhook call 401'd, so no
+# paying household ever got its family record created). This file makes the correct setting the
+# default from here on, for every function, on every deploy, with no flag to forget.
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.public-signup]
+verify_jwt = false
+
+[functions.send-task-reminders]
+verify_jwt = false
