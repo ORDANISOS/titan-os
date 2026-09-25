@@ -8032,7 +8032,7 @@ function MemberQuickForm({onSave,onCancel,saving,contactsImportEnabled,onLockedI
 // allowPortalGrant: only self-serve households (Basic/Core) may offer this -- Premier already has
 // an assigned Expert, and the server-side check in manage-business-partner enforces the same rule
 // independently of whatever this prop is set to.
-function ProfessionalQuickForm({onSave,onCancel,saving,contactsImportEnabled,onLockedImport,allowPortalGrant}){
+function ProfessionalQuickForm({onSave,onCancel,saving,contactsImportEnabled,onLockedImport,allowPortalGrant,partnerSeatFree}){
   const[f,setF]=useState({name:"",role:"",company:"",email:"",phone:"",grantPortalAccess:false});
   const set=(k,v)=>setF(m=>({...m,[k]:v}));
   const emailOk=EMAIL_RE.test(f.email.trim());
@@ -8049,7 +8049,7 @@ function ProfessionalQuickForm({onSave,onCancel,saving,contactsImportEnabled,onL
     {allowPortalGrant&&<label style={{display:"flex",gap:10,alignItems:"flex-start",background:B.bg,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"12px 14px",marginBottom:16,cursor:"pointer"}}>
       <input type="checkbox" checked={f.grantPortalAccess} onChange={e=>set("grantPortalAccess",e.target.checked)} style={{marginTop:2}}/>
       <span style={{fontSize:12.5,color:B.text,lineHeight:1.5}}>
-        <strong style={{color:B.navy}}>Also give this Business Partner their own portal login</strong> — a read-only account so they can see this household's dashboard on their own (properties, cash flow, documents, and more). We'll email them a secure link to set it up. <strong style={{color:B.navy}}>$5.00/month</strong>, billed to this household until removed.
+        <strong style={{color:B.navy}}>Also give this Business Partner their own portal login</strong> — a read-only account so they can see this household's dashboard on their own (properties, cash flow, documents, and more). We'll email them a secure link to set it up. {partnerSeatFree?<><strong style={{color:B.navy}}>Free</strong>, included with Premier.</>:<><strong style={{color:B.navy}}>$5.00/month</strong>, billed to this household until removed.</>}
       </span>
     </label>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
@@ -8137,7 +8137,7 @@ function OnboardingWizard({onClose,addMember,addProfessional,addBusinessPartner,
   if(step==="professional")return shell(
     "Add your professional network",
     "CPA, attorney, physician — anyone outside the household you work with. Entirely optional.",
-    <>{list("professional")}<ProfessionalQuickForm saving={saving} contactsImportEnabled={contactsImportEnabled} onLockedImport={onOpenBilling} allowPortalGrant={true} onSave={f=>save("professional",f)}/></>,
+    <>{list("professional")}<ProfessionalQuickForm saving={saving} contactsImportEnabled={contactsImportEnabled} onLockedImport={onOpenBilling} allowPortalGrant={true} partnerSeatFree={false} onSave={f=>save("professional",f)}/></>,
     <>
       <button onClick={back} style={{background:"none",border:"none",color:B.textSoft,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>← Back</button>
       <Btn variant="ghost" onClick={next}>{professionals.length?"Next":"Skip"}</Btn>
@@ -8441,7 +8441,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
 
   const TABS=[
     {id:"summary",   label:"Summary",    icon:"◈"},
-    ...(clientSelfServe?[{id:"household",label:"Household",icon:"◎"}]:[]),
+    ...(clientSelfServe||clientPlan==="premier"?[{id:"household",label:"Household",icon:"◎"}]:[]),
     {id:"portfolio", label:"Portfolio",  icon:"◇"},
     {id:"properties",label:"Properties", icon:"⌂"},
     {id:"cashflow",  label:"Cash Flow",  icon:"$"},
@@ -8689,7 +8689,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           to -- this tab is where a household reviews or adds to what it entered there, or adds
           from scratch if it skipped the wizard. Premier doesn't get this tab: an assigned Expert
           already maintains this for that household on the staff side. */}
-      {activeTab==="household"&&clientSelfServe&&<div>
+      {activeTab==="household"&&(clientSelfServe||clientPlan==="premier")&&<div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600}}>Household Members</div>
           <Btn small onClick={()=>setAddMemberOpen(true)}>+ Add Member</Btn>
@@ -8712,7 +8712,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           <Btn small onClick={()=>setAddProfessionalOpen(true)}>+ Add Contact</Btn>
         </div>
         {addProfessionalOpen&&<Modal title="Add a professional contact" onClose={()=>setAddProfessionalOpen(false)}>
-          <ProfessionalQuickForm saving={savingQuickAdd} contactsImportEnabled={!!fam.contactsImportEnabled} onLockedImport={()=>{setAddProfessionalOpen(false);setActiveTab("billing");}} allowPortalGrant={true} onCancel={()=>setAddProfessionalOpen(false)} onSave={async f=>{setSavingQuickAdd(true);try{await addProfessional(f);if(f.grantPortalAccess)await addBusinessPartner(f.email,f.name);setAddProfessionalOpen(false);}finally{setSavingQuickAdd(false);}}}/>
+          <ProfessionalQuickForm saving={savingQuickAdd} contactsImportEnabled={!!fam.contactsImportEnabled} onLockedImport={()=>{setAddProfessionalOpen(false);setActiveTab("billing");}} allowPortalGrant={true} partnerSeatFree={clientPlan==="premier"} onCancel={()=>setAddProfessionalOpen(false)} onSave={async f=>{setSavingQuickAdd(true);try{await addProfessional(f);if(f.grantPortalAccess)await addBusinessPartner(f.email,f.name);setAddProfessionalOpen(false);}finally{setSavingQuickAdd(false);}}}/>
         </Modal>}
         {professionals.length===0?<Empty text="No professional contacts on file."/>:<div style={{marginBottom:28}}>
           {professionals.map(p=><div key={p.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"14px 18px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:B.shadow,gap:12,flexWrap:"wrap"}}>
@@ -8731,14 +8731,14 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12,flexWrap:"wrap",gap:10}}>
           <div>
             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600}}>Business Partner Portal Access</div>
-            <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>Read-only logins to this household's portal — $5.00/month each. Add one from the Professional Network form above.</div>
+            <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>Read-only logins to this household's portal{clientPlan==="premier"?" — included free with Premier.":" — $5.00/month each."} Add one from the Professional Network form above.</div>
           </div>
         </div>
         {businessPartners.length===0?<Empty text="No portal seats granted yet."/>:<div>
           {businessPartners.map(p=><div key={p.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid ${B.gold}`,borderRadius:10,padding:"14px 18px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:B.shadow,gap:12,flexWrap:"wrap"}}>
             <div>
               <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{p.fullName||p.email}</div>
-              <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>{p.email} · invited {fmt(p.invitedAt)} · $5.00/mo</div>
+              <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>{p.email} · invited {fmt(p.invitedAt)} · {clientPlan==="premier"?"Free":"$5.00/mo"}</div>
             </div>
             <button onClick={()=>removeBusinessPartner(p.userId)} style={{background:"none",border:"none",color:B.textMute,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Revoke access</button>
           </div>)}
@@ -8849,17 +8849,18 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
             </div>
             <Btn small variant={fam.contactsImportEnabled?"ghost":undefined} onClick={toggleContactsImport} disabled={addonBusy}>{addonBusy?"Working…":fam.contactsImportEnabled?"Turn off":"Turn on — $5/mo"}</Btn>
           </div>
+        </div>}
 
-          {/* Business Partner portal seats -- a running total, not a toggle (there can be
-              several). Managed from the Household tab; this is just the cost roll-up so it shows
-              up where billing questions actually get asked. */}
-          {businessPartners.length>0&&<div style={{borderTop:`1px solid ${B.borderLight}`,marginTop:16,paddingTop:16,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-            <div>
-              <div style={{fontWeight:700,color:B.navy,fontSize:14}}>Business Partner Portal Access — {businessPartners.length} seat{businessPartners.length===1?"":"s"} × $5.00/mo</div>
-              <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>Manage who has a seat from the Household tab.</div>
-            </div>
-            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600}}>{fmtMoney(businessPartners.length*5)}<span style={{fontSize:11,color:B.textSoft,fontWeight:400}}>/mo</span></div>
-          </div>}
+        {/* Business Partner portal seats -- a running total, not a toggle (there can be several).
+            Managed from the Household tab; this is just the cost roll-up so it shows up where
+            billing questions actually get asked. Available on every plan; Premier's seats are
+            free, so its card shows $0.00/mo rather than being hidden. */}
+        {businessPartners.length>0&&<div style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:14,padding:"20px 24px",marginBottom:16,boxShadow:B.shadow,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+          <div>
+            <div style={{fontWeight:700,color:B.navy,fontSize:14}}>Business Partner Portal Access — {businessPartners.length} seat{businessPartners.length===1?"":"s"}{clientPlan==="premier"?" (included free with Premier)":" × $5.00/mo"}</div>
+            <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>Manage who has a seat from the Household tab.</div>
+          </div>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600}}>{fmtMoney(clientPlan==="premier"?0:businessPartners.length*5)}<span style={{fontSize:11,color:B.textSoft,fontWeight:400}}>/mo</span></div>
         </div>}
 
         {/* Workflow usage & overage charges -- the exact breakdown behind whatever this month's

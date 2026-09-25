@@ -1,7 +1,8 @@
 // supabase/functions/manage-business-partner/index.ts
-// Self-serve "Business Partner" portal seats -- $5.00/month each, Basic/Core only. A household
-// adding someone to its Professional Network can also grant that person their own read-only login
-// scoped to just this one household. This reuses the EXISTING partner mechanism end to end
+// Self-serve "Business Partner" portal seats -- $5.00/month each on Basic/Core, free on Premier
+// (Premier already pays for an assigned Expert, so this is treated as included rather than another
+// line item -- see the `billable` gate below). A household adding someone to its Professional
+// Network can also grant that person their own read-only login scoped to just this one household. This reuses the EXISTING partner mechanism end to end
 // (user_profiles.role='partner', the family_partners junction, PartnerDashboard's view-only
 // rendering, partner_kind='professional' -- which already exists for exactly this "CPA/attorney,
 // visibility only" case) rather than building a parallel access system. What was missing was a way
@@ -108,6 +109,11 @@ async function sendMail(to: string, subject: string, html: string, text: string)
   }
 }
 
+async function countHouseholdSeats(familyId: string) {
+  const { count } = await admin.from("family_partners").select("id", { count: "exact", head: true }).eq("family_id", familyId).eq("source", "household");
+  return count ?? 0;
+}
+
 // Recompute the $5/mo-per-seat Stripe line item for a family after a seat is added or removed.
 // Increases are charged immediately (always_invoice, same as every other add in this codebase);
 // a decrease or the last seat being removed carries no proration credit (proration_behavior:
@@ -171,12 +177,16 @@ Deno.serve(async (req) => {
   if (familyErr) return json({ error: familyErr.message }, 500);
   if (!family) return json({ error: "Family not found, or you do not have access to it" }, 404);
 
-  // Server-side plan gate -- defense in depth behind the UI's own clientSelfServe check. Only
-  // self-serve plans (today: Basic, Core) get this add-on; Premier already has an assigned Expert
-  // who can set up the equivalent access from Admin > Users.
+  // Server-side plan gate -- defense in depth behind the UI's own gating. Every plan may use
+  // Business Partner portal seats: self-serve plans (Basic, Core) pay $5/month per seat; Premier
+  // gets it free (per product decision -- Premier already pays for an assigned Expert, so this is
+  // treated as included rather than another line item). `billable` is what decides whether
+  // syncSeatBilling below ever touches Stripe at all.
   const { data: tier } = await sb.from("plan_features").select("self_serve").eq("plan", family.plan).maybeSingle();
-  if (!tier?.self_serve) {
-    return json({ error: "The Business Partner portal add-on is only available on self-serve plans." }, 409);
+  const planAllowed = !!tier?.self_serve || family.plan === "premier";
+  const billable = !!tier?.self_serve; // Premier: seats are created/removed, Stripe is never called.
+  if (!planAllowed) {
+    return json({ error: "The Business Partner portal feature is not available on this plan." }, 409);
   }
 
   try {
@@ -220,7 +230,9 @@ Deno.serve(async (req) => {
       });
       if (linkInsErr) return json({ error: linkInsErr.message }, 500);
 
-      const seatCount = await syncSeatBilling(family_id, family.stripe_subscription_id, family.business_partner_seats_stripe_item_id);
+      const seatCount = billable
+        ? await syncSeatBilling(family_id, family.stripe_subscription_id, family.business_partner_seats_stripe_item_id)
+        : await countHouseholdSeats(family_id);
 
       const householdName = esc(family.name || "your household");
       if (isNewUser && inviteLink) {
@@ -257,7 +269,9 @@ Deno.serve(async (req) => {
     const { error: delErr } = await admin.from("family_partners").delete().eq("id", link.id);
     if (delErr) return json({ error: delErr.message }, 500);
 
-    const seatCount = await syncSeatBilling(family_id, family.stripe_subscription_id, family.business_partner_seats_stripe_item_id);
+    const seatCount = billable
+      ? await syncSeatBilling(family_id, family.stripe_subscription_id, family.business_partner_seats_stripe_item_id)
+      : await countHouseholdSeats(family_id);
 
     // If this was their only remaining link anywhere (this household or any other), deactivate
     // the login outright -- removing access should actually remove access, not just this row.
