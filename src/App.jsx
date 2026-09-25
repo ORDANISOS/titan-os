@@ -7066,10 +7066,10 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
           <span style={{width:11,height:11,borderRadius:3,background:SIGNUP_PLAN_COLOR[plan],display:"inline-block"}}/>
           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?22:28,color:B.navy,fontWeight:600}}>{labelOf(plan)} Households</div>
         </div>
-        <div style={{color:B.textSoft,fontSize:isMobile?12:14,marginTop:4}}>{rows.length} self-serve household{rows.length===1?"":"s"} on {labelOf(plan)}</div>
+        <div style={{color:B.textSoft,fontSize:isMobile?12:14,marginTop:4}}>{rows.length} household{rows.length===1?"":"s"} on {labelOf(plan)}</div>
         <div style={{height:2,width:56,background:B.gold,marginTop:10,borderRadius:2}}/>
       </div>
-      {rows.length===0?<div style={{padding:22,color:B.textSoft,fontSize:13,background:B.bgCard,borderRadius:12,border:`1px solid ${B.borderLight}`}}>No self-serve households on this plan yet.</div>:
+      {rows.length===0?<div style={{padding:22,color:B.textSoft,fontSize:13,background:B.bgCard,borderRadius:12,border:`1px solid ${B.borderLight}`}}>No households on this plan yet.</div>:
       <div style={{background:B.bgCard,borderRadius:12,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,overflow:"hidden"}}>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
@@ -7263,7 +7263,7 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
   return <div style={{overflowY:"auto",height:"100%",padding:isMobile?"18px 14px 32px":"26px 30px 48px"}}>
     <div style={{marginBottom:isMobile?16:24}}>
       <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?22:28,color:B.navy,fontWeight:600,marginBottom:4}}>Signups & Revenue</div>
-      <div style={{color:B.textSoft,fontSize:isMobile?12:14}}>Households created through the public self-serve sign-up flow</div>
+      <div style={{color:B.textSoft,fontSize:isMobile?12:14}}>Households created through the public sign-up flow</div>
       <div style={{height:2,width:56,background:B.gold,marginTop:10,borderRadius:2}}/>
       <div onClick={()=>setDrill({type:"utilization"})} role="button" tabIndex={0}
         onKeyDown={e=>{if(e.key==="Enter"||e.key===" ")setDrill({type:"utilization"});}}
@@ -7288,13 +7288,12 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
     </div>}
 
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(180px,100%),1fr))",gap:14,marginBottom:24}}>
-      <StatBox label="Self-Serve Signups" value={totalSelfServe} accent={B.navy}/>
       {/* One tile per plan tier -- byPlan already computes mrr correctly per plan (see the
           Signups by Plan breakdown below); previously every self-serve household's revenue was
           lumped into a single "Self-Serve MRR" tile regardless of plan, which read as if
           everyone was on one tier. */}
       {byPlan.map(p=><StatBox key={p.plan} label={`${p.label} MRR`} value={fmtMoney(p.mrr)} accent={SIGNUP_PLAN_COLOR[p.plan]}/>)}
-      <StatBox label="Total Self-Serve MRR" value={fmtMoney(selfServeMRR)} accent={B.gold}/>
+      <StatBox label="Total MRR" value={fmtMoney(selfServeMRR)} accent={B.gold}/>
       <StatBox label="Platform MRR (all households)" value={fmtMoney(platformMRR)} accent={B.navyMid}/>
       <StatBox label="Total Households" value={families.length} accent={B.textSoft}/>
       <StatBox label="Pending Onboarding Contact" value={allPendingOnboarding.length} accent={ONBOARDING_SCHEME.new.dot}/>
@@ -7304,7 +7303,7 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
     <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1.1fr 1fr",gap:18,marginBottom:18,alignItems:"start"}}>
       {/* Weekly signups -- a single series, so no legend is needed (the title names it). */}
       <div style={{background:B.bgCard,borderRadius:12,padding:"20px 22px",border:`1px solid ${B.borderLight}`,boxShadow:B.shadow}}>
-        <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:14}}>Self-Serve Signups — Last 8 Weeks</div>
+        <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:14}}>Signups — Last 8 Weeks</div>
         <div style={{display:"flex",alignItems:"flex-end",gap:10,height:140,borderBottom:`1px solid ${B.borderLight}`,paddingBottom:2}}>
           {weeks.map((w,i)=>{
             const h=w.count===0?0:Math.max(6,Math.round((w.count/maxWeek)*120));
@@ -7322,7 +7321,7 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
       {/* Plan breakdown -- fixed 3-category order and color, never derived from data order.
           Each row drills into that plan's household list (see the drill==="plan" branch above). */}
       <div style={{background:B.bgCard,borderRadius:12,padding:"20px 22px",border:`1px solid ${B.borderLight}`,boxShadow:B.shadow}}>
-        <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:14}}>Self-Serve Signups by Plan</div>
+        <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:14}}>Signups by Plan</div>
         {byPlan.map(p=><div key={p.plan} onClick={()=>setDrill({type:"plan",plan:p.plan})} role="button" tabIndex={0}
           onKeyDown={e=>{if(e.key==="Enter"||e.key===" ")setDrill({type:"plan",plan:p.plan});}}
           style={{marginBottom:14,cursor:"pointer",borderRadius:6,padding:"4px 6px",margin:"-4px -6px 10px"}}>
@@ -7343,8 +7342,8 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
     </div>
 
     <div style={{background:B.bgCard,borderRadius:12,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,overflow:"hidden"}}>
-      <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",padding:"16px 22px 0"}}>Recent Self-Serve Signups</div>
-      {recent.length===0?<div style={{padding:22,color:B.textSoft,fontSize:13}}>No self-serve signups yet.</div>:
+      <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",padding:"16px 22px 0"}}>Recent Signups</div>
+      {recent.length===0?<div style={{padding:22,color:B.textSoft,fontSize:13}}>No signups yet.</div>:
       <div style={{overflowX:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,marginTop:10}}>
           <thead><tr style={{textAlign:"left",color:B.textMute,fontSize:10,letterSpacing:"0.06em",textTransform:"uppercase"}}>
