@@ -252,7 +252,7 @@ async function sendWelcomeEmail(familyId: string, email: string, fullName: strin
   // Onboarding Assistant every plan tier includes -- a real person will still reach out to help,
   // just not a permanently-assigned one -- alongside the standing invitation to sign in now.
   const onboardingParagraph = hasExpert
-    ? `<p>A named ${esc(sender.label)} Expert has been assigned to the <strong>${esc(householdName)}</strong> household and will reach out directly within <strong>24-48 hours</strong> to get everything set up. In the meantime, feel free to sign in and start exploring the platform and its capabilities.</p>`
+    ? `<p>As a Premier household, you now have a named ${esc(sender.label)} Expert dedicated to <strong>${esc(householdName)}</strong> -- they will reach out directly within <strong>24-48 hours</strong> to get everything set up around you. In the meantime, feel free to sign in and start exploring the platform for yourself.</p>`
     : `<p>Your plan includes a complimentary <strong>30-day Onboarding Assistant</strong> -- someone from our team will be in touch shortly to help you get the <strong>${esc(householdName)}</strong> household fully set up. In the meantime, you're welcome to sign in and start exploring the platform on your own.</p>`;
 
   // Opens on the decision itself -- congratulating them and naming what the brand stands for --
