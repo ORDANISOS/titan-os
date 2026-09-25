@@ -7289,7 +7289,12 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
 
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(180px,100%),1fr))",gap:14,marginBottom:24}}>
       <StatBox label="Self-Serve Signups" value={totalSelfServe} accent={B.navy}/>
-      <StatBox label="Self-Serve MRR" value={fmtMoney(selfServeMRR)} accent={B.gold}/>
+      {/* One tile per plan tier -- byPlan already computes mrr correctly per plan (see the
+          Signups by Plan breakdown below); previously every self-serve household's revenue was
+          lumped into a single "Self-Serve MRR" tile regardless of plan, which read as if
+          everyone was on one tier. */}
+      {byPlan.map(p=><StatBox key={p.plan} label={`${p.label} MRR`} value={fmtMoney(p.mrr)} accent={SIGNUP_PLAN_COLOR[p.plan]}/>)}
+      <StatBox label="Total Self-Serve MRR" value={fmtMoney(selfServeMRR)} accent={B.gold}/>
       <StatBox label="Platform MRR (all households)" value={fmtMoney(platformMRR)} accent={B.navyMid}/>
       <StatBox label="Total Households" value={families.length} accent={B.textSoft}/>
       <StatBox label="Pending Onboarding Contact" value={allPendingOnboarding.length} accent={ONBOARDING_SCHEME.new.dot}/>
