@@ -255,11 +255,24 @@ async function sendWelcomeEmail(familyId: string, email: string, fullName: strin
     ? `<p>A named ${esc(sender.label)} Expert has been assigned to the <strong>${esc(householdName)}</strong> household and will reach out directly within <strong>24-48 hours</strong> to get everything set up. In the meantime, feel free to sign in and start exploring the platform and its capabilities.</p>`
     : `<p>Your plan includes a complimentary <strong>30-day Onboarding Assistant</strong> -- someone from our team will be in touch shortly to help you get the <strong>${esc(householdName)}</strong> household fully set up. In the meantime, you're welcome to sign in and start exploring the platform on your own.</p>`;
 
+  // Opens on the decision itself -- congratulating them and naming what the brand stands for --
+  // before the operational plan/onboarding details. sender.label is forced to "ORDANIS" (see the
+  // brand_profiles/outbound_email_settings rows) so it renders identically everywhere this
+  // resolves, including here.
+  const introParagraph =
+    `<p>Congratulations, and welcome to ${esc(sender.label)}.</p>` +
+    `<p>The name comes from the Latin <em>ordo</em> -- order: the clarity and structure we believe every family's wealth deserves, no matter how complex it becomes. That is what ${esc(sender.label)} is built to bring you, and it is why joining us was the right call.</p>`;
+
+  const closingParagraph =
+    `<p>We're glad you're here, and we're looking forward to bringing that same sense of order to what matters most to you.</p>`;
+
   const html =
     `<div style="font-family:Arial,sans-serif;font-size:14px;color:#0A2540;line-height:1.6">` +
     `<p>Hi ${esc(name)},</p>` +
-    `<p>Welcome to ${esc(sender.label)}. Your <strong>${esc(planLabel)}</strong> plan for ${esc(householdName)} is now active.</p>` +
+    `${introParagraph}` +
+    `<p>Your <strong>${esc(planLabel)}</strong> plan for ${esc(householdName)} is now active.</p>` +
     `${onboardingParagraph}` +
+    `${closingParagraph}` +
     `<hr style="border:none;border-top:1px solid #E2E0D8;margin:20px 0">` +
     `<div style="font-size:12px;color:#8A94A3">${esc(sender.label)} -- Private Wealth Administration</div>` +
     `</div>`;
