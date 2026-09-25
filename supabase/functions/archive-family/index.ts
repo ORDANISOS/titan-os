@@ -1,5 +1,5 @@
 // supabase/functions/archive-family/index.ts
-// Ordanis — step 1 of honoring a household's request to be removed from the platform.
+// ORDANIS — step 1 of honoring a household's request to be removed from the platform.
 //
 // This is the immediate, non-destructive action: nothing about the household's data is deleted
 // here. It only stops the relationship from continuing forward --

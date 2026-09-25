@@ -1,5 +1,5 @@
 // supabase/functions/purge-family/index.ts
-// Ordanis — step 2 (permanent, deliberate) of honoring a household's request to be removed from
+// ORDANIS — step 2 (permanent, deliberate) of honoring a household's request to be removed from
 // the platform. See archive-family for step 1. This function refuses to run on any family that
 // has not already been archived -- a slip of the finger can archive a family, but it cannot reach
 // this function, on purpose. There is no undo past this point.

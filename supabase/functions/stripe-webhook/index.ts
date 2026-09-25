@@ -166,7 +166,7 @@ async function createFamilyFromSignup(session: Stripe.Checkout.Session, authUser
   // itself, since they need the exact same answer (which plan, does it carry an Expert).
   const { data: tier } = await admin.from("plan_features")
     .select("label, has_expert").eq("plan", plan).maybeSingle();
-  const planLabel = tier?.label || plan || "Ordanis";
+  const planLabel = tier?.label || plan || "ORDANIS";
   const hasExpert = !!tier?.has_expert;
 
   try {
@@ -222,7 +222,7 @@ async function resolveSender(): Promise<{ from: string; label: string }> {
     orgLabel = clean(data?.from_org_label);
   } catch (_e) { /* ditto */ }
 
-  const label = orgLabel || brandName || clean(BRAND_NAME_ENV) || "Ordanis";
+  const label = orgLabel || brandName || clean(BRAND_NAME_ENV) || "ORDANIS";
 
   if (fixed) return { from: fixed, label };
   if (sendingDomain) return { from: `alerts@${sendingDomain}`, label };

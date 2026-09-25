@@ -23,7 +23,7 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 const SIGNUP_FN_URL = `${SUPABASE_URL}/functions/v1/public-signup`;
 
-const BRAND_NAME = import.meta.env.VITE_BRAND_NAME || "Ordanis";
+const BRAND_NAME = import.meta.env.VITE_BRAND_NAME || "ORDANIS";
 const BRAND_TAGLINE = import.meta.env.VITE_BRAND_TAGLINE || "Private Wealth Administration";
 
 // ── Palette, taken directly from the approved "Sign-up Flow" design (Plans.dc.html /

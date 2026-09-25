@@ -25,7 +25,7 @@ import { PLANS, PLAN_BLURB, planAllows, planLabel, planIsSelfServe } from "./pla
 // a blocked tile, never another firm's contract.
 
 // Backend + brand are env-overridable so the exact same codebase can be
-// deployed as a white-label instance (e.g. Ordanis demo) from a second Vercel
+// deployed as a white-label instance (e.g. ORDANIS demo) from a second Vercel
 // project with different VITE_* env vars — with NO env vars set, everything
 // defaults to the PCM production values below, so this deploy is unaffected.
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://unkirihxtruhdjeldfpm.supabase.co";
@@ -33,13 +33,13 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ── WHITE-LABEL BRAND CONFIG ─────────────────────────────────────────────────
-// Ordanis is the product. Every deployment — including PCM's own — is a tenant
+// ORDANIS is the product. Every deployment — including PCM's own — is a tenant
 // that supplies its own identity through these env vars; with none set you get
-// plain Ordanis. (PCM_LOGO/PCM_MARK stay bundled only as the last-resort image
+// plain ORDANIS. (PCM_LOGO/PCM_MARK stay bundled only as the last-resort image
 // fallback so the app never renders a broken logo.)
 const BRAND = {
-  name: import.meta.env.VITE_BRAND_NAME || "Ordanis",
-  short: import.meta.env.VITE_BRAND_SHORT || "Ordanis",
+  name: import.meta.env.VITE_BRAND_NAME || "ORDANIS",
+  short: import.meta.env.VITE_BRAND_SHORT || "ORDANIS",
   tagline: import.meta.env.VITE_BRAND_TAGLINE || "PRIVATE WEALTH OPERATING SYSTEM",
   contactEmail: import.meta.env.VITE_BRAND_CONTACT_EMAIL || "",
   emailDomain: import.meta.env.VITE_BRAND_EMAIL_DOMAIN || "ordanisos.com",
@@ -734,8 +734,8 @@ const FAMILY_SCOPED=["contacts","properties","deals","notes","tasks","portfolio_
 // Display label of the signed-in user, set at login; used to stamp task completions.
 let CURRENT_USER_LABEL="";
 // Display-only rename: the underlying role value stored in the DB/permissions stays "advisor";
-// only the label shown to users reads "Ordanis Expert".
-const ROLE_LABELS={admin:"Admin",advisor:"Ordanis Expert",client:"Client",partner:"Partner"};
+// only the label shown to users reads "ORDANIS Expert".
+const ROLE_LABELS={admin:"Admin",advisor:"ORDANIS Expert",client:"Client",partner:"Partner"};
 const roleLabel=r=>ROLE_LABELS[(r||"").toLowerCase()]||r;
 
 
@@ -799,7 +799,7 @@ function MoneyInput({value,onChange,placeholder,style,disabled}){
   return <input type="text" inputMode="decimal" style={style||inp} disabled={disabled} value={fmt(value)} onChange={handleChange} placeholder={placeholder||"0"}/>;
 }
 const Sel=({children,...p})=><select {...p} style={{...inp,cursor:"pointer",...(p.style||{})}}>{children}</select>;
-function AdvisorScopeBar({userProfile,value,onChange,label="Ordanis Expert"}){
+function AdvisorScopeBar({userProfile,value,onChange,label="ORDANIS Expert"}){
   const[advisors,setAdvisors]=useState([]);
   const isAdmin=userProfile?.role==="admin";
   useEffect(()=>{
@@ -810,7 +810,7 @@ function AdvisorScopeBar({userProfile,value,onChange,label="Ordanis Expert"}){
     <span style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase"}}>{label}</span>
     <div style={{minWidth:150}}>
       <Sel value={value} onChange={e=>onChange(e.target.value)}>
-        <option value="">All Ordanis Experts</option>
+        <option value="">All ORDANIS Experts</option>
         {advisors.map(a=><option key={a.id} value={(a.email||"").toLowerCase()}>{a.full_name||a.email}</option>)}
       </Sel>
     </div>
@@ -1394,7 +1394,7 @@ function FamilyReport({family,data,onClose}){
     </style></head><body>
     <div class="header">
       <div><img src="${BRAND.logo}" alt="${BRAND.name}" class="logo-img"/></div>
-      <div style="text-align:right"><h1>${family.name}</h1><div class="advisor">Ordanis Expert: ${family.advisorName||"—"} | ${family.advisorEmail||""}</div><div class="date">${new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</div></div>
+      <div style="text-align:right"><h1>${family.name}</h1><div class="advisor">ORDANIS Expert: ${family.advisorName||"—"} | ${family.advisorEmail||""}</div><div class="date">${new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</div></div>
     </div>
     <div class="stats">
       <div class="stat"><div class="stat-l">Real Estate Value</div><div class="stat-v">${fmtMoney(totalPortfolio)}</div></div>
@@ -2135,7 +2135,7 @@ function FamilyAssistant({family,data,reload,compact,toast}){
   // Read the family from the live data set so a rename reflects immediately
   // (the `family` prop passed by parents can be a stale snapshot).
   const fam=(data.families||[]).find(x=>x.id===family.id)||family;
-  const assistantName=(fam.assistantName||"").trim()||"Ordanis";
+  const assistantName=(fam.assistantName||"").trim()||"ORDANIS";
   const[messages,setMessages]=useState([]); // {role:"user"|"assistant", content}
   const[input,setInput]=useState("");
   const[busy,setBusy]=useState(false);
@@ -2209,11 +2209,11 @@ div.body{font-size:14px;white-space:pre-wrap;}
     setBusy(true);
     try{
       const{data:resp,error:fnErr}=await sb.functions.invoke("family-ai-assistant",{body:{question,snapshot,history,assistantName}});
-      if(fnErr)throw new Error("Please contact your Ordanis Expert for that information.");
-      if(resp&&resp.error)throw new Error("Please contact your Ordanis Expert for that information.");
+      if(fnErr)throw new Error("Please contact your ORDANIS Expert for that information.");
+      if(resp&&resp.error)throw new Error("Please contact your ORDANIS Expert for that information.");
       setMessages(m=>[...m,{role:"assistant",content:(resp&&resp.answer)||"No response."}]);
     }catch(e){
-      setError("Please contact your Ordanis Expert for that information.");
+      setError("Please contact your ORDANIS Expert for that information.");
     }finally{
       setBusy(false);
     }
@@ -2226,14 +2226,14 @@ div.body{font-size:14px;white-space:pre-wrap;}
       {editingName
         ? <div style={{display:"flex",alignItems:"center",gap:8}}>
             <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?22:26,color:B.navy,fontWeight:600}}>Ask</span>
-            <input autoFocus value={nameInput} onChange={e=>setNameInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveName();if(e.key==="Escape"){setEditingName(false);setNameInput(assistantName);}}} maxLength={40} placeholder="Ordanis"
+            <input autoFocus value={nameInput} onChange={e=>setNameInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveName();if(e.key==="Escape"){setEditingName(false);setNameInput(assistantName);}}} maxLength={40} placeholder="ORDANIS"
               style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?20:24,color:B.navy,fontWeight:600,border:`1px solid ${B.border}`,borderRadius:8,padding:"2px 8px",width:160,outline:"none"}}/>
             <Btn small onClick={saveName} disabled={savingName}>{savingName?"…":"Save"}</Btn>
             <button onClick={()=>{setEditingName(false);setNameInput(assistantName);}} style={{background:"none",border:"none",color:B.textSoft,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
           </div>
         : <>
             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?22:26,color:B.navy,fontWeight:600}}>Ask {assistantName}</div>
-            <button onClick={()=>{setNameInput(assistantName==="Ordanis"?"":assistantName);setEditingName(true);}} title="Rename your assistant" style={{background:"none",border:"none",color:B.gold,fontSize:14,cursor:"pointer",padding:"2px 4px"}}>✎</button>
+            <button onClick={()=>{setNameInput(assistantName==="ORDANIS"?"":assistantName);setEditingName(true);}} title="Rename your assistant" style={{background:"none",border:"none",color:B.gold,fontSize:14,cursor:"pointer",padding:"2px 4px"}}>✎</button>
           </>}
       <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:B.navy,background:"rgba(206,182,132,0.22)",border:`1px solid ${B.gold}`,borderRadius:20,padding:"2px 9px"}}>Beta</span>
     </div>
@@ -2292,7 +2292,7 @@ div.body{font-size:14px;white-space:pre-wrap;}
 const _greetedFamilies=new Set();
 
 function AssistantWelcome({family,data,reload,onClose,userProfile,toast}){
-  const assistantName=(((data.families||[]).find(x=>x.id===family.id)||family).assistantName||"").trim()||"Ordanis";
+  const assistantName=(((data.families||[]).find(x=>x.id===family.id)||family).assistantName||"").trim()||"ORDANIS";
   const[emailOpen,setEmailOpen]=useState(false);
   const isClient=userProfile&&userProfile.role==="client";
   return <Modal title={`Hi — I'm ${assistantName}`} onClose={onClose} wide>
@@ -2301,7 +2301,7 @@ function AssistantWelcome({family,data,reload,onClose,userProfile,toast}){
     </div>
     <FamilyAssistant family={family} data={data} reload={reload} compact toast={toast}/>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginTop:16,flexWrap:"wrap"}}>
-      {isClient?<Btn variant="ghost" onClick={()=>setEmailOpen(true)}>✉ Email my Ordanis Expert</Btn>:<span/>}
+      {isClient?<Btn variant="ghost" onClick={()=>setEmailOpen(true)}>✉ Email my ORDANIS Expert</Btn>:<span/>}
       <Btn onClick={onClose}>Take me to the dashboard →</Btn>
     </div>
     {emailOpen&&<EmailAdvisorModal family={family} userProfile={userProfile} data={data} onClose={()=>setEmailOpen(false)}/>}
@@ -2324,7 +2324,7 @@ function FloatingAssistant({family,families,data,reload,toast,userProfile}){
   const isMobile=useIsMobile();
   const active=family||picked;
   const list=(families||[]).filter(f=>!q.trim()||(f.name||"").toLowerCase().includes(q.trim().toLowerCase()));
-  const assistantName=((active&&active.assistantName)||"").trim()||"Ordanis";
+  const assistantName=((active&&active.assistantName)||"").trim()||"ORDANIS";
   const close=()=>{setOpen(false);setPicked(null);setQ("");};
 
   return <>
@@ -2434,7 +2434,7 @@ function EmailAdvisorModal({family,userProfile,data,onClose}){
     finally{ setSending(false); }
   };
 
-  return <Modal title="Email your Ordanis Expert" onClose={onClose}>
+  return <Modal title="Email your ORDANIS Expert" onClose={onClose}>
     {sent?<div style={{textAlign:"center",padding:"12px 0"}}>
       <div style={{fontSize:40,marginBottom:8}}>✓</div>
       <div style={{fontSize:16,color:B.navy,fontWeight:600,fontFamily:"'Cormorant Garamond',serif"}}>Message sent</div>
@@ -2443,14 +2443,14 @@ function EmailAdvisorModal({family,userProfile,data,onClose}){
     </div>:<>
       <Field label="To">
         {options.length>0
-          ? <Sel value={toEmail} onChange={e=>setToEmail(e.target.value)}>{options.map(o=><option key={o.email} value={o.email}>{o.name}{o.primary?" (primary Ordanis Expert)":""} · {o.email}</option>)}</Sel>
-          : <div style={{fontSize:13,color:B.textMute,padding:"9px 0"}}>No designated Ordanis Expert is on file yet — add one under Team Member & Contacts, or add someone below.</div>}
+          ? <Sel value={toEmail} onChange={e=>setToEmail(e.target.value)}>{options.map(o=><option key={o.email} value={o.email}>{o.name}{o.primary?" (primary ORDANIS Expert)":""} · {o.email}</option>)}</Sel>
+          : <div style={{fontSize:13,color:B.textMute,padding:"9px 0"}}>No designated ORDANIS Expert is on file yet — add one under Team Member & Contacts, or add someone below.</div>}
       </Field>
       {ccPrimary&&<div style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:B.navy,background:B.bg,border:`1px solid ${B.borderLight}`,borderRadius:8,padding:"9px 12px",marginBottom:12}}>
         <span style={{fontSize:13}}>🔒</span>
         <div style={{minWidth:0}}>
           <div><span style={{fontWeight:700}}>Cc:</span> {ccPrimary.name} · {ccPrimary.email}</div>
-          <div style={{fontSize:11,color:B.textMute,marginTop:1}}>Your primary Ordanis Expert is always copied and can't be removed.</div>
+          <div style={{fontSize:11,color:B.textMute,marginTop:1}}>Your primary ORDANIS Expert is always copied and can't be removed.</div>
         </div>
       </div>}
       {customs.length>0&&<div style={{marginBottom:10}}>
@@ -2470,7 +2470,7 @@ function EmailAdvisorModal({family,userProfile,data,onClose}){
         </div>
         {addErr&&<div style={{fontSize:11,color:"#8b1a1a",marginTop:5}}>{addErr}</div>}
       </Field>
-      {!ccPrimary&&!primaryEmailRaw&&<div style={{fontSize:11,color:B.textMute,marginBottom:12}}>No primary Ordanis Expert is on file for your account yet — this will go out without an automatic copy.</div>}
+      {!ccPrimary&&!primaryEmailRaw&&<div style={{fontSize:11,color:B.textMute,marginBottom:12}}>No primary ORDANIS Expert is on file for your account yet — this will go out without an automatic copy.</div>}
       <Field label="Subject"><Inp value={subject} onChange={e=>setSubject(e.target.value)}/></Field>
       <Field label="Message"><textarea value={msg} onChange={e=>setMsg(e.target.value)} rows={7} placeholder="Write your message…" style={{width:"100%",resize:"vertical",border:`1px solid ${B.border}`,borderRadius:8,padding:"11px 13px",fontSize:14,fontFamily:"inherit",color:B.text,background:B.white,outline:"none",lineHeight:1.5}}/></Field>
       <div style={{fontSize:11,color:B.textMute,margin:"6px 0 14px"}}>{clientEmail?<>Sent from your address (<strong>{clientEmail}</strong>) — recipients can reply straight to you.</>:"Recipients can reply straight to you."}</div>
@@ -2570,7 +2570,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   const overdueTasks=pendingTasks.filter(t=>t.dueDate&&new Date(t.dueDate)<new Date());
   const soonTasks=pendingTasks.filter(t=>t.dueDate&&!overdueTasks.includes(t)&&(new Date(t.dueDate)-new Date())/(86400000)<=30);
 
-  // Scheduled Prompts is visible to every Ordanis Expert/Admin, and to a Partner
+  // Scheduled Prompts is visible to every ORDANIS Expert/Admin, and to a Partner
   // only when an admin has flipped their can_run_scheduled_prompts toggle on.
   const canSeePrompts=userProfile?.role==="advisor"||userProfile?.role==="admin"||(userProfile?.role==="partner"&&userProfile?.canRunScheduledPrompts);
   // ORDER MATTERS: familyRow and plan must stay ABOVE TABS, which reads plan to decide whether the
@@ -2586,7 +2586,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   const hasBillPay=planAllows(plan,"billPay");
   const hasAssignedExpert=planAllows(plan,"assignedExpert");
 
-  // "Ask Ordanis" is the internal key, not the label — the label resolves to this household's
+  // "Ask ORDANIS" is the internal key, not the label — the label resolves to this household's
   // assistant name at render, so a family whose assistant is called Nova reads "Ask Nova"
   // while the tab id stays "askordanis" and existing links keep working.
   //
@@ -2596,8 +2596,8 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   //
   // Obligations is absent entirely on Core rather than shown disabled. A locked door on every
   // visit is worse than no door, and the tab row is already the tightest thing on this screen.
-  const TABS=["Overview","Properties","Portfolio","Cash Flow",...(hasWorkflows?["Obligations"]:[]),"Valuables","Deals","Notes","Tasks","Vault",...(canSeePrompts?["Prompts"]:[]),"Ask Ordanis"];
-  const assistantName=(familyRow.assistantName||"").trim()||"Ordanis";
+  const TABS=["Overview","Properties","Portfolio","Cash Flow",...(hasWorkflows?["Obligations"]:[]),"Valuables","Deals","Notes","Tasks","Vault",...(canSeePrompts?["Prompts"]:[]),"Ask ORDANIS"];
+  const assistantName=(familyRow.assistantName||"").trim()||"ORDANIS";
   const[showWelcome,setShowWelcome]=useState(false);
   // Carries "attach a document to this property section" from the Properties tab
   // over to the Vault tab, which owns the upload form.
@@ -2722,7 +2722,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   const toggleMemberAdvisor=async(c)=>{
     if(!c.email){toast("Add an email to this contact first — the client emails them here.","error");return;}
     const{error}=await sb.from("contacts").update({is_advisor:!c.isAdvisor}).eq("id",c.id);
-    if(error)toast(error.message,"error");else{toast(!c.isAdvisor?"Marked as an emailable Ordanis Expert":"Removed as Ordanis Expert option");reload("contacts");}
+    if(error)toast(error.message,"error");else{toast(!c.isAdvisor?"Marked as an emailable ORDANIS Expert":"Removed as ORDANIS Expert option");reload("contacts");}
   };
   // The family principal, copied on every outbound workflow draft. A partial unique
   // index allows only one per family, so the previous holder is cleared first
@@ -2793,7 +2793,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   const addFamilyContact=async(f)=>{const{error}=await sb.from("family_contacts").insert({family_id:family.id,name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,is_advisor:!!f.isAdvisor,notes:f.notes||null});if(error)toast(error.message,"error");else{toast("Contact added");reload("family_contacts");}};
   const editFamilyContact=async(f)=>{const{error}=await sb.from("family_contacts").update({name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,is_advisor:!!f.isAdvisor,notes:f.notes||null}).eq("id",editFC.id);if(error)toast(error.message,"error");else{toast("Contact updated");reload("family_contacts");}};
   const delFamilyContact=async(id)=>{const{error}=await sb.from("family_contacts").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Contact removed");reload("family_contacts");}};
-  const toggleFCAdvisor=async(c)=>{if(!c.email){toast("Add an email to this contact first — the client emails them here.","error");return;}const{error}=await sb.from("family_contacts").update({is_advisor:!c.isAdvisor}).eq("id",c.id);if(error)toast(error.message,"error");else{toast(!c.isAdvisor?"Marked as an emailable Ordanis Expert":"Removed as Ordanis Expert option");reload("family_contacts");}};
+  const toggleFCAdvisor=async(c)=>{if(!c.email){toast("Add an email to this contact first — the client emails them here.","error");return;}const{error}=await sb.from("family_contacts").update({is_advisor:!c.isAdvisor}).eq("id",c.id);if(error)toast(error.message,"error");else{toast(!c.isAdvisor?"Marked as an emailable ORDANIS Expert":"Removed as ORDANIS Expert option");reload("family_contacts");}};
 
   const propContactsFor=(pid)=>(data.property_contacts||[]).filter(pc=>pc.propertyId===pid);
   // Supporting document behind a given figure on a property card (mortgage note,
@@ -2888,12 +2888,13 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
               padding:"3px 7px",borderRadius:4,
               background:hasWorkflows?B.gold:B.borderLight,color:hasWorkflows?B.navy:B.textSoft}}>{planLabel(plan)}</span>
           </div>
-          {/* On Core the expert-of-record exists only so staff can open the household; naming them
-              here as the household's Ordanis Expert would contradict the tier that was sold. */}
+          {/* On Basic/Core the expert-of-record exists only so staff can open the household; naming
+              them here as the household's ORDANIS Expert would contradict the tier that was sold --
+              both tiers are self-directed, not staff-led, per plans.js's PLAN_BLURB. */}
           {!isMobile&&<div style={{fontSize:12,color:B.textSoft,marginTop:2}}>
             {hasAssignedExpert
-              ? <>Ordanis Expert: {family.advisorName||"—"}{family.advisorEmail?` · ${family.advisorEmail}`:""}</>
-              : <>Partner-led · no assigned Ordanis Expert on this plan</>}
+              ? <>ORDANIS Expert: {family.advisorName||"—"}{family.advisorEmail?` · ${family.advisorEmail}`:""}</>
+              : <>Self-directed · no assigned ORDANIS Expert on this plan</>}
           </div>}
           {isMobile&&hasAssignedExpert&&family.advisorName&&<div style={{fontSize:11,color:B.textSoft,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{family.advisorName}</div>}
         </div>
@@ -2918,7 +2919,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
         {TABS.map(t=>{
           const id=t.toLowerCase().replace(/\s+/g,"");
           const on=activeTab===id;
-          const isAssistant=t==="Ask Ordanis";
+          const isAssistant=t==="Ask ORDANIS";
           const label=isAssistant?("Ask "+assistantName):t;
           return <button key={t} onClick={()=>setActiveTab(id)} aria-current={on?"page":undefined}
             style={{
@@ -3472,7 +3473,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
         <FamilyAssistant family={family} data={data} reload={reload} toast={toast}/>
       </div>}
 
-      {/* PROMPTS TAB — Ordanis Experts/Admins always; Partners only if permitted */}
+      {/* PROMPTS TAB — ORDANIS Experts/Admins always; Partners only if permitted */}
       {activeTab==="prompts"&&<div style={{padding:isMobile?"16px 14px":"24px 28px"}}>
         <ScheduledPromptsSection userProfile={userProfile} families={data.families||[]} toast={toast} lockFamilyId={userProfile?.role==="partner"?family.id:undefined}/>
       </div>}
@@ -3540,7 +3541,7 @@ function FamilyContactForm({initial,onSave,onClose,hideAdvisor=false,rolePlaceho
     {!hideAdvisor&&<label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"10px 14px",background:f.isAdvisor?"rgba(206,182,132,0.15)":B.bg,borderRadius:8,border:`1px solid ${f.isAdvisor?B.gold:B.border}`,marginBottom:4}}>
       <input type="checkbox" checked={!!f.isAdvisor} onChange={e=>setF(p=>({...p,isAdvisor:e.target.checked}))} style={{width:16,height:16,accentColor:B.navy}}/>
       <span style={{fontSize:13,color:B.navy,fontWeight:600}}>Client can email this contact</span>
-      <span style={{fontSize:11,color:B.textMute}}>appears in the client's "Email my Ordanis Expert"</span>
+      <span style={{fontSize:11,color:B.textMute}}>appears in the client's "Email my ORDANIS Expert"</span>
     </label>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}>
       <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
@@ -3638,7 +3639,7 @@ function TaskForm({initial,contacts=[],onSave,onClose}){
       </Sel>
     </Field>
     {f.reminderDays>0&&f.dueDate&&<div style={{background:"#e8f0f8",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:12,color:B.navyMid}}>
-      🔔 Ordanis Expert will be emailed on {(()=>{const b=parseLocalDate(f.dueDate);if(isNaN(b.getTime()))return new Date(NaN);const r=new Date(b);r.setDate(r.getDate()-f.reminderDays);return r;})().toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}
+      🔔 ORDANIS Expert will be emailed on {(()=>{const b=parseLocalDate(f.dueDate);if(isNaN(b.getTime()))return new Date(NaN);const r=new Date(b);r.setDate(r.getDate()-f.reminderDays);return r;})().toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}
     </div>}
     <RecurrenceField f={f} setF={setF}/>
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}>
@@ -4764,13 +4765,13 @@ function FamilyForm({initial,onSave,onClose,userProfile,advisors=[]}){
         </div>}
     </Field>
     {isAdmin
-      ? <Field label="Assign Ordanis Expert">
+      ? <Field label="Assign ORDANIS Expert">
           <select value={f.advisorEmail||""} onChange={pickAdvisor} style={{width:"100%",padding:"10px 12px",borderRadius:8,border:`1px solid ${B.border}`,fontSize:14,fontFamily:"'DM Sans',sans-serif",background:B.white,color:B.navy}}>
-            <option value="">— Select a Ordanis Expert —</option>
+            <option value="">— Select a ORDANIS Expert —</option>
             {advisors.map(a=><option key={a.id} value={a.email}>{(a.full_name||a.email)}{a.full_name?` (${a.email})`:""}</option>)}
           </select>
         </Field>
-      : <Field label="Ordanis Expert"><Inp value={userProfile?.fullName||userProfile?.email||""} disabled/></Field>
+      : <Field label="ORDANIS Expert"><Inp value={userProfile?.fullName||userProfile?.email||""} disabled/></Field>
     }
     <Field label="Notes"><Tex value={f.notes||""} onChange={set("notes")}/></Field>
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",alignItems:"center",marginTop:10}}>
@@ -4839,7 +4840,7 @@ function printAdvisorReport(adv,data){
   </style></head><body>
   <div class="header">
     <div><img src="${BRAND.logo}" alt="${BRAND.name}" class="logo-img"/></div>
-    <div style="text-align:right"><h1>Ordanis Expert Activity Report</h1><div class="advisor">${esc(adv.name||email)}${email?` | ${esc(email)}`:""}</div><div class="date">${new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</div></div>
+    <div style="text-align:right"><h1>ORDANIS Expert Activity Report</h1><div class="advisor">${esc(adv.name||email)}${email?` | ${esc(email)}`:""}</div><div class="date">${new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</div></div>
   </div>
   <div class="stats">
     ${stat("Families",families.length)}${stat("AUM (Est.)",fmtMoney(aum))}${stat("Prospects",prospects.length)}${stat("Open Deals",openDeals.length)}${stat("Pipeline $",fmtMoney(pipelineVal))}${stat("Open Tasks",openTasks.length)}${stat("Overdue",overdue.length)}
@@ -4919,7 +4920,7 @@ function FamiliesView({data,reload,toast,userProfile,navIntent,onNavConsumed}){
   },[families,data,advisors]);
 
   // advisor_email is written on BOTH plans, including Core. On Core the client is never shown a
-  // Ordanis Expert and no expert-led feature turns on, but somebody at the firm still has to be able
+  // ORDANIS Expert and no expert-led feature turns on, but somebody at the firm still has to be able
   // to open the household: fetchTable scopes an advisor's families by advisor_email, so a null
   // there would make every Core family invisible to everyone but an admin the moment it was
   // created. Expert of record for access, not a service level.
@@ -4942,18 +4943,18 @@ function FamiliesView({data,reload,toast,userProfile,navIntent,onNavConsumed}){
   return <div style={{height:"100%",display:"flex",flexDirection:"column",minHeight:0}}>
     <div style={{padding:"14px 24px",borderBottom:`1px solid ${B.borderLight}`,background:B.white,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
       {isAdmin&&<div style={{display:"flex",background:B.bg,borderRadius:8,padding:3,border:`1px solid ${B.borderLight}`}}>
-        {[{k:"families",l:"Families"},{k:"advisors",l:"By Ordanis Expert"}].map(t=><button key={t.k} onClick={()=>setViewMode(t.k)} style={{border:"none",borderRadius:6,padding:"7px 14px",fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",background:viewMode===t.k?B.navy:"transparent",color:viewMode===t.k?B.white:B.textSoft}}>{t.l}</button>)}
+        {[{k:"families",l:"Families"},{k:"advisors",l:"By ORDANIS Expert"}].map(t=><button key={t.k} onClick={()=>setViewMode(t.k)} style={{border:"none",borderRadius:6,padding:"7px 14px",fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",background:viewMode===t.k?B.navy:"transparent",color:viewMode===t.k?B.white:B.textSoft}}>{t.l}</button>)}
       </div>}
       {viewMode==="families"&&<>
         <Inp value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search families…" style={{flex:1,minWidth:160}}/>
         {advisorFilter&&<button onClick={()=>setAdvisorFilter("")} style={{border:`1px solid ${B.gold}`,background:"#fbf6ec",color:B.navy,borderRadius:16,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>{(advisorSummary.find(a=>a.email===advisorFilter)?.name)||advisorFilter} ✕</button>}
         <Btn onClick={()=>setModal("add")}>+ New Family</Btn>
       </>}
-      {viewMode==="advisors"&&<div style={{flex:1,fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Ordanis Expert Summary</div>}
+      {viewMode==="advisors"&&<div style={{flex:1,fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>ORDANIS Expert Summary</div>}
     </div>
     <div style={{flex:1,overflowY:"auto",padding:"16px 24px"}}>
       {viewMode==="advisors"&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(320px,100%),1fr))",gap:16}}>
-        {advisorSummary.length===0&&<Empty text="No Ordanis Experts or families yet."/>}
+        {advisorSummary.length===0&&<Empty text="No ORDANIS Experts or families yet."/>}
         {advisorSummary.map(a=>(
           <div key={a.email||"unassigned"} onClick={()=>{if(!a.unassigned){setAdvisorFilter(a.email);setViewMode("families");}}}
             style={{background:B.white,borderRadius:12,border:`1px solid ${B.borderLight}`,borderTop:`3px solid ${a.unassigned?B.textMute:B.gold}`,padding:20,cursor:a.unassigned?"default":"pointer",boxShadow:B.shadow,transition:"box-shadow .15s"}}
@@ -4961,7 +4962,7 @@ function FamiliesView({data,reload,toast,userProfile,navIntent,onNavConsumed}){
             onMouseLeave={e=>e.currentTarget.style.boxShadow=B.shadow}>
             <div style={{marginBottom:12}}>
               <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:a.unassigned?B.textMute:B.navy,fontWeight:600,marginBottom:2}}>{a.name}</div>
-              <div style={{fontSize:12,color:B.textSoft}}>{a.email||"Families with no Ordanis Expert assigned"}</div>
+              <div style={{fontSize:12,color:B.textSoft}}>{a.email||"Families with no ORDANIS Expert assigned"}</div>
             </div>
             <div style={{height:1,background:`linear-gradient(90deg,${a.unassigned?B.textMute:B.gold},transparent)`,marginBottom:12}}/>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(170px,100%),1fr))",gap:8}}>
@@ -4980,7 +4981,7 @@ function FamiliesView({data,reload,toast,userProfile,navIntent,onNavConsumed}){
         ))}
       </div>}
       {viewMode!=="advisors"&&<>
-      {filtered.length===0&&<Empty text={advisorFilter?"No families for this Ordanis Expert.":"No families yet. Add your first one."}/>}
+      {filtered.length===0&&<Empty text={advisorFilter?"No families for this ORDANIS Expert.":"No families yet. Add your first one."}/>}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(300px,100%),1fr))",gap:16}}>
         {filtered.map(f=>{
           const s=getStats(f);
@@ -4999,12 +5000,12 @@ function FamiliesView({data,reload,toast,userProfile,navIntent,onNavConsumed}){
                     background:planAllows(f.plan,"workflows")?B.gold:B.borderLight,
                     color:planAllows(f.plan,"workflows")?B.navy:B.textSoft}}>{planLabel(f.plan)}</span>
                 </div>
-                {/* On Core there is no assigned expert to name, so the row says who leads instead
-                    of showing the expert-of-record we keep for access. */}
+                {/* On Basic/Core there is no assigned expert to name -- both are self-directed, so the
+                    row says that instead of showing the expert-of-record we keep for access. */}
                 <div style={{fontSize:12,color:B.textSoft}}>
                   {planAllows(f.plan,"assignedExpert")
-                    ? (f.advisorName||"No Ordanis Expert assigned")
-                    : "Partner-led"}
+                    ? (f.advisorName||"No ORDANIS Expert assigned")
+                    : "Self-directed"}
                 </div>
               </div>
               <div style={{display:"flex",gap:6}} onClick={e=>e.stopPropagation()}>
@@ -5211,13 +5212,13 @@ function NotesView({data,reload,toast,userProfile,prospectMode=false}){
     return <div style={{height:"100%",display:"flex",flexDirection:"column",minHeight:0}}>
       <div style={{padding:"12px 20px",borderBottom:`1px solid ${B.borderLight}`,background:B.white,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
         <div style={{display:"flex",background:B.bg,borderRadius:8,padding:3,border:`1px solid ${B.borderLight}`}}>
-          {[{k:"notes",l:"Notes"},{k:"advisors",l:"By Ordanis Expert"}].map(t=><button key={t.k} onClick={()=>setViewMode(t.k)} style={{border:"none",borderRadius:6,padding:"6px 12px",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",background:viewMode===t.k?B.navy:"transparent",color:viewMode===t.k?B.white:B.textSoft}}>{t.l}</button>)}
+          {[{k:"notes",l:"Notes"},{k:"advisors",l:"By ORDANIS Expert"}].map(t=><button key={t.k} onClick={()=>setViewMode(t.k)} style={{border:"none",borderRadius:6,padding:"6px 12px",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",background:viewMode===t.k?B.navy:"transparent",color:viewMode===t.k?B.white:B.textSoft}}>{t.l}</button>)}
         </div>
-        <div style={{flex:1,fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Notes by Ordanis Expert</div>
+        <div style={{flex:1,fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Notes by ORDANIS Expert</div>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(300px,100%),1fr))",gap:16}}>
-          {advisorSummary.length===0&&<Empty text="No Ordanis Experts or notes yet."/>}
+          {advisorSummary.length===0&&<Empty text="No ORDANIS Experts or notes yet."/>}
           {advisorSummary.map(a=>(
             <div key={a.email||"unassigned"} onClick={()=>{if(!a.unassigned){setAdvisorFilter(a.email);setViewMode("notes");}}}
               style={{background:B.white,borderRadius:12,border:`1px solid ${B.borderLight}`,borderTop:`3px solid ${a.unassigned?B.textMute:B.gold}`,padding:20,cursor:a.unassigned?"default":"pointer",boxShadow:B.shadow,transition:"box-shadow .15s"}}
@@ -5225,7 +5226,7 @@ function NotesView({data,reload,toast,userProfile,prospectMode=false}){
               onMouseLeave={e=>e.currentTarget.style.boxShadow=B.shadow}>
               <div style={{marginBottom:12}}>
                 <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:a.unassigned?B.textMute:B.navy,fontWeight:600,marginBottom:2}}>{a.name}</div>
-                <div style={{fontSize:12,color:B.textSoft}}>{a.email||"Notes not linked to a Ordanis Expert's contact"}</div>
+                <div style={{fontSize:12,color:B.textSoft}}>{a.email||"Notes not linked to a ORDANIS Expert's contact"}</div>
               </div>
               <div style={{height:1,background:`linear-gradient(90deg,${a.unassigned?B.textMute:B.gold},transparent)`,marginBottom:12}}/>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(170px,100%),1fr))",gap:8}}>
@@ -5247,13 +5248,13 @@ function NotesView({data,reload,toast,userProfile,prospectMode=false}){
   return <div style={{height:"100%",display:"flex",flexDirection:"column",minHeight:0}}>
     {adminProspect&&<div style={{padding:"10px 20px",borderBottom:`1px solid ${B.borderLight}`,background:B.white,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
       <div style={{display:"flex",background:B.bg,borderRadius:8,padding:3,border:`1px solid ${B.borderLight}`}}>
-        {[{k:"notes",l:"Notes"},{k:"advisors",l:"By Ordanis Expert"}].map(t=><button key={t.k} onClick={()=>setViewMode(t.k)} style={{border:"none",borderRadius:6,padding:"6px 12px",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",background:viewMode===t.k?B.navy:"transparent",color:viewMode===t.k?B.white:B.textSoft}}>{t.l}</button>)}
+        {[{k:"notes",l:"Notes"},{k:"advisors",l:"By ORDANIS Expert"}].map(t=><button key={t.k} onClick={()=>setViewMode(t.k)} style={{border:"none",borderRadius:6,padding:"6px 12px",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",background:viewMode===t.k?B.navy:"transparent",color:viewMode===t.k?B.white:B.textSoft}}>{t.l}</button>)}
       </div>
       {advisorFilter&&<button onClick={()=>setAdvisorFilter("")} style={{border:`1px solid ${B.gold}`,background:"#fbf6ec",color:B.navy,borderRadius:16,padding:"5px 11px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>{(advisorSummary.find(a=>a.email===advisorFilter)?.name)||advisorFilter} ✕</button>}
     </div>}
     {!prospectMode&&userProfile?.role==="admin"&&<div style={{padding:"10px 20px",borderBottom:`1px solid ${B.borderLight}`,background:B.white,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
       <AdvisorScopeBar userProfile={userProfile} value={cmAdvScope} onChange={setCmAdvScope}/>
-      {cmAdvScope&&<span style={{fontSize:12,color:B.textSoft}}>Showing notes for this Ordanis Expert's families</span>}
+      {cmAdvScope&&<span style={{fontSize:12,color:B.textSoft}}>Showing notes for this ORDANIS Expert's families</span>}
     </div>}
     <div style={{padding:isMobile?"14px 14px":"20px 28px",borderBottom:`1px solid ${B.borderLight}`,background:B.white}}>
       <div style={{maxWidth:800,margin:"0 auto"}}>
@@ -5436,13 +5437,13 @@ function TasksView({data,reload,toast,userProfile,prospectMode=false}){
     return <div style={{height:"100%",display:"flex",flexDirection:"column",minHeight:0}}>
       <div style={{padding:"12px 20px",borderBottom:`1px solid ${B.borderLight}`,background:B.white,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
         <div style={{display:"flex",background:B.bg,borderRadius:8,padding:3,border:`1px solid ${B.borderLight}`}}>
-          {[{k:"tasks",l:"Tasks"},{k:"advisors",l:"By Ordanis Expert"}].map(t=><button key={t.k} onClick={()=>setViewMode(t.k)} style={{border:"none",borderRadius:6,padding:"6px 12px",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",background:viewMode===t.k?B.navy:"transparent",color:viewMode===t.k?B.white:B.textSoft}}>{t.l}</button>)}
+          {[{k:"tasks",l:"Tasks"},{k:"advisors",l:"By ORDANIS Expert"}].map(t=><button key={t.k} onClick={()=>setViewMode(t.k)} style={{border:"none",borderRadius:6,padding:"6px 12px",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",background:viewMode===t.k?B.navy:"transparent",color:viewMode===t.k?B.white:B.textSoft}}>{t.l}</button>)}
         </div>
-        <div style={{flex:1,fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Tasks by Ordanis Expert</div>
+        <div style={{flex:1,fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Tasks by ORDANIS Expert</div>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(300px,100%),1fr))",gap:16}}>
-          {advisorSummary.length===0&&<Empty text="No Ordanis Experts or tasks yet."/>}
+          {advisorSummary.length===0&&<Empty text="No ORDANIS Experts or tasks yet."/>}
           {advisorSummary.map(a=>(
             <div key={a.email||"unassigned"} onClick={()=>{if(!a.unassigned){setAdvisorFilter(a.email);setViewMode("tasks");}}}
               style={{background:B.white,borderRadius:12,border:`1px solid ${B.borderLight}`,borderTop:`3px solid ${a.unassigned?B.textMute:B.gold}`,padding:20,cursor:a.unassigned?"default":"pointer",boxShadow:B.shadow,transition:"box-shadow .15s"}}
@@ -5450,7 +5451,7 @@ function TasksView({data,reload,toast,userProfile,prospectMode=false}){
               onMouseLeave={e=>e.currentTarget.style.boxShadow=B.shadow}>
               <div style={{marginBottom:12}}>
                 <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:a.unassigned?B.textMute:B.navy,fontWeight:600,marginBottom:2}}>{a.name}</div>
-                <div style={{fontSize:12,color:B.textSoft}}>{a.email||"Tasks not linked to a Ordanis Expert's contact"}</div>
+                <div style={{fontSize:12,color:B.textSoft}}>{a.email||"Tasks not linked to a ORDANIS Expert's contact"}</div>
               </div>
               <div style={{height:1,background:`linear-gradient(90deg,${a.unassigned?B.textMute:B.gold},transparent)`,marginBottom:12}}/>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(150px,100%),1fr))",gap:8}}>
@@ -5472,7 +5473,7 @@ function TasksView({data,reload,toast,userProfile,prospectMode=false}){
   return <div style={{maxWidth:760,margin:"0 auto",padding:"20px",height:"100%",display:"flex",flexDirection:"column",minHeight:0}}>
     <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:16,flexWrap:"wrap"}}>
       {adminProspect&&<div style={{display:"flex",background:B.bg,borderRadius:8,padding:3,border:`1px solid ${B.borderLight}`}}>
-        {[{k:"tasks",l:"Tasks"},{k:"advisors",l:"By Ordanis Expert"}].map(t=><button key={t.k} onClick={()=>setViewMode(t.k)} style={{border:"none",borderRadius:6,padding:"5px 11px",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",background:viewMode===t.k?B.navy:"transparent",color:viewMode===t.k?B.white:B.textSoft}}>{t.l}</button>)}
+        {[{k:"tasks",l:"Tasks"},{k:"advisors",l:"By ORDANIS Expert"}].map(t=><button key={t.k} onClick={()=>setViewMode(t.k)} style={{border:"none",borderRadius:6,padding:"5px 11px",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",background:viewMode===t.k?B.navy:"transparent",color:viewMode===t.k?B.white:B.textSoft}}>{t.l}</button>)}
       </div>}
       {adminProspect&&advisorFilter&&<button onClick={()=>setAdvisorFilter("")} style={{border:`1px solid ${B.gold}`,background:"#fbf6ec",color:B.navy,borderRadius:16,padding:"5px 11px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>{(advisorSummary.find(a=>a.email===advisorFilter)?.name)||advisorFilter} ✕</button>}
       <div style={{display:"flex",gap:5}}>{["Pending","Done","All"].map(s=><button key={s} onClick={()=>setFilter(s)} style={{background:filter===s?B.navy:"transparent",border:`1px solid ${filter===s?B.navy:B.border}`,color:filter===s?B.white:B.textSoft,borderRadius:20,padding:"4px 14px",fontSize:11,cursor:"pointer",fontWeight:700,fontFamily:"inherit"}}>{s}</button>)}</div>
@@ -5529,7 +5530,7 @@ function GlobalTaskForm({initial,families=[],contacts=[],onSave,onClose}){
     <Field label="Task"><Inp placeholder="Follow up on loan maturity" value={f.title} onChange={set("title")}/></Field>
     <Grid2><Field label="Due Date"><Inp type="date" value={f.dueDate||""} onChange={set("dueDate")}/></Field><Field label="Priority"><Sel value={f.priority} onChange={set("priority")}><option>Low</option><option>Medium</option><option>High</option></Sel></Field></Grid2>
     <Field label="Email Reminder"><Sel value={f.reminderDays||7} onChange={e=>setF(p=>({...p,reminderDays:Number(e.target.value)}))}><option value={0}>No reminder</option>{REMINDER_OPTIONS.map(r=><option key={r.days} value={r.days}>{r.label}</option>)}</Sel></Field>
-    {Number(f.reminderDays)>0&&f.dueDate&&<div style={{background:"#e8f0f8",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:12,color:B.navyMid}}>🔔 Ordanis Expert emailed on {new Date(new Date(f.dueDate).setDate(new Date(f.dueDate).getDate()-Number(f.reminderDays))).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</div>}
+    {Number(f.reminderDays)>0&&f.dueDate&&<div style={{background:"#e8f0f8",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:12,color:B.navyMid}}>🔔 ORDANIS Expert emailed on {new Date(new Date(f.dueDate).setDate(new Date(f.dueDate).getDate()-Number(f.reminderDays))).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</div>}
     <RecurrenceField f={f} setF={setF}/>
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save Task"}</Btn></div>
   </div>;
@@ -5549,13 +5550,13 @@ function ProspectContactForm({initial,onSave,onClose,userProfile,advisors=[]}){
     <Grid2><Field label="Email"><Inp type="email" value={f.email||""} onChange={set("email")}/></Field><Field label="Phone"><Inp placeholder="(555) 000-0000" value={f.phone||""} onChange={e=>set("phone")({target:{value:formatPhoneInput(e.target.value)}})}/></Field></Grid2>
     <Grid2><Field label="Type"><Sel value={f.type} onChange={set("type")}><option>Individual</option><option>Business</option></Sel></Field><Field label="Lead Source"><Inp placeholder="Referral, LinkedIn…" value={f.source||""} onChange={set("source")}/></Field></Grid2>
     {isAdmin
-      ? <Field label="Assign Ordanis Expert">
+      ? <Field label="Assign ORDANIS Expert">
           <select value={f.advisorEmail||""} onChange={pickAdvisor} style={{width:"100%",padding:"10px 12px",borderRadius:8,border:`1px solid ${B.border}`,fontSize:14,fontFamily:"'DM Sans',sans-serif",background:B.white,color:B.navy}}>
-            <option value="">— Select a Ordanis Expert —</option>
+            <option value="">— Select a ORDANIS Expert —</option>
             {advisors.map(a=><option key={a.id} value={a.email}>{(a.full_name||a.email)}{a.full_name?` (${a.email})`:""}</option>)}
           </select>
         </Field>
-      : <Field label="Ordanis Expert"><Inp value={f.advisorName||f.advisorEmail||userProfile?.fullName||userProfile?.email||""} disabled/></Field>
+      : <Field label="ORDANIS Expert"><Inp value={f.advisorName||f.advisorEmail||userProfile?.fullName||userProfile?.email||""} disabled/></Field>
     }
     <Field label="Tags"><Inp placeholder="warm-lead, vip" value={f.tags||""} onChange={set("tags")}/></Field>
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save"}</Btn></div>
@@ -5602,13 +5603,13 @@ function ProspectContactsView({data,reload,toast,userProfile}){
     return <div style={{height:"100%",display:"flex",flexDirection:"column",minHeight:0}}>
       <div style={{padding:isMobile?"12px 14px":"14px 20px",borderBottom:`1px solid ${B.borderLight}`,background:B.white,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
         <div style={{display:"flex",background:B.bg,borderRadius:8,padding:3,border:`1px solid ${B.borderLight}`}}>
-          {[{k:"contacts",l:"Contacts"},{k:"advisors",l:"By Ordanis Expert"}].map(t=><button key={t.k} onClick={()=>setViewMode(t.k)} style={{border:"none",borderRadius:6,padding:"7px 14px",fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",background:viewMode===t.k?B.navy:"transparent",color:viewMode===t.k?B.white:B.textSoft}}>{t.l}</button>)}
+          {[{k:"contacts",l:"Contacts"},{k:"advisors",l:"By ORDANIS Expert"}].map(t=><button key={t.k} onClick={()=>setViewMode(t.k)} style={{border:"none",borderRadius:6,padding:"7px 14px",fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",background:viewMode===t.k?B.navy:"transparent",color:viewMode===t.k?B.white:B.textSoft}}>{t.l}</button>)}
         </div>
-        <div style={{flex:1,fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Prospecting by Ordanis Expert</div>
+        <div style={{flex:1,fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Prospecting by ORDANIS Expert</div>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(320px,100%),1fr))",gap:16}}>
-          {advisorSummary.length===0&&<Empty text="No Ordanis Experts or prospects yet."/>}
+          {advisorSummary.length===0&&<Empty text="No ORDANIS Experts or prospects yet."/>}
           {advisorSummary.map(a=>(
             <div key={a.email||"unassigned"} onClick={()=>{if(!a.unassigned){setAdvisorFilter(a.email);setViewMode("contacts");}}}
               style={{background:B.white,borderRadius:12,border:`1px solid ${B.borderLight}`,borderTop:`3px solid ${a.unassigned?B.textMute:B.gold}`,padding:20,cursor:a.unassigned?"default":"pointer",boxShadow:B.shadow,transition:"box-shadow .15s"}}
@@ -5616,7 +5617,7 @@ function ProspectContactsView({data,reload,toast,userProfile}){
               onMouseLeave={e=>e.currentTarget.style.boxShadow=B.shadow}>
               <div style={{marginBottom:12}}>
                 <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:a.unassigned?B.textMute:B.navy,fontWeight:600,marginBottom:2}}>{a.name}</div>
-                <div style={{fontSize:12,color:B.textSoft}}>{a.email||"Prospects with no Ordanis Expert assigned"}</div>
+                <div style={{fontSize:12,color:B.textSoft}}>{a.email||"Prospects with no ORDANIS Expert assigned"}</div>
               </div>
               <div style={{height:1,background:`linear-gradient(90deg,${a.unassigned?B.textMute:B.gold},transparent)`,marginBottom:12}}/>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(170px,100%),1fr))",gap:8}}>
@@ -5642,7 +5643,7 @@ function ProspectContactsView({data,reload,toast,userProfile}){
     {(!isMobile||!selected)&&<div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",borderRight:isMobile?"none":`1px solid ${B.borderLight}`}}>
       <div style={{padding:isMobile?"12px 14px":"14px 20px",display:"flex",gap:10,alignItems:"center",borderBottom:`1px solid ${B.borderLight}`,background:B.white,flexWrap:"wrap"}}>
         {isAdmin&&<div style={{display:"flex",background:B.bg,borderRadius:8,padding:3,border:`1px solid ${B.borderLight}`}}>
-          {[{k:"contacts",l:"Contacts"},{k:"advisors",l:"By Ordanis Expert"}].map(t=><button key={t.k} onClick={()=>setViewMode(t.k)} style={{border:"none",borderRadius:6,padding:"6px 12px",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",background:viewMode===t.k?B.navy:"transparent",color:viewMode===t.k?B.white:B.textSoft}}>{t.l}</button>)}
+          {[{k:"contacts",l:"Contacts"},{k:"advisors",l:"By ORDANIS Expert"}].map(t=><button key={t.k} onClick={()=>setViewMode(t.k)} style={{border:"none",borderRadius:6,padding:"6px 12px",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",background:viewMode===t.k?B.navy:"transparent",color:viewMode===t.k?B.white:B.textSoft}}>{t.l}</button>)}
         </div>}
         <Inp value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search prospects…" style={{flex:1,minWidth:140}}/>
         {advisorFilter&&<button onClick={()=>setAdvisorFilter("")} style={{border:`1px solid ${B.gold}`,background:"#fbf6ec",color:B.navy,borderRadius:16,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>{(advisorSummary.find(a=>a.email===advisorFilter)?.name)||advisorFilter} ✕</button>}
@@ -5692,13 +5693,13 @@ function ProspectDealForm({initial,contacts=[],onSave,onClose,userProfile,adviso
     <Grid2><Field label="Value ($)"><MoneyInput value={f.value||""} onChange={set("value")}/></Field><Field label="Close Date"><Inp type="date" value={f.closeDate||""} onChange={set("closeDate")}/></Field></Grid2>
     <Field label="Stage"><Sel value={f.stage} onChange={set("stage")}>{STAGES.map(s=><option key={s}>{s}</option>)}</Sel></Field>
     {isAdmin
-      ? <Field label="Assign Ordanis Expert">
+      ? <Field label="Assign ORDANIS Expert">
           <select value={f.advisorEmail||""} onChange={pickAdvisor} style={{width:"100%",padding:"10px 12px",borderRadius:8,border:`1px solid ${B.border}`,fontSize:14,fontFamily:"'DM Sans',sans-serif",background:B.white,color:B.navy}}>
-            <option value="">— Select a Ordanis Expert —</option>
+            <option value="">— Select a ORDANIS Expert —</option>
             {advisors.map(a=><option key={a.id} value={a.email}>{(a.full_name||a.email)}{a.full_name?` (${a.email})`:""}</option>)}
           </select>
         </Field>
-      : <Field label="Ordanis Expert"><Inp value={f.advisorName||f.advisorEmail||userProfile?.fullName||userProfile?.email||""} disabled/></Field>
+      : <Field label="ORDANIS Expert"><Inp value={f.advisorName||f.advisorEmail||userProfile?.fullName||userProfile?.email||""} disabled/></Field>
     }
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save"}</Btn></div>
   </div>;
@@ -5747,13 +5748,13 @@ function ProspectPipelineView({data,reload,toast,userProfile}){
     return <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
       <div style={{padding:"12px 20px",borderBottom:`1px solid ${B.borderLight}`,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap",background:B.white}}>
         <div style={{display:"flex",background:B.bg,borderRadius:8,padding:3,border:`1px solid ${B.borderLight}`}}>
-          {[{k:"pipeline",l:"Pipeline"},{k:"advisors",l:"By Ordanis Expert"}].map(t=><button key={t.k} onClick={()=>setViewMode(t.k)} style={{border:"none",borderRadius:6,padding:"6px 12px",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",background:viewMode===t.k?B.navy:"transparent",color:viewMode===t.k?B.white:B.textSoft}}>{t.l}</button>)}
+          {[{k:"pipeline",l:"Pipeline"},{k:"advisors",l:"By ORDANIS Expert"}].map(t=><button key={t.k} onClick={()=>setViewMode(t.k)} style={{border:"none",borderRadius:6,padding:"6px 12px",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",background:viewMode===t.k?B.navy:"transparent",color:viewMode===t.k?B.white:B.textSoft}}>{t.l}</button>)}
         </div>
-        <div style={{flex:1,fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Pipeline by Ordanis Expert</div>
+        <div style={{flex:1,fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Pipeline by ORDANIS Expert</div>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(320px,100%),1fr))",gap:16}}>
-          {advisorSummary.length===0&&<Empty text="No Ordanis Experts or deals yet."/>}
+          {advisorSummary.length===0&&<Empty text="No ORDANIS Experts or deals yet."/>}
           {advisorSummary.map(a=>(
             <div key={a.email||"unassigned"} onClick={()=>{if(!a.unassigned){setAdvisorFilter(a.email);setViewMode("pipeline");}}}
               style={{background:B.white,borderRadius:12,border:`1px solid ${B.borderLight}`,borderTop:`3px solid ${a.unassigned?B.textMute:B.gold}`,padding:20,cursor:a.unassigned?"default":"pointer",boxShadow:B.shadow,transition:"box-shadow .15s"}}
@@ -5761,7 +5762,7 @@ function ProspectPipelineView({data,reload,toast,userProfile}){
               onMouseLeave={e=>e.currentTarget.style.boxShadow=B.shadow}>
               <div style={{marginBottom:12}}>
                 <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:a.unassigned?B.textMute:B.navy,fontWeight:600,marginBottom:2}}>{a.name}</div>
-                <div style={{fontSize:12,color:B.textSoft}}>{a.email||"Opportunities not linked to a Ordanis Expert's contact"}</div>
+                <div style={{fontSize:12,color:B.textSoft}}>{a.email||"Opportunities not linked to a ORDANIS Expert's contact"}</div>
               </div>
               <div style={{height:1,background:`linear-gradient(90deg,${a.unassigned?B.textMute:B.gold},transparent)`,marginBottom:12}}/>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(170px,100%),1fr))",gap:8}}>
@@ -5784,7 +5785,7 @@ function ProspectPipelineView({data,reload,toast,userProfile}){
   return <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
     <div style={{padding:"12px 20px",borderBottom:`1px solid ${B.borderLight}`,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",background:B.white}}>
       {isAdmin&&<div style={{display:"flex",background:B.bg,borderRadius:8,padding:3,border:`1px solid ${B.borderLight}`}}>
-        {[{k:"pipeline",l:"Pipeline"},{k:"advisors",l:"By Ordanis Expert"}].map(t=><button key={t.k} onClick={()=>setViewMode(t.k)} style={{border:"none",borderRadius:6,padding:"6px 12px",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",background:viewMode===t.k?B.navy:"transparent",color:viewMode===t.k?B.white:B.textSoft}}>{t.l}</button>)}
+        {[{k:"pipeline",l:"Pipeline"},{k:"advisors",l:"By ORDANIS Expert"}].map(t=><button key={t.k} onClick={()=>setViewMode(t.k)} style={{border:"none",borderRadius:6,padding:"6px 12px",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",background:viewMode===t.k?B.navy:"transparent",color:viewMode===t.k?B.white:B.textSoft}}>{t.l}</button>)}
       </div>}
       <div style={{flex:1,display:"flex",gap:5,flexWrap:"wrap"}}>{["All",...STAGES].map(s=><button key={s} onClick={()=>setFs(s)} style={{background:fs===s?(STAGE_COLORS[s]?.bg||B.borderLight):"transparent",border:`1px solid ${fs===s?(STAGE_COLORS[s]?.dot||B.navy):B.border}`,color:fs===s?(STAGE_COLORS[s]?.text||B.navy):B.textSoft,borderRadius:20,padding:"3px 12px",fontSize:11,cursor:"pointer",fontWeight:700,fontFamily:"inherit"}}>{s}</button>)}</div>
       {advisorFilter&&<button onClick={()=>setAdvisorFilter("")} style={{border:`1px solid ${B.gold}`,background:"#fbf6ec",color:B.navy,borderRadius:16,padding:"5px 11px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>{(advisorSummary.find(a=>a.email===advisorFilter)?.name)||advisorFilter} ✕</button>}
@@ -6066,7 +6067,7 @@ function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
   const{families:_families,contacts:_contacts,properties:_properties,deals:_deals,notes:_notes,tasks:_tasks,portfolio_accounts:_accts=[]}=data;
   const isAdmin=userProfile?.role==="admin";
   const myEmail=(userProfile?.email||"").toLowerCase();
-  // Admins default to "All Ordanis Experts" and can switch; non-admins are locked to their own scope so unscoped prospect records (family_id null) don't leak in.
+  // Admins default to "All ORDANIS Experts" and can switch; non-admins are locked to their own scope so unscoped prospect records (family_id null) don't leak in.
   const[scope,setScope]=useState(isAdmin?"":myEmail);
   const _famIds=new Set(_families.filter(f=>!scope||(f.advisorEmail||"").toLowerCase()===scope).map(f=>f.id));
   const _cAdv=id=>{const c=_contacts.find(x=>x.id===id);return (c?.advisorEmail||"").toLowerCase();};
@@ -6126,7 +6127,7 @@ function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap",marginBottom:isMobile?16:24}}>
       <div>
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?22:28,color:B.navy,fontWeight:600,marginBottom:4}}>Good {hr<12?"Morning":hr<17?"Afternoon":"Evening"}</div>
-        <div style={{color:B.textSoft,fontSize:isMobile?12:14}}>{BRAND.name} — Portfolio & Client Overview{isAdmin&&scope?" · filtered by Ordanis Expert":""}</div>
+        <div style={{color:B.textSoft,fontSize:isMobile?12:14}}>{BRAND.name} — Portfolio & Client Overview{isAdmin&&scope?" · filtered by ORDANIS Expert":""}</div>
         <div style={{height:2,width:56,background:B.gold,marginTop:10,borderRadius:2}}/>
       </div>
       <AdvisorScopeBar userProfile={userProfile} value={scope} onChange={setScope}/>
@@ -6142,7 +6143,7 @@ function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(280px,100%),1fr))",gap:18,marginBottom:18}}>
       {/* PIPELINE_CARD_REMOVED — the deal pipeline card was admin-only, so the
           dashboard showed a prospecting CRM to admins and not to anyone else.
-          Ordanis does not sell pipeline management. */}
+          ORDANIS does not sell pipeline management. */}
       {bills.length>0&&<div style={{background:B.bgCard,borderRadius:12,padding:24,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,marginBottom:18}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:4,gap:12,flexWrap:"wrap"}}>
           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Bills Due</div>
@@ -6318,7 +6319,7 @@ function UserManagementView({userProfile,data={},toast}){
   // Lead Advisor designation. This is a LABEL, not a permission: the partner stays
   // read-only exactly as before. It decides who the AI assistant hands investment
   // questions to, and who the family record shows as owning the relationship.
-  // The Ordanis Expert on the family record runs administration and is deliberately
+  // The ORDANIS Expert on the family record runs administration and is deliberately
   // NOT the fallback for investment questions.
   const partnerLinkFor=(userId,familyId)=>familyPartners.find(fp=>fp.user_id===userId&&fp.family_id===familyId);
   const setLeadAdvisor=async(u,familyId,makeLead)=>{
@@ -6334,7 +6335,7 @@ function UserManagementView({userProfile,data={},toast}){
   };
 
   // Per-Partner toggle: whether this Partner is allowed to create/run Scheduled
-  // Prompts. Not all Partners should have this — off by default. Ordanis Experts
+  // Prompts. Not all Partners should have this — off by default. ORDANIS Experts
   // and Admins always have it implicitly (not stored on their row).
   // Blank clears the cap; zero is a real and different instruction - "may hold no
   // families" - so the two are never conflated.
@@ -6453,7 +6454,7 @@ function UserManagementView({userProfile,data={},toast}){
         </div>
       </div>
 
-      {/* Users grouped by access level: Admin · Ordanis Expert (role="advisor" internally) · Partner · Client */}
+      {/* Users grouped by access level: Admin · ORDANIS Expert (role="advisor" internally) · Partner · Client */}
       {loading?<Spinner/>:(()=>{
         const HEADERS=["Name","Email","Role","Family (clients)","Status","Actions"];
         const COLS="1.2fr 1.4fr 130px 1fr 110px 130px";
@@ -6471,7 +6472,7 @@ function UserManagementView({userProfile,data={},toast}){
                 ?<Badge scheme={{bg:"#e8f0f8",text:B.navyMid,dot:B.navyMid}}>{roleLabel(u.role)}</Badge>
                 :<select value={u.role||"advisor"} onChange={e=>changeRole(u,e.target.value)} style={{background:B.bg,border:`1px solid ${B.border}`,borderRadius:6,padding:"4px 8px",fontSize:12,color:B.text,outline:"none",fontFamily:"inherit",cursor:"pointer",width:"100%"}}>
                   <option value="admin">Admin</option>
-                  <option value="advisor">Ordanis Expert</option>
+                  <option value="advisor">ORDANIS Expert</option>
                   <option value="partner">Partner</option>
                   <option value="client">Client</option>
                 </select>}
@@ -6566,7 +6567,7 @@ function UserManagementView({userProfile,data={},toast}){
         })();
         const GROUPS=[
           {key:"admin",label:"Admins",accent:B.navy,desc:"Full access to all families, users, and settings"},
-          {key:"advisor",label:"Ordanis Experts",accent:B.gold,desc:"Scoped to their assigned families and prospects"},
+          {key:"advisor",label:"ORDANIS Experts",accent:B.gold,desc:"Scoped to their assigned families and prospects"},
           {key:"partner",label:"Partners",accent:"#7a8fa6",desc:"View-only across linked families; can upload & download documents"},
           {key:"client",label:"Clients",accent:B.navyMid,desc:"Read-only portal access to their own family"},
         ];
@@ -6635,7 +6636,7 @@ function UserManagementView({userProfile,data={},toast}){
             <Grid2>
               <Field label="Role">
                 <Sel value={newRole} onChange={e=>setNewRole(e.target.value)}>
-                  <option value="advisor">Ordanis Expert — sees assigned families</option>
+                  <option value="advisor">ORDANIS Expert — sees assigned families</option>
                   <option value="partner">Partner — view-only, upload/download docs only</option>
                   <option value="admin">Admin — sees everything</option>
                   <option value="client">Client — read-only portal</option>
@@ -6670,7 +6671,7 @@ function UserManagementView({userProfile,data={},toast}){
                 <input type="checkbox" checked={newCanRunPrompts} onChange={e=>setNewCanRunPrompts(e.target.checked)}/>
                 Allow this Partner to create and run Scheduled Prompts
               </label>
-              <div style={{fontSize:11,color:B.textMute,marginTop:4}}>Off by default — most Partners shouldn't have this. Ordanis Experts and Admins already can, and always see every Partner's scheduled prompts for their families.</div>
+              <div style={{fontSize:11,color:B.textMute,marginTop:4}}>Off by default — most Partners shouldn't have this. ORDANIS Experts and Admins already can, and always see every Partner's scheduled prompts for their families.</div>
             </Field>}
             <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}>
               <Btn variant="ghost" onClick={()=>setModal(null)}>Cancel</Btn>
@@ -8056,13 +8057,14 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const[emailAdvisorOpen,setEmailAdvisorOpen]=useState(false);
   const fam=(data.families||[]).find(x=>x.id===family.id)||family;
   const rawAssistantName=(fam.assistantName||"").trim();
-  const assistantName=rawAssistantName||"Ordanis";
+  const assistantName=rawAssistantName||"ORDANIS";
   // Read from `fam`, not the `family` prop, so a plan change lands without a re-login.
   //
-  // On Core the household is Partner-led. The expert-of-record on the row exists only so staff
-  // can open the file, so anything on this screen that offers the client "your Ordanis Expert" would
-  // point them at someone who is not their lead — the one place where the wrong copy sends a real
-  // email to the wrong person.
+  // Basic and Core are self-directed -- there is no assigned Expert on those tiers. The
+  // expert-of-record on the row exists only so staff can open the file, so anything on this
+  // screen that offers the client "your ORDANIS Expert" would point them at someone who isn't
+  // actually managing this household -- the one place where the wrong copy sends a real email
+  // to the wrong person.
   const clientPlan=fam.plan;
   const clientHasExpert=planAllows(clientPlan,"assignedExpert");
   const clientHasWorkflows=planAllows(clientPlan,"workflows");
@@ -8075,7 +8077,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   // ── Billing (upgrade / downgrade) ──────────────────────────────────────
   // Only Basic <-> Core is ever self-serve here (plan_features.self_serve / plans.js
   // PLAN_SELF_SERVE) -- Premier is advisor-provisioned, so a move to or from Premier is always
-  // "contact your Ordanis Expert" copy, never a button that calls Stripe directly. Enforcement
+  // "contact your ORDANIS Expert" copy, never a button that calls Stripe directly. Enforcement
   // still lives server-side in change-subscription-plan; this just decides what to draw.
   const[billingPlans,setBillingPlans]=useState([]); // plan_features: plan,label,monthly_price,sort_order
   useEffect(()=>{
@@ -8179,7 +8181,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const[savingWelcome,setSavingWelcome]=useState(false);
   const showNamePrompt=!rawAssistantName && !namePromptDismissed;
   const saveWelcomeName=async(useDefault)=>{
-    const nm=useDefault?"Ordanis":((welcomeName||"").trim().slice(0,40)||"Ordanis");
+    const nm=useDefault?"ORDANIS":((welcomeName||"").trim().slice(0,40)||"ORDANIS");
     setSavingWelcome(true);
     try{ await sb.from("families").update({assistant_name:nm}).eq("id",family.id); if(reload)await reload("families"); }
     catch(e){}
@@ -8269,12 +8271,12 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         What would you like to call it? You can always change this later.
       </div>
       <Field label="Assistant name">
-        <Inp autoFocus placeholder="e.g. Ordanis, Ace, Atlas…" value={welcomeName} maxLength={40}
+        <Inp autoFocus placeholder="e.g. ORDANIS, Ace, Atlas…" value={welcomeName} maxLength={40}
           onChange={e=>setWelcomeName(e.target.value)}
           onKeyDown={e=>{if(e.key==="Enter"&&!savingWelcome)saveWelcomeName(false);}}/>
       </Field>
       <div style={{display:"flex",gap:10,justifyContent:"flex-end",alignItems:"center",marginTop:18}}>
-        <button onClick={()=>saveWelcomeName(true)} disabled={savingWelcome} style={{background:"none",border:"none",color:B.textSoft,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Skip — use "Ordanis"</button>
+        <button onClick={()=>saveWelcomeName(true)} disabled={savingWelcome} style={{background:"none",border:"none",color:B.textSoft,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Skip — use "ORDANIS"</button>
         <Btn onClick={()=>saveWelcomeName(false)} disabled={savingWelcome}>{savingWelcome?"Saving…":"Save name"}</Btn>
       </div>
     </Modal>}
@@ -8306,7 +8308,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
             </div>
           </div>
           {clientSelfServe&&<button onClick={()=>setWizardOpen(true)} style={{background:"rgba(206,182,132,0.15)",border:`1px solid ${B.gold}`,color:B.navy,borderRadius:8,padding:isMobile?"6px 10px":"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"inherit",flexShrink:0,fontWeight:600}}>{isMobile?"⚙ Getting Started":"⚙ Getting Started"}</button>}
-          {clientHasExpert&&<button onClick={()=>setEmailAdvisorOpen(true)} style={{background:"rgba(206,182,132,0.15)",border:`1px solid ${B.gold}`,color:B.navy,borderRadius:8,padding:isMobile?"6px 10px":"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"inherit",flexShrink:0,fontWeight:600}}>{isMobile?"✉ Ordanis Expert":"✉ Email my Ordanis Expert"}</button>}
+          {clientHasExpert&&<button onClick={()=>setEmailAdvisorOpen(true)} style={{background:"rgba(206,182,132,0.15)",border:`1px solid ${B.gold}`,color:B.navy,borderRadius:8,padding:isMobile?"6px 10px":"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"inherit",flexShrink:0,fontWeight:600}}>{isMobile?"✉ ORDANIS Expert":"✉ Email my ORDANIS Expert"}</button>}
           <button onClick={logout} style={{background:"transparent",border:`1px solid ${B.border}`,color:B.textSoft,borderRadius:8,padding:isMobile?"6px 10px":"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>Sign Out</button>
         </div>
       </div>
@@ -8381,7 +8383,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         {/* Alert banners */}
         {overdue.length>0&&<div style={{background:"#fde8e8",border:"1px solid #f5c6c6",borderRadius:10,padding:"12px 18px",marginBottom:12,display:"flex",alignItems:"center",gap:12}}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d43030" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M10.3 3.8 1.8 18a2 2 0 0 0 1.7 3h16.9a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-          <div><div style={{fontWeight:700,color:"#8b1a1a",fontSize:14}}>Overdue Tasks</div><div style={{fontSize:13,color:"#8b1a1a"}}>{overdue.length} task{overdue.length>1?"s":""} past due — please contact {clientHasExpert?"your Ordanis Expert":"your lead partner"}.</div></div>
+          <div><div style={{fontWeight:700,color:"#8b1a1a",fontSize:14}}>Overdue Tasks</div><div style={{fontSize:13,color:"#8b1a1a"}}>{overdue.length} task{overdue.length>1?"s":""} past due — please contact {clientHasExpert?"your ORDANIS Expert":"your lead partner"}.</div></div>
         </div>}
         {soon.length>0&&<div style={{background:"#fef3e2",border:"1px solid #fcd97d",borderRadius:10,padding:"12px 18px",marginBottom:12,display:"flex",alignItems:"center",gap:12}}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d4900a" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5l3 2"/></svg>
@@ -8489,12 +8491,13 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         })()}
       </div>}
 
-      {/* CASH FLOW (read-only) */}
+      {/* CASH FLOW -- self-directed (Basic/Core) can add/edit their own events; Premier's
+          assigned Expert manages this for them, so Premier stays read-only here. */}
       {activeTab==="cashflow"&&<div>
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:8}}>Cash Flow Projection</div>
-        <div style={{fontSize:14,color:B.textSoft,marginBottom:20}}>Projection of expected cash flow events configured by {clientHasExpert?"your Ordanis Expert":"your lead partner"}.</div>
+        <div style={{fontSize:14,color:B.textSoft,marginBottom:20}}>{clientSelfServe?"Add and manage your own income and expense events below.":`Projection of expected cash flow events configured by your ORDANIS Expert.`}</div>
         {/* fam, not the `family` prop, so the bill-pay gate reads the current plan. */}
-        <CashFlowView family={fam} events={(data.cash_flow_events||[]).filter(e=>e.familyId===family.id)} paymentLog={(data.cash_flow_payment_log||[]).filter(p=>p.familyId===family.id)} properties={properties} vendors={vendorOptions} reload={()=>{}} toast={toast||(()=>{})} readOnly={true}/>
+        <CashFlowView family={fam} events={(data.cash_flow_events||[]).filter(e=>e.familyId===family.id)} paymentLog={(data.cash_flow_payment_log||[]).filter(p=>p.familyId===family.id)} properties={properties} vendors={vendorOptions} reload={reload} toast={toast||(()=>{})} readOnly={!clientSelfServe}/>
       </div>}
 
       {/* WORKFLOWS -- self-directed on Core: the household runs its own obligations/playbooks
@@ -8562,7 +8565,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
       {/* BILLING */}
       {activeTab==="billing"&&<div style={{maxWidth:640}}>
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:8}}>Billing & Plan</div>
-        <div style={{fontSize:14,color:B.textSoft,marginBottom:20}}>Manage your Ordanis subscription.</div>
+        <div style={{fontSize:14,color:B.textSoft,marginBottom:20}}>Manage your ORDANIS subscription.</div>
 
         {billingMsg&&<div style={{background:billingMsg.type==="error"?"#fde8e8":"#e0f5e9",border:`1px solid ${billingMsg.type==="error"?"#f5c6c6":"#bfe8cf"}`,color:billingMsg.type==="error"?"#8b1a1a":"#0d5c2b",borderRadius:10,padding:"12px 16px",marginBottom:16,fontSize:13,lineHeight:1.5}}>{billingMsg.text}</div>}
 
@@ -8652,13 +8655,13 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
             </div>)}
           </div>}
           <div style={{fontSize:12,color:B.textSoft,padding:"10px 0"}}>
-            Want a dedicated Ordanis Expert, priority workflows, and bill pay? <a href={`mailto:${BRAND.contactEmail}?subject=${encodeURIComponent("Interested in Premier — "+family.name)}`} style={{color:B.navy,fontWeight:600}}>Ask us about Premier</a>.
+            Want a dedicated ORDANIS Expert, priority workflows, and bill pay? <a href={`mailto:${BRAND.contactEmail}?subject=${encodeURIComponent("Interested in Premier — "+family.name)}`} style={{color:B.navy,fontWeight:600}}>Ask us about Premier</a>.
           </div>
         </>}
 
         {/* Premier — advisor-led, no self-serve plan change */}
         {!planSelfServe&&<div style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:12,padding:"18px 20px",fontSize:13,color:B.textSoft,lineHeight:1.6}}>
-          Premier is managed by your Ordanis Expert. {clientHasExpert&&<>To change your plan, <button onClick={()=>setEmailAdvisorOpen(true)} style={{background:"none",border:"none",color:B.navy,fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,fontSize:13,textDecoration:"underline"}}>email your Ordanis Expert</button>.</>}
+          Premier is managed by your ORDANIS Expert. {clientHasExpert&&<>To change your plan, <button onClick={()=>setEmailAdvisorOpen(true)} style={{background:"none",border:"none",color:B.navy,fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,fontSize:13,textDecoration:"underline"}}>email your ORDANIS Expert</button>.</>}
         </div>}
 
         {confirmDowngrade&&<Modal title="Confirm downgrade" onClose={()=>setConfirmDowngrade(null)}>
@@ -8847,7 +8850,7 @@ const DOC_CONFIGS={
       {key:"svc_property",    label:"Include: Property & asset tracking", pdfField:null, type:"checkbox", default:()=>true},
       {key:"svc_documents",   label:"Include: Document management",     pdfField:null, type:"checkbox", default:()=>true},
       {key:"svc_planning",    label:"Include: Financial planning",      pdfField:null, type:"checkbox", default:()=>true},
-      {key:"svc_portal",      label:"Include: Client portal & Ask Ordanis",pdfField:null, type:"checkbox", default:()=>true},
+      {key:"svc_portal",      label:"Include: Client portal & Ask ORDANIS",pdfField:null, type:"checkbox", default:()=>true},
       {key:"svc_bookkeeping", label:"Include: Bookkeeping, bill pay & reporting", pdfField:null, type:"checkbox", default:()=>true},
     ],
   },
@@ -8873,7 +8876,7 @@ const DOC_CONFIGS={
     docKey:"checklist",
     fields:[
       {key:"family_client",label:"Family / Client Name", pdfField:"family_client", default:(f)=>f.name||""},
-      {key:"advisor_name", label:"Ordanis Expert",       pdfField:"advisor_name",  default:(f,c,u)=>f.advisorName||u?.fullName||u?.email||""},
+      {key:"advisor_name", label:"ORDANIS Expert",       pdfField:"advisor_name",  default:(f,c,u)=>f.advisorName||u?.fullName||u?.email||""},
       {key:"date_reviewed",label:"Date Reviewed",         pdfField:"date_reviewed", type:"date", default:()=>new Date().toISOString().slice(0,10)},
     ],
   },
@@ -8937,7 +8940,7 @@ function requiredFieldsFor(docId){
 // is stored per tenant like the fillable templates rather than served from a
 // fixed path under /public.
 const RESOURCE_LINKS=[
-  {label:"Ordanis Expert User Guide",icon:"book",desc:"Full platform walkthrough for Ordanis Experts",docKey:"user_guide"},
+  {label:"ORDANIS Expert User Guide",icon:"book",desc:"Full platform walkthrough for ORDANIS Experts",docKey:"user_guide"},
 ];
 
 function FillClientDocModal({docId,family,contact,userProfile,bankAccount,onClose,toast}){
@@ -9072,9 +9075,9 @@ function ScheduledPromptsSection({userProfile,families,toast,lockFamilyId}){
   const[saving,setSaving]=useState(false);
 
   // No client-side owner_user_id filter here — RLS governs exactly which rows
-  // come back per role (self-owned always; admin: everything; Ordanis Expert:
+  // come back per role (self-owned always; admin: everything; ORDANIS Expert:
   // also Partner-owned rows for families they're allowed to see; Partner:
-  // self-owned only, never a Ordanis Expert's). When locked to one family (the
+  // self-owned only, never a ORDANIS Expert's). When locked to one family (the
   // Partner-in-FamilyDashboard case), also narrow to that family client-side.
   const load=async()=>{
     let q=sb.from("scheduled_prompts").select("*").order("created_at",{ascending:false});
@@ -9746,7 +9749,7 @@ function DraftReviewModal({step,onClose,onApproved,toast,userProfile}){
       // Send the firm name with the request. The tenant's identity lives in this
       // deployment's brand config, so it is authoritative here; the function used
       // to read it from its own env var and fell back to the product name, which
-      // meant a tenant provisioned without that secret signed letters "Ordanis".
+      // meant a tenant provisioned without that secret signed letters "ORDANIS".
       const{data,error}=await sb.functions.invoke("draft-workflow-step",{
         body:{stepId:step.id,brandName:BRAND.name}});
       if(error)throw new Error(error.message||"Could not prepare a draft");
@@ -9836,7 +9839,7 @@ function DraftReviewModal({step,onClose,onApproved,toast,userProfile}){
 
     {!hasDraft&&<div style={{background:B.bg,border:`1px dashed ${B.border}`,borderRadius:10,padding:"18px",textAlign:"center",marginBottom:14}}>
       <div style={{fontSize:12.5,color:B.textSoft,marginBottom:10,lineHeight:1.55}}>
-        Nothing drafted yet. Ordanis will assemble this from the obligation, the funding
+        Nothing drafted yet. ORDANIS will assemble this from the obligation, the funding
         accounts and the source document on file — then you review it.
       </div>
       <Btn onClick={generate} disabled={drafting}>{drafting?"Preparing…":"✦ Prepare draft"}</Btn>
@@ -9865,7 +9868,7 @@ function DraftReviewModal({step,onClose,onApproved,toast,userProfile}){
       </div>}
       <div style={{fontSize:11,color:B.textMute,marginBottom:14,lineHeight:1.5}}>
         Square-bracketed placeholders mark anything the record could not supply — complete those before approving.
-        Approving records your name and time against this step; sending goes out from this client's Ordanis Expert.
+        Approving records your name and time against this step; sending goes out from this client's ORDANIS Expert.
       </div>
 
       {/* A draft recipient is partly derived from uploaded document text, so an
@@ -10199,7 +10202,7 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
 }
 
 // ── WORKFLOW TEMPLATE LIBRARY ────────────────────────────────────────────────
-// The playbooks behind recurring obligations. Read-only for Ordanis Experts and
+// The playbooks behind recurring obligations. Read-only for ORDANIS Experts and
 // Partners so they can see exactly what a workflow will do before it runs;
 // editable by admins, because changing a lead time changes what happens to real
 // client money.
@@ -10491,7 +10494,7 @@ const BRAND_DOC_KEYS=[
     // a contractual problem, not a cosmetic one.
     legal:id==="agreement"||id==="ach",
   })),
-  {key:"user_guide",label:"Ordanis Expert User Guide",required:[],legal:false},
+  {key:"user_guide",label:"ORDANIS Expert User Guide",required:[],legal:false},
 ];
 
 // Per-tenant document templates. Attached either to one brand profile or to the
@@ -10562,7 +10565,7 @@ function FirmFeeDefaults({toast}){
   return <div style={{marginBottom:30}}>
     <SectionLabel>Standard Fees</SectionLabel>
     <div style={{fontSize:13,color:B.textSoft,maxWidth:760,lineHeight:1.55,marginBottom:12}}>
-      Pre-fills the Client Services Agreement and the Auto-Debit form. A Ordanis Expert can change either figure
+      Pre-fills the Client Services Agreement and the Auto-Debit form. A ORDANIS Expert can change either figure
       on a particular client before generating. Leave blank for no standard fee and the field starts empty —
       the annual figure on the agreement is always twelve times the monthly one, and the onboarding fee is
       itemised separately rather than folded into it.
@@ -10964,7 +10967,7 @@ const NAV_SECTIONS=[
   // The Prospecting section (Contacts / Pipeline / Notes / Tasks) is gone for
   // every role, admins included. It was previously admin-only, which meant the
   // product looked like it had a prospecting CRM or not depending on who was
-  // signed in. Ordanis is a family office administrative platform; lead
+  // signed in. ORDANIS is a family office administrative platform; lead
   // management belongs in whatever CRM the firm already runs.
   {section:"RESOURCES",items:[
     {id:"resources",label:"Resources",icon:"▥"},
@@ -11177,7 +11180,7 @@ export default function App(){
       // polling effect above. Show a normal "getting things ready" screen instead of the
       // dead-end message while that's still plausible.
       if(isWelcomeRedirect&&!welcomeWaitElapsed)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:B.bg,flexDirection:"column",gap:16,color:B.navy,fontFamily:"'DM Sans',sans-serif"}}><PCMLogo/><Spinner/><div style={{marginTop:4,fontSize:15,textAlign:"center",maxWidth:360,color:B.textSoft,lineHeight:1.5}}>Finishing setting up your account — this usually takes just a few seconds…</div></div>;
-      return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:B.bg,flexDirection:"column",gap:12,color:B.navy,fontFamily:"'DM Sans',sans-serif"}}><PCMLogo/><div style={{marginTop:20,fontSize:16}}>No family assigned to your account. Contact your Ordanis Expert.</div><button onClick={logout} style={{marginTop:12,background:"none",border:`1px solid ${B.border}`,borderRadius:8,padding:"8px 16px",cursor:"pointer",fontFamily:"inherit",color:B.textSoft}}>Sign Out</button></div>;
+      return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:B.bg,flexDirection:"column",gap:12,color:B.navy,fontFamily:"'DM Sans',sans-serif"}}><PCMLogo/><div style={{marginTop:20,fontSize:16}}>No family assigned to your account. Contact your ORDANIS Expert.</div><button onClick={logout} style={{marginTop:12,background:"none",border:`1px solid ${B.border}`,borderRadius:8,padding:"8px 16px",cursor:"pointer",fontFamily:"inherit",color:B.textSoft}}>Sign Out</button></div>;
     }
     return <><ClientDashboard family={clientFamily} data={data} userProfile={userProfile} logout={logout} toast={showToast} reload={reload}/><FloatingAssistant family={clientFamily} data={data} reload={reload} toast={showToast} userProfile={userProfile}/>{toastState&&<Toast msg={toastState.msg} type={toastState.type}/>}<UpdateBanner/></>;
   }
