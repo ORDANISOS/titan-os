@@ -4925,7 +4925,6 @@ function FamiliesView({data,reload,toast,userProfile,navIntent,onNavConsumed}){
   // created. Expert of record for access, not a service level.
   const add=async f=>{const{error}=await sb.from("families").insert({name:f.name,plan:f.plan,advisor_name:f.advisorName||null,advisor_email:f.advisorEmail||null,notes:f.notes||null});if(error)toast(error.message,"error");else{toast("Family added");reload("families");}};
   const edit=async f=>{const{error}=await sb.from("families").update({name:f.name,plan:f.plan,advisor_name:f.advisorName||null,advisor_email:f.advisorEmail||null,notes:f.notes||null}).eq("id",modal.id);if(error)toast(error.message,"error");else{toast("Updated");reload("families");}};
-  const del=async id=>{const{error}=await sb.from("families").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Deleted");reload("families");if(selected?.id===id)setSelected(null);}};
 
   // If a family is selected, show its dashboard
   if(selected) return <ViewErrorBoundary label="the family dashboard" onBack={()=>setSelected(null)}>
@@ -5010,7 +5009,6 @@ function FamiliesView({data,reload,toast,userProfile,navIntent,onNavConsumed}){
               </div>
               <div style={{display:"flex",gap:6}} onClick={e=>e.stopPropagation()}>
                 <Btn small variant="ghost" onClick={()=>setModal(f)}>Edit</Btn>
-                <Btn small variant="danger" onClick={()=>del(f.id)}>✕</Btn>
               </div>
             </div>
             <div style={{height:1,background:`linear-gradient(90deg,${B.gold},transparent)`,marginBottom:12}}/>
