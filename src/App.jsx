@@ -4188,12 +4188,8 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
 
   // Add synthetic rental events if toggled (with full expense math)
   const allEvents=useMemo(()=>{
-    // Backfill direction='income' for any legacy events without it; sort by sortOrder asc.
-    // A household-deactivated event (active===false -- see the "Mark Complete" toggle below) is
-    // excluded here on purpose: it should stop projecting forward the moment it's turned off, the
-    // same moment it stops counting toward the plan's included/overage total. It's still listed
-    // separately (Completed / Inactive, below) so it isn't lost, just not part of the math.
-    const e=events.filter(ev=>ev.active!==false).map(ev=>({...ev,direction:ev.direction||"income"}));
+    // Backfill direction='income' for any legacy events without it; sort by sortOrder asc
+    const e=events.map(ev=>({...ev,direction:ev.direction||"income"}));
     // Property costs come from ONE shared derivation, also used by the AI snapshot.
     //
     // This used to net every property cost inside a single "Rental Income (Net)" line
@@ -4361,17 +4357,8 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
   const addEvent=async(f)=>{
     // New events go to the end of the list
     const maxSort=Math.max(0,...events.map(e=>Number(e.sortOrder)||0));
-    // Snapshot usage BEFORE inserting -- same pattern as the Workflows tab's startCycle -- so the
-    // cost note reflects what this new event actually does to the count, not a post-insert number
-    // that's already moved on.
-    const willBeBilled=cfUsage&&!cfUsage.unlimited&&activeEventCount>=cfUsage.included;
     const{error}=await sb.from("cash_flow_events").insert({family_id:family.id,direction:f.direction||"income",event_type:f.eventType,description:f.description||null,amount:Number(f.amount)||0,frequency:f.frequency,start_date:f.startDate,end_date:f.endDate||null,tax_treatment:f.taxTreatment||"ordinary",notes:f.notes||null,sort_order:maxSort+10,pcm_responsible:f.direction==="expense"?!!f.pcmResponsible:false,category:f.direction==="expense"?(f.category||null):null,property_id:f.propertyId||null,...(f.direction==="expense"?splitVendorKey(f.vendorKey):{vendor_family_contact_id:null,vendor_property_contact_id:null})});
-    if(error)toast(error.message,"error");
-    else{
-      const costNote=willBeBilled?` This is event #${activeEventCount+1} -- since your plan includes ${cfUsage.included}, it adds $${Number(cfUsage.unit_price).toFixed(2)}/month to your bill for as long as it stays active. Use "Mark Complete" on the event anytime to stop that charge.`:"";
-      toast("Event added."+costNote);
-      reload("cash_flow_events");
-    }
+    if(error)toast(error.message,"error");else{toast("Event added");reload("cash_flow_events");}
   };
   const editEvent=async(id,f)=>{
     const{error}=await sb.from("cash_flow_events").update({direction:f.direction||"income",event_type:f.eventType,description:f.description||null,amount:Number(f.amount)||0,frequency:f.frequency,start_date:f.startDate,end_date:f.endDate||null,tax_treatment:f.taxTreatment||"ordinary",notes:f.notes||null,pcm_responsible:f.direction==="expense"?!!f.pcmResponsible:false,category:f.direction==="expense"?(f.category||null):null,property_id:f.propertyId||null,...(f.direction==="expense"?splitVendorKey(f.vendorKey):{vendor_family_contact_id:null,vendor_property_contact_id:null})}).eq("id",id);
@@ -4405,28 +4392,6 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
     if(e1||e2){toast((e1||e2).message,"error");return;}
     reload("cash_flow_events");
   };
-  // Turn a specific event on/off. Off means: excluded from the projection (see allEvents above)
-  // and no longer counted toward the plan's included/overage total from that point forward -- the
-  // way a self-serve household stops being billed $/mo for an event without deleting its history.
-  const toggleActive=async(ev)=>{
-    const willBecomeActive=ev.active===false;
-    const{error}=await sb.from("cash_flow_events").update({active:willBecomeActive}).eq("id",ev.id);
-    if(error)toast(error.message,"error");
-    else{toast(willBecomeActive?"Event reactivated":"Marked complete -- no longer projected forward or counted toward your plan's included events");reload("cash_flow_events");}
-  };
-  // Cash flow event usage/overage, for self-serve households (Basic/Core) -- 10 included, $8/mo
-  // for each additional ACTIVE event. Mirrors family_workflow_month_usage's shape and purpose:
-  // one source of truth the usage banner, the add-event cost toast, and the Billing tab all read.
-  const activeEventCount=events.filter(ev=>ev.active!==false).length;
-  const[cfUsage,setCfUsage]=useState(null);
-  useEffect(()=>{
-    let stopped=false;
-    sb.rpc("family_cash_flow_event_month_usage",{p_family_id:family.id}).then(({data:rows,error})=>{
-      if(!stopped&&!error&&rows&&rows[0])setCfUsage(rows[0]);
-    });
-    return()=>{stopped=true;};
-    // eslint-disable-next-line
-  },[family.id,activeEventCount]);
 
   return <div style={{padding:readOnly?0:(isMobile?"16px 14px":"24px 28px")}}>
     {/* Settings Bar */}
@@ -4632,21 +4597,12 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
 
     {/* Events Table */}
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,gap:10,flexWrap:"wrap"}}>
-      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Events ({activeEventCount})</div>
+      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Events ({events.length})</div>
       {!readOnly&&<div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
         <Btn variant="gold" onClick={()=>setReportOpen(true)}>🖨 Print Report</Btn>
         <Btn onClick={()=>setModal({type:"add"})}>+ New Event</Btn>
       </div>}
     </div>
-
-    {/* Usage banner: 10 events included, $8/mo for each additional ACTIVE event -- Premier
-        (unlimited) shows nothing here, there's nothing metered to explain. */}
-    {cfUsage&&!cfUsage.unlimited&&<div style={{background:cfUsage.overage_count>0?"#fef3e2":B.bg,border:`1px solid ${cfUsage.overage_count>0?"#fcd97d":B.borderLight}`,borderRadius:10,padding:"12px 16px",marginBottom:14,fontSize:12.5,color:B.textMid,lineHeight:1.6}}>
-      <strong style={{color:B.navy}}>{cfUsage.active_count} of {cfUsage.included} included events active.</strong>{" "}
-      {cfUsage.overage_count>0
-        ?<>{cfUsage.overage_count} additional event{cfUsage.overage_count===1?"":"s"} × ${Number(cfUsage.unit_price).toFixed(2)}/mo = <strong>${(cfUsage.overage_count*Number(cfUsage.unit_price)).toFixed(2)}/mo</strong> added to your bill for as long as they stay active. Use "Mark Complete" on an event anytime to stop its charge.</>
-        :<>You can add up to {Math.max(0,cfUsage.included-cfUsage.active_count)} more at no extra cost. Beyond that, each additional active event is ${Number(cfUsage.unit_price).toFixed(2)}/month.</>}
-    </div>}
 
     {enrichedEvents.length===0?<Empty text={readOnly?"No cash flow events yet.":"No cash flow events yet. Add your first event."}/>:enrichedEvents.map((e,idx)=>{
       const freqLabel=CF_FREQUENCIES.find(fr=>fr.value===e.frequency)?.label||e.frequency;
@@ -4742,39 +4698,12 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
           </div>
           <div style={{display:"flex",gap:6}}>
             {isExpense&&billPay&&e.pcmResponsible&&!isRegisterFreq(e)&&<Btn small variant={e.paid?"ghost":"primary"} onClick={()=>togglePaid(e)}>{e.paid?"Mark Unpaid":"Mark Paid"}</Btn>}
-            <Btn small variant="ghost" onClick={()=>{if(confirm("Mark this event complete? It will stop projecting forward and stop counting toward your plan's included/overage total."))toggleActive(e);}}>Mark Complete</Btn>
             <Btn small variant="ghost" onClick={()=>setModal({type:"edit",event:e})}>Edit</Btn>
             <Btn small variant="danger" onClick={()=>{if(confirm("Delete this event?"))delEvent(e.id);}}>Delete</Btn>
           </div>
         </div>}
       </div>;
     })}
-
-    {/* Completed / Inactive: kept out of allEvents (so out of the projection and the
-        included/overage count) but still visible here so nothing is silently lost, and so it can
-        be turned back on. Not run through buildProjection -- these don't need a projectedNet. */}
-    {(()=>{
-      const inactiveEvents=events.filter(ev=>ev.active===false).sort((a,b)=>(Number(a.sortOrder)||0)-(Number(b.sortOrder)||0));
-      if(inactiveEvents.length===0)return null;
-      return <div style={{marginTop:22}}>
-        <div style={{fontSize:11,fontWeight:800,color:B.textMute,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Completed / Inactive ({inactiveEvents.length})</div>
-        <div style={{fontSize:11.5,color:B.textSoft,marginBottom:10}}>Turned off — no longer projected forward, and not counted toward your plan's included events.</div>
-        {inactiveEvents.map(e=>{
-          const freqLabel=CF_FREQUENCIES.find(fr=>fr.value===e.frequency)?.label||e.frequency;
-          const isExpense=e.direction==="expense";
-          return <div key={e.id} style={{background:B.bg,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:isMobile?12:14,marginBottom:8,opacity:0.7,display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-            <div>
-              <div style={{fontSize:13,fontWeight:700,color:B.navy}}>{e.eventType}{e.description?` — ${e.description}`:""}</div>
-              <div style={{fontSize:11,color:B.textSoft}}>{isExpense?"Expense":"Income"} · {freqLabel} · {fmtMoney(Math.abs(Number(e.amount)||0))}</div>
-            </div>
-            {!readOnly&&<div style={{display:"flex",gap:6}}>
-              <Btn small variant="gold" onClick={()=>toggleActive(e)}>↻ Reactivate</Btn>
-              <Btn small variant="danger" onClick={()=>{if(confirm("Delete this event permanently?"))delEvent(e.id);}}>Delete</Btn>
-            </div>}
-          </div>;
-        })}
-      </div>;
-    })()}
 
     {/* Disclaimer */}
     <div style={{background:"#fef3e2",border:"1px solid #fcd97d",borderRadius:8,padding:"10px 14px",marginTop:18,fontSize:11,color:"#8a5c00",lineHeight:1.5}}>
@@ -8209,32 +8138,6 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     });
     return()=>{stopped=true;};
   },[family.id,clientHasWorkflows]);
-  // ── Cash flow event usage & overage charges, for the Billing tab ──────────
-  // Same family_cash_flow_event_month_usage RPC the Cash Flow tab's own banner reads (so the two
-  // numbers can never disagree), plus the raw ledger rows for a by-month history. Basic AND Core
-  // both get self-serve Cash Flow (unlike Workflows, which is Core-only), so this is gated on
-  // clientSelfServe, not clientHasWorkflows.
-  const[billingCashFlowUsage,setBillingCashFlowUsage]=useState(null);
-  const[cashFlowOverageHistory,setCashFlowOverageHistory]=useState([]);
-  useEffect(()=>{
-    if(!clientSelfServe)return;
-    let stopped=false;
-    sb.rpc("family_cash_flow_event_month_usage",{p_family_id:family.id}).then(({data:rows,error})=>{
-      if(!stopped&&!error&&rows&&rows[0])setBillingCashFlowUsage(rows[0]);
-    });
-    sb.from("cash_flow_event_overage_charges").select("period,unit_price,status").eq("family_id",family.id).order("period",{ascending:false}).then(({data:rows,error})=>{
-      if(stopped||error||!rows)return;
-      const byPeriod=new Map();
-      for(const r of rows){
-        const e=byPeriod.get(r.period)||{period:r.period,count:0,total:0,invoiced:0,pending:0};
-        e.count++;e.total+=Number(r.unit_price);
-        if(r.status==="invoiced")e.invoiced+=Number(r.unit_price);else if(r.status==="pending")e.pending+=Number(r.unit_price);
-        byPeriod.set(r.period,e);
-      }
-      setCashFlowOverageHistory([...byPeriod.values()].sort((a,b)=>b.period.localeCompare(a.period)));
-    });
-    return()=>{stopped=true;};
-  },[family.id,clientSelfServe]);
   const requestPlanChange=async newPlan=>{
     setBillingBusy(true); setBillingMsg(null);
     try{
@@ -8698,35 +8601,6 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
             <div style={{display:"flex",flexDirection:"column",gap:6}}>
               {overageHistory.map(h=><div key={h.period} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12.5,color:B.text,padding:"6px 0"}}>
                 <span>{new Date(h.period+"T00:00:00Z").toLocaleDateString("en-US",{month:"long",year:"numeric",timeZone:"UTC"})} — {h.count} additional workflow{h.count===1?"":"s"}</span>
-                <span style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{fontWeight:600,color:B.navy}}>{fmtMoney(h.total)}</span>
-                  <span style={{fontSize:9.5,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",borderRadius:20,padding:"2px 8px",background:h.pending>0?"rgba(206,182,129,0.22)":"#e0f5e9",color:h.pending>0?"#7a5a19":"#0d5c2b"}}>{h.pending>0?"Pending":"On invoice"}</span>
-                </span>
-              </div>)}
-            </div>
-          </div>}
-        </div>}
-
-        {/* Cash flow event usage & overage charges -- Basic AND Core (self-serve), unlike
-            Workflows above which is Core-only. Unit price here is MONTHLY and recurring for as
-            long as the event stays active, not a one-off per-instance charge like Workflows --
-            see the cash_flow_event_overage_billing migration for why. */}
-        {clientSelfServe&&billingCashFlowUsage&&!billingCashFlowUsage.unlimited&&<div style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:14,padding:"20px 24px",marginBottom:16,boxShadow:B.shadow}}>
-          <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10}}>Cash Flow Event Usage & Charges</div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:4}}>
-            <div style={{fontSize:13.5,color:B.text}}>{billingCashFlowUsage.active_count} of {billingCashFlowUsage.included} included events active</div>
-            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600}}>{fmtMoney(billingCashFlowUsage.charged_this_month)}</div>
-          </div>
-          <div style={{fontSize:12,color:B.textSoft,marginBottom:cashFlowOverageHistory.length?14:0}}>
-            {billingCashFlowUsage.overage_count>0
-              ? `${billingCashFlowUsage.overage_count} beyond your included ${billingCashFlowUsage.included}, at $${Number(billingCashFlowUsage.unit_price).toFixed(2)}/month each for as long as they stay active. Mark an event complete anytime from the Cash Flow tab to stop its charge.`
-              : `Additional cash flow events beyond your included ${billingCashFlowUsage.included} are $${Number(billingCashFlowUsage.unit_price).toFixed(2)}/month each, for as long as they stay active -- no cap. You'll see the exact cost when you add one.`}
-          </div>
-          {cashFlowOverageHistory.length>0&&<div style={{borderTop:`1px solid ${B.borderLight}`,paddingTop:12}}>
-            <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:8}}>By Month</div>
-            <div style={{display:"flex",flexDirection:"column",gap:6}}>
-              {cashFlowOverageHistory.map(h=><div key={h.period} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12.5,color:B.text,padding:"6px 0"}}>
-                <span>{new Date(h.period+"T00:00:00Z").toLocaleDateString("en-US",{month:"long",year:"numeric",timeZone:"UTC"})} — {h.count} event{h.count===1?"":"s"} beyond included</span>
                 <span style={{display:"flex",alignItems:"center",gap:8}}>
                   <span style={{fontWeight:600,color:B.navy}}>{fmtMoney(h.total)}</span>
                   <span style={{fontSize:9.5,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",borderRadius:20,padding:"2px 8px",background:h.pending>0?"rgba(206,182,129,0.22)":"#e0f5e9",color:h.pending>0?"#7a5a19":"#0d5c2b"}}>{h.pending>0?"Pending":"On invoice"}</span>
