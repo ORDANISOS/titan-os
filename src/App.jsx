@@ -6952,6 +6952,10 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
   const PLATFORM_AREAS=[...PLATFORM_AREA_DEFS].sort((a,b)=>a.pct-b.pct);
 
   const selfServe=families.filter(f=>f.acquisition_channel==="self_serve");
+  // Everything that isn't self-serve is a household someone on the team put on the platform --
+  // an advisor/admin onboarding an existing relationship. Same acquisition_channel column, just
+  // the other side of it (see the comment above where it's declared).
+  const teamOnboarded=families.filter(f=>f.acquisition_channel!=="self_serve");
   // Counted toward MRR: still paying (active), or Stripe is actively trying to collect (past_due).
   // final_notice / archived / cancelled households are not generating revenue right now.
   const BILLING_STATES=new Set(["active","past_due"]);
@@ -6959,7 +6963,8 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
 
   const totalSelfServe=selfServe.length;
   const selfServeMRR=mrrOf(selfServe);
-  const platformMRR=mrrOf(families);
+  const teamOnboardedMRR=mrrOf(teamOnboarded);
+  const platformMRR=mrrOf(families); // selfServeMRR + teamOnboardedMRR, by construction
 
   // Onboarding follow-up: has anyone internally actually reached out to this self-serve household
   // yet? families.onboarding_contacted_at/_by (set only by the "Mark as Contacted" button below)
@@ -7287,17 +7292,31 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
       </div>
     </div>}
 
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(180px,100%),1fr))",gap:14,marginBottom:24}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(180px,100%),1fr))",gap:14,marginBottom:18}}>
       {/* One tile per plan tier -- byPlan already computes mrr correctly per plan (see the
           Signups by Plan breakdown below); previously every self-serve household's revenue was
           lumped into a single "Self-Serve MRR" tile regardless of plan, which read as if
           everyone was on one tier. */}
       {byPlan.map(p=><StatBox key={p.plan} label={`${p.label} MRR`} value={fmtMoney(p.mrr)} accent={SIGNUP_PLAN_COLOR[p.plan]}/>)}
-      <StatBox label="Total MRR" value={fmtMoney(selfServeMRR)} accent={B.gold}/>
-      <StatBox label="Platform MRR (all households)" value={fmtMoney(platformMRR)} accent={B.navyMid}/>
       <StatBox label="Total Households" value={families.length} accent={B.textSoft}/>
       <StatBox label="Pending Onboarding Contact" value={allPendingOnboarding.length} accent={ONBOARDING_SCHEME.new.dot}/>
       <StatBox label="Overdue (48h+)" value={overdueOnboarding.length} accent={UTIL_SCHEME.Low.dot}/>
+    </div>
+
+    {/* MRR roll-up, laid out as the actual equation rather than three unrelated tiles: households
+        that signed themselves up, plus households the team onboarded, equal the platform total.
+        Kept out of the auto-fit grid above and given its own flex row so the +/= glyphs can sit
+        at a fixed narrow width between tiles instead of claiming a full grid track each. */}
+    <div style={{display:"flex",flexWrap:"wrap",alignItems:"center",gap:10,marginBottom:24}}>
+      <div style={{flex:"1 1 180px",minWidth:0}}><StatBox label="Self-Directed MRR" value={fmtMoney(selfServeMRR)} accent={B.gold}/></div>
+      <div aria-hidden="true" style={{flex:"none",fontSize:20,fontWeight:700,color:B.textMute}}>+</div>
+      {/* Team-Onboarded: households an advisor/admin put on the platform for an existing
+          relationship, rather than the household signing itself up. This tile plus
+          Self-Directed MRR always equals Total Platform MRR, by construction -- see
+          teamOnboardedMRR/selfServeMRR/platformMRR. */}
+      <div style={{flex:"1 1 180px",minWidth:0}}><StatBox label="Team-Onboarded MRR" value={fmtMoney(teamOnboardedMRR)} accent={B.navy}/></div>
+      <div aria-hidden="true" style={{flex:"none",fontSize:20,fontWeight:700,color:B.textMute}}>=</div>
+      <div style={{flex:"1 1 180px",minWidth:0}}><StatBox label="Total Platform MRR" value={fmtMoney(platformMRR)} accent={B.navyMid}/></div>
     </div>
 
     <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1.1fr 1fr",gap:18,marginBottom:18,alignItems:"start"}}>
