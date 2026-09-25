@@ -7873,6 +7873,179 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
 }
 
 // ── CLIENT DASHBOARD ──────────────────────────────────────────────────────────
+// ── SELF-SERVE QUICK-ADD FORMS ───────────────────────────────────────────────
+// Basic/Core has no assigned Expert to enter a household's properties, portfolio accounts or
+// valuables for them -- until this, ClientDashboard's Properties/Portfolio/Valuables tabs were
+// read-only for the client with no add path at all (RLS already allowed the write; nothing in the
+// UI offered it). These are the minimal, self-entry versions of the admin side's much longer
+// forms (see addProperty/addAccount/addValuable in FamilyDashboard) -- just enough for a household
+// to get its own record started; every field these skip is still editable later by an advisor/admin,
+// or by the household itself once it's comfortable, in a fuller edit view.
+// Each is a plain form (no <Modal> wrapper of its own) so it can render either inside a standalone
+// popup modal (the tab's own "+ Add" button) or directly as a step in OnboardingWizard below --
+// same fields, same save handler, two different frames around it.
+function PropertyQuickForm({onSave,onCancel,saving}){
+  const[f,setF]=useState({address:"",propertyType:PROP_TYPES[0],purchasePrice:"",purchaseDate:"",currentValue:"",notes:""});
+  const set=(k,v)=>setF(m=>({...m,[k]:v}));
+  const valid=f.address.trim().length>0;
+  return <div>
+    <Field label="Address"><Inp value={f.address} onChange={e=>set("address",e.target.value)} placeholder="123 Main St, Springfield"/></Field>
+    <Grid2>
+      <Field label="Property type"><Sel value={f.propertyType} onChange={e=>set("propertyType",e.target.value)}>{PROP_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</Sel></Field>
+      <Field label="Current value (if known)"><MoneyInput value={f.currentValue} onChange={v=>set("currentValue",v)} placeholder="850,000"/></Field>
+      <Field label="Purchase price"><MoneyInput value={f.purchasePrice} onChange={v=>set("purchasePrice",v)} placeholder="720,000"/></Field>
+      <Field label="Purchase date"><Inp type="date" value={f.purchaseDate} onChange={e=>set("purchaseDate",e.target.value)}/></Field>
+    </Grid2>
+    <Field label="Notes (optional)"><textarea value={f.notes} onChange={e=>set("notes",e.target.value)} rows={2} style={{...inp,resize:"vertical",fontFamily:"inherit"}}/></Field>
+    <div style={{fontSize:11.5,color:B.textSoft,marginBottom:14}}>Mortgage, insurance and rental details can be added later -- an advisor can also fill these in for you.</div>
+    <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+      {onCancel&&<Btn variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Btn>}
+      <Btn onClick={()=>onSave(f)} disabled={saving||!valid}>{saving?"Saving…":"Add property"}</Btn>
+    </div>
+  </div>;
+}
+function AccountQuickForm({onSave,onCancel,saving}){
+  const[f,setF]=useState({institution:"",accountType:ACCT_TYPES[0],startingBalance:"",currentBalance:"",notes:""});
+  const set=(k,v)=>setF(m=>({...m,[k]:v}));
+  const valid=f.institution.trim().length>0;
+  return <div>
+    <Grid2>
+      <Field label="Institution"><Inp value={f.institution} onChange={e=>set("institution",e.target.value)} placeholder="Fidelity, Chase, Schwab…"/></Field>
+      <Field label="Account type"><Sel value={f.accountType} onChange={e=>set("accountType",e.target.value)}>{ACCT_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</Sel></Field>
+      <Field label="Current balance"><MoneyInput value={f.currentBalance} onChange={v=>set("currentBalance",v)} placeholder="240,000"/></Field>
+      <Field label="Starting balance (optional)"><MoneyInput value={f.startingBalance} onChange={v=>set("startingBalance",v)} placeholder="200,000"/></Field>
+    </Grid2>
+    <Field label="Notes (optional)"><textarea value={f.notes} onChange={e=>set("notes",e.target.value)} rows={2} style={{...inp,resize:"vertical",fontFamily:"inherit"}}/></Field>
+    <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+      {onCancel&&<Btn variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Btn>}
+      <Btn onClick={()=>onSave(f)} disabled={saving||!valid}>{saving?"Saving…":"Add account"}</Btn>
+    </div>
+  </div>;
+}
+function ValuableQuickForm({onSave,onCancel,saving}){
+  const[f,setF]=useState({category:VALUABLE_CATS[0],description:"",makeModel:"",year:"",estimatedValue:"",notes:""});
+  const set=(k,v)=>setF(m=>({...m,[k]:v}));
+  const valid=f.description.trim().length>0;
+  return <div>
+    <Grid2>
+      <Field label="Category"><Sel value={f.category} onChange={e=>set("category",e.target.value)}>{VALUABLE_CATS.map(t=><option key={t} value={t}>{t}</option>)}</Sel></Field>
+      <Field label="Estimated value"><MoneyInput value={f.estimatedValue} onChange={v=>set("estimatedValue",v)} placeholder="45,000"/></Field>
+    </Grid2>
+    <Field label="Description"><Inp value={f.description} onChange={e=>set("description",e.target.value)} placeholder="2021 Rolex Submariner"/></Field>
+    <Grid2>
+      <Field label="Make / model (optional)"><Inp value={f.makeModel} onChange={e=>set("makeModel",e.target.value)}/></Field>
+      <Field label="Year (optional)"><Inp value={f.year} onChange={e=>set("year",e.target.value)}/></Field>
+    </Grid2>
+    <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+      {onCancel&&<Btn variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Btn>}
+      <Btn onClick={()=>onSave(f)} disabled={saving||!valid}>{saving?"Saving…":"Add valuable"}</Btn>
+    </div>
+  </div>;
+}
+
+// ── ONBOARDING WIZARD ─────────────────────────────────────────────────────────
+// Self-serve (Basic/Core, no assigned Expert) "getting started" flow. Opens automatically the
+// first time a household with nothing on file yet lands on its dashboard, and stays reachable
+// afterward from the "Getting Started" button in the header -- see ClientDashboard, which is the
+// only caller. Each step reuses the exact same QuickForm + save handler as that entity's
+// standalone "+ Add" button, so nothing about how the data is saved differs by how someone got to
+// the form; only the chrome around it (a wizard step vs. a popup modal) differs.
+const WIZARD_STEPS=["welcome","property","account","valuable","done"];
+function OnboardingWizard({onClose,addProperty,addAccount,addValuable,properties,accounts,valuables}){
+  const[stepIdx,setStepIdx]=useState(0);
+  const[saving,setSaving]=useState(false);
+  const step=WIZARD_STEPS[stepIdx];
+  const next=()=>setStepIdx(i=>Math.min(i+1,WIZARD_STEPS.length-1));
+  const back=()=>setStepIdx(i=>Math.max(i-1,0));
+
+  const save=async(kind,f)=>{
+    setSaving(true);
+    try{
+      if(kind==="property")await addProperty(f);
+      if(kind==="account")await addAccount(f);
+      if(kind==="valuable")await addValuable(f);
+    } finally { setSaving(false); }
+  };
+
+  const list=kind=>{
+    const rows=kind==="property"?properties:kind==="account"?accounts:valuables;
+    if(!rows.length)return null;
+    const label=r=>kind==="property"?r.address:kind==="account"?`${r.institution} · ${r.accountType}`:r.description;
+    return <div style={{marginTop:2,marginBottom:18}}>
+      <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:8}}>Added so far</div>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {rows.map(r=><div key={r.id} style={{background:B.bg,border:`1px solid ${B.borderLight}`,borderRadius:8,padding:"8px 12px",fontSize:12.5,color:B.text}}>✓ {label(r)}</div>)}
+      </div>
+    </div>;
+  };
+
+  const shell=(title,blurb,body,footer)=><div style={{
+    position:"fixed",inset:0,background:"rgba(9,20,35,0.55)",zIndex:2000,
+    display:"flex",alignItems:"center",justifyContent:"center",padding:20,
+  }}>
+    <div style={{background:B.white,borderRadius:16,maxWidth:640,width:"100%",maxHeight:"88vh",overflowY:"auto",padding:"32px 34px",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+      <div style={{display:"flex",gap:6,marginBottom:20}}>
+        {WIZARD_STEPS.slice(0,-1).map((s,i)=><div key={s} style={{flex:1,height:4,borderRadius:2,background:i<=stepIdx?B.gold:B.borderLight}}/>)}
+      </div>
+      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,color:B.navy,fontWeight:600,marginBottom:6}}>{title}</div>
+      {blurb&&<div style={{fontSize:13.5,color:B.textSoft,marginBottom:22,lineHeight:1.55}}>{blurb}</div>}
+      {body}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:22,paddingTop:18,borderTop:`1px solid ${B.borderLight}`}}>
+        {footer}
+      </div>
+    </div>
+  </div>;
+
+  if(step==="welcome")return shell(
+    "Let's set up your household",
+    "A few quick, optional steps to get your properties, accounts and valuables on record. Add as much or as little as you'd like now — you can always add more later, and this wizard is here anytime from \"Getting Started\" in the header.",
+    null,
+    <>
+      <button onClick={onClose} style={{background:"none",border:"none",color:B.textSoft,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Skip for now</button>
+      <Btn onClick={next}>Get started →</Btn>
+    </>
+  );
+
+  if(step==="property")return shell(
+    "Add a property",
+    "Real estate, land, or anywhere else you hold property. Add one, several, or skip this entirely.",
+    <>{list("property")}<PropertyQuickForm saving={saving} onSave={f=>save("property",f)}/></>,
+    <>
+      <button onClick={back} style={{background:"none",border:"none",color:B.textSoft,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>← Back</button>
+      <Btn variant="ghost" onClick={next}>{properties.length?"Next":"Skip"}</Btn>
+    </>
+  );
+
+  if(step==="account")return shell(
+    "Add a portfolio account",
+    "Brokerage, bank, retirement — anywhere you hold investable assets.",
+    <>{list("account")}<AccountQuickForm saving={saving} onSave={f=>save("account",f)}/></>,
+    <>
+      <button onClick={back} style={{background:"none",border:"none",color:B.textSoft,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>← Back</button>
+      <Btn variant="ghost" onClick={next}>{accounts.length?"Next":"Skip"}</Btn>
+    </>
+  );
+
+  if(step==="valuable")return shell(
+    "Add a valuable",
+    "Vehicles, jewelry, art, watches — anything worth keeping a record and value on. Entirely optional.",
+    <>{list("valuable")}<ValuableQuickForm saving={saving} onSave={f=>save("valuable",f)}/></>,
+    <>
+      <button onClick={back} style={{background:"none",border:"none",color:B.textSoft,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>← Back</button>
+      <Btn onClick={next}>{valuables.length?"Finish":"Skip & finish"}</Btn>
+    </>
+  );
+
+  return shell(
+    "You're all set",
+    "You can add more properties, accounts or valuables anytime from their own tabs, upload documents to your Vault, or reopen this wizard anytime from \"Getting Started\" in the header.",
+    <div style={{fontSize:13,color:B.textSoft,lineHeight:1.6}}>
+      Added this session: {properties.length} propert{properties.length===1?"y":"ies"}, {accounts.length} account{accounts.length===1?"":"s"}, {valuables.length} valuable{valuables.length===1?"":"s"}.
+    </div>,
+    <div style={{marginLeft:"auto"}}><Btn onClick={onClose}>Go to my dashboard</Btn></div>
+  );
+}
+
 function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const isMobile=useIsMobile();
   // Needed because this view renders CashFlowView too. The client view is read-only, so
@@ -7893,6 +8066,11 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const clientPlan=fam.plan;
   const clientHasExpert=planAllows(clientPlan,"assignedExpert");
   const clientHasWorkflows=planAllows(clientPlan,"workflows");
+  // No assigned Expert (Basic/Core) means nobody else is entering this household's properties,
+  // accounts or valuables -- that's the whole reason the QuickForm "+ Add" buttons and the
+  // onboarding wizard exist. Premier already has someone doing this for the household, so neither
+  // is shown there.
+  const clientSelfServe=!clientHasExpert;
 
   // ── Billing (upgrade / downgrade) ──────────────────────────────────────
   // Only Basic <-> Core is ever self-serve here (plan_features.self_serve / plans.js
@@ -7932,6 +8110,32 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   // renders). Reads straight from data already loaded for this dashboard rather than a fresh
   // query, same as everywhere else in ClientDashboard that filters data.* by family.id.
   const billPayLostCount=(data.cash_flow_events||[]).filter(e=>e.familyId===family.id&&e.pcm_responsible_cleared_by_downgrade).length;
+  // ── Workflow usage & overage charges, for the Billing tab ──────────────────
+  // Same family_workflow_month_usage RPC the Workflows tab's banner reads (so the two numbers
+  // can never disagree), plus the raw ledger rows so Billing can show WHICH months and HOW MANY
+  // extra workflows -- not just this month's running total. workflow_overage_charges' own
+  // read_access RLS already lets a client read its own family's rows.
+  const[billingWorkflowUsage,setBillingWorkflowUsage]=useState(null);
+  const[overageHistory,setOverageHistory]=useState([]);
+  useEffect(()=>{
+    if(!clientHasWorkflows)return;
+    let stopped=false;
+    sb.rpc("family_workflow_month_usage",{p_family_id:family.id}).then(({data:rows,error})=>{
+      if(!stopped&&!error&&rows&&rows[0])setBillingWorkflowUsage(rows[0]);
+    });
+    sb.from("workflow_overage_charges").select("period,unit_price,status").eq("family_id",family.id).order("period",{ascending:false}).then(({data:rows,error})=>{
+      if(stopped||error||!rows)return;
+      const byPeriod=new Map();
+      for(const r of rows){
+        const e=byPeriod.get(r.period)||{period:r.period,count:0,total:0,invoiced:0,pending:0};
+        e.count++;e.total+=Number(r.unit_price);
+        if(r.status==="invoiced")e.invoiced+=Number(r.unit_price);else if(r.status==="pending")e.pending+=Number(r.unit_price);
+        byPeriod.set(r.period,e);
+      }
+      setOverageHistory([...byPeriod.values()].sort((a,b)=>b.period.localeCompare(a.period)));
+    });
+    return()=>{stopped=true;};
+  },[family.id,clientHasWorkflows]);
   const requestPlanChange=async newPlan=>{
     setBillingBusy(true); setBillingMsg(null);
     try{
@@ -7993,6 +8197,46 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const accounts=(data.portfolio_accounts||[]).filter(a=>a.familyId===family.id);
   const valuables=(data.valuables||[]).filter(v=>v.familyId===family.id);
   const tasks=(data.tasks||[]).filter(t=>t.familyId===family.id&&!t.done);
+
+  // ── Self-serve quick-add (Basic/Core, no assigned Expert) ─────────────────
+  // Trimmed versions of FamilyDashboard's addProperty/addAccount/addValuable -- same tables, same
+  // RLS (already allowed a client to write to their own family's rows; nothing enforced it, this
+  // is purely the missing UI), fewer fields. See PropertyQuickForm/AccountQuickForm/
+  // ValuableQuickForm above for why the fields differ from the admin forms.
+  const addProperty=async f=>{
+    const{error}=await sb.from("properties").insert({family_id:family.id,address:f.address,property_type:f.propertyType,purchase_price:f.purchasePrice||null,purchase_date:f.purchaseDate||null,current_value:f.currentValue||null,notes:f.notes||null});
+    if(error)toast(error.message,"error");else{toast("Property added");await reload("properties");}
+  };
+  const addAccount=async f=>{
+    const{error}=await sb.from("portfolio_accounts").insert({family_id:family.id,institution:f.institution,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,notes:f.notes||null});
+    if(error)toast(error.message,"error");else{toast("Account added");await reload("portfolio_accounts");}
+  };
+  const addValuable=async f=>{
+    const{error}=await sb.from("valuables").insert({family_id:family.id,category:f.category,description:f.description,make_model:f.makeModel||null,year:f.year||null,estimated_value:f.estimatedValue||null,notes:f.notes||null});
+    if(error)toast(error.message,"error");else{toast("Valuable added");await reload("valuables");}
+  };
+  const[addPropertyOpen,setAddPropertyOpen]=useState(false);
+  const[addAccountOpen,setAddAccountOpen]=useState(false);
+  const[addValuableOpen,setAddValuableOpen]=useState(false);
+  const[savingQuickAdd,setSavingQuickAdd]=useState(false);
+  const runQuickAdd=(fn,close)=>async f=>{setSavingQuickAdd(true);try{await fn(f);close();}finally{setSavingQuickAdd(false);}};
+
+  // Onboarding wizard: opens once on its own for a brand-new, empty, self-serve household: after
+  // that, "seen" is remembered per-family in localStorage so it doesn't nag on every login, but
+  // the "Getting Started" header button (see below) reaches it on demand forever after.
+  const[wizardOpen,setWizardOpen]=useState(false);
+  const wizardSeenKey=`ordanis_onboarding_wizard_seen_${family.id}`;
+  useEffect(()=>{
+    if(!clientSelfServe)return;
+    if(properties.length||accounts.length||valuables.length)return;
+    let seen=false;
+    try{seen=localStorage.getItem(wizardSeenKey)==="1";}catch{}
+    if(!seen)setWizardOpen(true);
+  },[family.id,clientSelfServe]);
+  const closeWizard=()=>{
+    try{localStorage.setItem(wizardSeenKey,"1");}catch{}
+    setWizardOpen(false);
+  };
   const totalRE=properties.reduce((s,p)=>s+(Number(p.currentValue)||Number(p.purchasePrice)||0),0);
   const totalDebt=properties.reduce((s,p)=>s+(Number(p.loanBalance)||0)+(Number(p.secondMortgageBalance)||0),0)+accounts.filter(a=>a.accountType==="Line of Credit").reduce((s,a)=>s+(Number(a.currentBalance)||0),0);
   const totalAccounts=accounts.filter(a=>a.accountType!=="Line of Credit").reduce((s,a)=>s+(Number(a.currentBalance)||0),0);
@@ -8037,6 +8281,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
 
     {showAssistantGreeting&&!showNamePrompt&&<AssistantWelcome family={family} data={data} reload={reload} userProfile={userProfile} onClose={()=>setShowAssistantGreeting(false)} toast={toast}/>}
     {emailAdvisorOpen&&<EmailAdvisorModal family={family} userProfile={userProfile} data={data} onClose={()=>setEmailAdvisorOpen(false)}/>}
+    {wizardOpen&&<OnboardingWizard onClose={closeWizard} addProperty={addProperty} addAccount={addAccount} addValuable={addValuable} properties={properties} accounts={accounts} valuables={valuables}/>}
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 
     {/* Header (white banner with logo, family name, sign out) */}
@@ -8060,6 +8305,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
               <span>{isMobile?"Client Portal":`Client Portal · ${new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"})}`}</span>
             </div>
           </div>
+          {clientSelfServe&&<button onClick={()=>setWizardOpen(true)} style={{background:"rgba(206,182,132,0.15)",border:`1px solid ${B.gold}`,color:B.navy,borderRadius:8,padding:isMobile?"6px 10px":"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"inherit",flexShrink:0,fontWeight:600}}>{isMobile?"⚙ Getting Started":"⚙ Getting Started"}</button>}
           {clientHasExpert&&<button onClick={()=>setEmailAdvisorOpen(true)} style={{background:"rgba(206,182,132,0.15)",border:`1px solid ${B.gold}`,color:B.navy,borderRadius:8,padding:isMobile?"6px 10px":"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"inherit",flexShrink:0,fontWeight:600}}>{isMobile?"✉ Ordanis Expert":"✉ Email my Ordanis Expert"}</button>}
           <button onClick={logout} style={{background:"transparent",border:`1px solid ${B.border}`,color:B.textSoft,borderRadius:8,padding:isMobile?"6px 10px":"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>Sign Out</button>
         </div>
@@ -8163,7 +8409,13 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
 
       {/* PORTFOLIO */}
       {activeTab==="portfolio"&&<div>
-        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:20}}>Investment Portfolio</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600}}>Investment Portfolio</div>
+          {clientSelfServe&&<Btn small onClick={()=>setAddAccountOpen(true)}>+ Add Account</Btn>}
+        </div>
+        {addAccountOpen&&<Modal title="Add a portfolio account" onClose={()=>setAddAccountOpen(false)}>
+          <AccountQuickForm saving={savingQuickAdd} onCancel={()=>setAddAccountOpen(false)} onSave={runQuickAdd(addAccount,()=>setAddAccountOpen(false))}/>
+        </Modal>}
         {accounts.length===0?<Empty text="No portfolio accounts on file."/>:accounts.map(a=>{
           const pct=pctChange(a.startingBalance,a.currentBalance);
           const gain=(Number(a.currentBalance)||0)-(Number(a.startingBalance)||0);
@@ -8193,7 +8445,13 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
 
       {/* PROPERTIES */}
       {activeTab==="properties"&&<div>
-        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:20}}>Property Holdings</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600}}>Property Holdings</div>
+          {clientSelfServe&&<Btn small onClick={()=>setAddPropertyOpen(true)}>+ Add Property</Btn>}
+        </div>
+        {addPropertyOpen&&<Modal title="Add a property" onClose={()=>setAddPropertyOpen(false)}>
+          <PropertyQuickForm saving={savingQuickAdd} onCancel={()=>setAddPropertyOpen(false)} onSave={runQuickAdd(addProperty,()=>setAddPropertyOpen(false))}/>
+        </Modal>}
         {properties.length===0?<Empty text="No properties on file."/>:(()=>{
           const bySort=(a,b)=>((Number.isFinite(Number(a.sortOrder))?Number(a.sortOrder):1e9)-(Number.isFinite(Number(b.sortOrder))?Number(b.sortOrder):1e9))||(new Date(a.createdAt||0)-new Date(b.createdAt||0));
           const groups=[...PROP_TYPES,"Other"].map(type=>({type,list:properties.filter(p=>type==="Other"?!PROP_TYPES.includes(p.propertyType):p.propertyType===type).sort(bySort)})).filter(g=>g.list.length>0);
@@ -8248,8 +8506,17 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
 
       {/* VALUABLES */}
       {activeTab==="valuables"&&<div>
-        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:8}}>Personal Property & Valuables</div>
-        <div style={{fontSize:14,color:B.textSoft,marginBottom:20}}>Total estimated value: <strong style={{color:B.navy}}>{fmtMoney(totalValuables)}</strong></div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8,flexWrap:"wrap",gap:10}}>
+          <div>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600}}>Personal Property & Valuables</div>
+            <div style={{fontSize:14,color:B.textSoft,marginTop:4}}>Total estimated value: <strong style={{color:B.navy}}>{fmtMoney(totalValuables)}</strong></div>
+          </div>
+          {clientSelfServe&&<Btn small onClick={()=>setAddValuableOpen(true)}>+ Add Valuable</Btn>}
+        </div>
+        {addValuableOpen&&<Modal title="Add a valuable" onClose={()=>setAddValuableOpen(false)}>
+          <ValuableQuickForm saving={savingQuickAdd} onCancel={()=>setAddValuableOpen(false)} onSave={runQuickAdd(addValuable,()=>setAddValuableOpen(false))}/>
+        </Modal>}
+        <div style={{marginBottom:20}}/>
         {valuables.length===0?<Empty text="No valuables on file."/>:VALUABLE_CATS.map(cat=>{
           // "Other" absorbs unrecognised categories so nothing is hidden.
           const items=valuables.filter(v=>cat==="Other"?!VALUABLE_CATS.includes(v.category)||v.category==="Other":v.category===cat);
@@ -8311,6 +8578,34 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
             </div>
           </div>
         </div>
+
+        {/* Workflow usage & overage charges -- the exact breakdown behind whatever this month's
+            bill includes beyond the base plan price. Unlimited plans (Premier) show nothing here;
+            there is nothing metered to break down. */}
+        {clientHasWorkflows&&billingWorkflowUsage&&!billingWorkflowUsage.unlimited&&<div style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:14,padding:"20px 24px",marginBottom:16,boxShadow:B.shadow}}>
+          <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10}}>Workflow Usage & Charges</div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:4}}>
+            <div style={{fontSize:13.5,color:B.text}}>{billingWorkflowUsage.used_this_month} of {billingWorkflowUsage.included} included workflows started this month</div>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600}}>{fmtMoney(billingWorkflowUsage.charged_this_month)}</div>
+          </div>
+          <div style={{fontSize:12,color:B.textSoft,marginBottom:overageHistory.length?14:0}}>
+            {billingWorkflowUsage.overage_count>0
+              ? `${billingWorkflowUsage.overage_count} beyond your included ${billingWorkflowUsage.included} this month, at $${Number(billingWorkflowUsage.overage_price).toFixed(2)} each. There is no cap -- each additional workflow is billed, and you're notified of the cost when you start it.`
+              : `Additional workflows beyond your included ${billingWorkflowUsage.included} are $${Number(billingWorkflowUsage.overage_price).toFixed(2)} each, with no monthly cap. You'll be told the exact cost each time before it's added.`}
+          </div>
+          {overageHistory.length>0&&<div style={{borderTop:`1px solid ${B.borderLight}`,paddingTop:12}}>
+            <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:8}}>By Month</div>
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {overageHistory.map(h=><div key={h.period} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12.5,color:B.text,padding:"6px 0"}}>
+                <span>{new Date(h.period+"T00:00:00Z").toLocaleDateString("en-US",{month:"long",year:"numeric",timeZone:"UTC"})} — {h.count} additional workflow{h.count===1?"":"s"}</span>
+                <span style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontWeight:600,color:B.navy}}>{fmtMoney(h.total)}</span>
+                  <span style={{fontSize:9.5,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",borderRadius:20,padding:"2px 8px",background:h.pending>0?"rgba(206,182,129,0.22)":"#e0f5e9",color:h.pending>0?"#7a5a19":"#0d5c2b"}}>{h.pending>0?"Pending":"On invoice"}</span>
+                </span>
+              </div>)}
+            </div>
+          </div>}
+        </div>}
 
         {/* Pending scheduled change */}
         {fam.pending_plan&&<div style={{background:"#fef3e2",border:"1px solid #fcd97d",borderRadius:10,padding:"14px 18px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
@@ -9699,9 +9994,17 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
     if(!t){toast("Choose a playbook on this obligation first","error");return;}
     if(instances.some(i=>i.obligation_id===ob.id&&i.due_date===ob.due_date)){
       toast("This cycle already exists","error");return;}
+    // Snapshot BEFORE creating the cycle, so used_this_month here is the count this new one is
+    // about to become #(used_this_month+1) of -- used to tell the household the cost of THIS
+    // cycle, not the running total after it. Core has no cap any more (plan_features
+    // .default_monthly_cap is null for it) -- workflows beyond the included 10 are simply billed,
+    // never blocked, but the household is told the cost every single time, right here.
+    const willBeBilled=usage&&!usage.unlimited&&usage.used_this_month>=usage.included;
     try{
       const inst=await generateWorkflowCycle({template:t,obligation:ob,dueDate:ob.due_date,familyId:family.id});
-      toast(inst.status==="at_risk"?"Cycle started — flagged at risk":"Cycle started");
+      const base=inst.status==="at_risk"?"Cycle started — flagged at risk.":"Cycle started.";
+      const costNote=willBeBilled?` This is workflow #${usage.used_this_month+1} this month — $${Number(usage.overage_price).toFixed(2)} has been added to this month's bill.`:"";
+      toast(base+costNote);
       setOpenInst(inst.id);load();loadUsage();
     }catch(e){toast(e.message||"Could not start the cycle. If this plan has a monthly workflow allowance, this household may have reached it — see the usage note above.","error");}
   };
