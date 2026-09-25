@@ -18,6 +18,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
+// Standalone mobile check -- this file is rendered by main.jsx in place of <App/> (see the
+// header comment) and deliberately doesn't import anything from App.jsx, so it gets its own
+// small copy of the same breakpoint hook rather than reaching across entry points.
+function useIsMobile(bp = 720) {
+  const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < bp);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < bp);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [bp]);
+  return isMobile;
+}
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://unkirihxtruhdjeldfpm.supabase.co";
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVua2lyaWh4dHJ1aGRqZWxkZnBtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNTA3MjUsImV4cCI6MjA5MTcyNjcyNX0._Ve9Pr3ooja-YdHYFIupebaZRhDjmJDnz2b-vzrhY04";
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -126,12 +139,13 @@ function StackedLogo({ width = 220 }) {
 }
 
 function Header({ onBack, backLabel }) {
+  const isMobile = useIsMobile();
   return (
-    <div style={{ padding: "14px 32px", borderBottom: `1px solid ${C.rule}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <div style={{ padding: isMobile ? "12px 18px" : "14px 32px", borderBottom: `1px solid ${C.rule}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
       <div style={{ textAlign: "center" }}>
-        <StackedLogo width={220} />
+        <StackedLogo width={isMobile ? 150 : 220} />
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 26 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 16 : 26 }}>
         {onBack && (
           <a href="#" onClick={(e) => { e.preventDefault(); onBack(); }} style={{ fontSize: ".76rem", fontWeight: 500, letterSpacing: ".06em", textTransform: "uppercase", color: C.slate, cursor: "pointer" }}>
             {backLabel || "Back"}
@@ -144,8 +158,9 @@ function Header({ onBack, backLabel }) {
 }
 
 function PlanCard({ planKey, plan, price, onChoose }) {
+  const isMobile = useIsMobile();
   return (
-    <div style={{ background: "#fff", border: `1px solid ${C.gold}`, borderRadius: 3, padding: "34px 30px", display: "flex", flexDirection: "column" }}>
+    <div style={{ background: "#fff", border: `1px solid ${C.gold}`, borderRadius: 3, padding: isMobile ? "26px 22px" : "34px 30px", display: "flex", flexDirection: "column" }}>
       <div style={{ fontSize: ".72rem", fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>{plan.eyebrow}</div>
       <h4 style={{ fontFamily: "Georgia,serif", fontWeight: 500, fontSize: "1.4rem", color: C.navy, margin: "0 0 6px" }}>{plan.label}</h4>
       <div style={{ fontFamily: "Georgia,serif", fontStyle: "italic", color: C.slate, fontSize: ".92rem", marginBottom: 14 }}>{plan.tagline}</div>
@@ -183,15 +198,16 @@ function PlanCard({ planKey, plan, price, onChoose }) {
 }
 
 function PlansStep({ prices, onChoose }) {
+  const isMobile = useIsMobile();
   return (
-    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "40px 32px 60px" }}>
-      <div style={{ textAlign: "center", maxWidth: 720, margin: "0 auto 30px" }}>
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: isMobile ? "24px 18px 40px" : "40px 32px 60px" }}>
+      <div style={{ textAlign: "center", maxWidth: 720, margin: isMobile ? "0 auto 22px" : "0 auto 30px" }}>
         <EyebrowLine>Choose how much you want done for you</EyebrowLine>
-        <h1 style={{ fontFamily: "Georgia,serif", color: C.navy, fontSize: "2.4rem", fontWeight: 460, margin: "0 0 .5em" }}>Three ways in</h1>
+        <h1 style={{ fontFamily: "Georgia,serif", color: C.navy, fontSize: isMobile ? "1.9rem" : "2.4rem", fontWeight: 460, margin: "0 0 .5em" }}>Three ways in</h1>
         <p style={{ color: C.slate, fontSize: "1rem", maxWidth: 640, margin: "10px auto 0" }}>Every plan sees all 49 workflows. What differs is how many run, and who does the work.</p>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 24, alignItems: "stretch" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,minmax(0,1fr))", gap: isMobile ? 18 : 24, alignItems: "stretch" }}>
         {PLAN_ORDER.map((key) => (
           <PlanCard key={key} planKey={key} plan={PLAN_COPY[key]} price={prices[key] ?? PLAN_COPY[key].price} onChoose={onChoose} />
         ))}
@@ -214,6 +230,7 @@ function Field({ label, ...props }) {
 }
 
 function AccountStep({ planKey, prices, onBack, onDone }) {
+  const isMobile = useIsMobile();
   const plan = PLAN_COPY[planKey];
   const price = prices[planKey] ?? plan.price;
   const [fullName, setFullName] = useState("");
@@ -309,10 +326,10 @@ function AccountStep({ planKey, prices, onBack, onDone }) {
   };
 
   return (
-    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "52px 32px 60px", display: "flex", gap: 40, alignItems: "flex-start", flexWrap: "wrap" }}>
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: isMobile ? "28px 18px 40px" : "52px 32px 60px", display: "flex", gap: 40, alignItems: "flex-start", flexWrap: "wrap" }}>
       <div style={{ flex: "1.2 1 420px" }}>
         <EyebrowLine>One step before payment</EyebrowLine>
-        <h1 style={{ fontFamily: "Georgia,serif", color: C.navy, fontSize: "2.4rem", fontWeight: 460, margin: "0 0 .5em" }}>Create your account</h1>
+        <h1 style={{ fontFamily: "Georgia,serif", color: C.navy, fontSize: isMobile ? "1.9rem" : "2.4rem", fontWeight: 460, margin: "0 0 .5em" }}>Create your account</h1>
         <p style={{ fontSize: "1.05rem", color: C.slate, marginTop: 12, maxWidth: 520 }}>So a declined card never costs you the work you have already done.</p>
 
         <div style={{ marginTop: 26, maxWidth: 520 }}>

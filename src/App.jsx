@@ -8531,8 +8531,12 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     // other tabs are ledgers, this one is the assistant.
     {id:"assistant", label:"Ask "+assistantName,   icon:"✦", assistant:true},
   ];
+  // Mobile nav: a top-left hamburger opening a slide-in drawer, same off-canvas pattern as the
+  // admin shell's own sidebar (see PortalShell's sidebarOpen) -- replaces the old fixed bottom
+  // tab bar, which squeezed 9+ tabs into one thin strip along the bottom of the screen.
+  const[navOpen,setNavOpen]=useState(false);
 
-  return <div style={{minHeight:"100vh",background:B.bg,fontFamily:"'DM Sans','Helvetica Neue',sans-serif",paddingBottom:isMobile?70:0}}>
+  return <div style={{minHeight:"100vh",background:B.bg,fontFamily:"'DM Sans','Helvetica Neue',sans-serif"}}>
 
     {showNamePrompt&&<Modal title="Meet your assistant" onClose={()=>setNamePromptDismissed(true)}>
       <div style={{fontSize:14,color:B.text,lineHeight:1.55,marginBottom:18}}>
@@ -8559,7 +8563,10 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     {/* Header (white banner with logo, family name, sign out) */}
     <div style={{background:B.white,padding:isMobile?"0 16px":"0 32px",borderBottom:`1px solid ${B.borderLight}`}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:isMobile?"12px 0":"16px 0",gap:10,flexWrap:isMobile?"wrap":"nowrap"}}>
-        <PCMLogo compact/>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          {isMobile&&<button onClick={()=>setNavOpen(true)} style={{background:"none",border:"none",cursor:"pointer",padding:"6px 4px 6px 0",fontSize:22,color:B.navy,flexShrink:0,display:"flex",alignItems:"center"}} aria-label="Open menu">☰</button>}
+          <PCMLogo compact/>
+        </div>
         <div style={{display:"flex",alignItems:"center",gap:isMobile?8:16,flex:isMobile?"1 1 auto":"none",justifyContent:isMobile?"flex-end":"flex-start"}}>
           <div style={{textAlign:"right",minWidth:0}}>
             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?16:22,color:B.navy,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{family.name}</div>
@@ -8619,11 +8626,24 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
       })}
     </div>}
 
-    {/* Bottom Tab Bar (mobile only) */}
-    {isMobile&&<div style={{position:"fixed",bottom:0,left:0,right:0,background:B.white,borderTop:`1px solid ${B.borderLight}`,display:"flex",justifyContent:"space-around",padding:"8px 4px 10px",zIndex:50,boxShadow:"0 -2px 12px rgba(0,0,0,0.08)",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
-      {TABS.map(t=><button key={t.id} onClick={()=>setActiveTab(t.id)} style={{background:"none",border:"none",borderTop:activeTab===t.id?`2px solid ${B.gold}`:"2px solid transparent",cursor:"pointer",padding:"8px 6px",display:"flex",alignItems:"center",justifyContent:"center",flex:1,minWidth:0,color:activeTab===t.id?B.navy:B.textSoft,fontFamily:"inherit",marginTop:-2}}>
-        <span style={{fontSize:11,fontWeight:activeTab===t.id?800:600,letterSpacing:"0.02em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"100%"}}>{t.label}</span>
-      </button>)}
+    {/* Mobile nav drawer (replaces the old fixed bottom tab bar) -- backdrop + slide-in panel
+        from the left, opened by the hamburger in the header above. */}
+    {isMobile&&navOpen&&<div onClick={()=>setNavOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:199,backdropFilter:"blur(2px)"}}/>}
+    {isMobile&&<div style={{position:"fixed",top:0,bottom:0,left:navOpen?0:-280,width:260,background:B.white,borderRight:`1px solid ${B.borderLight}`,zIndex:200,transition:"left 0.25s ease",boxShadow:navOpen?"4px 0 24px rgba(0,0,0,0.15)":"none",display:"flex",flexDirection:"column",overflowY:"auto"}}>
+      <div style={{padding:"18px 18px 14px",borderBottom:`1px solid ${B.borderLight}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+        <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Menu</span>
+        <button onClick={()=>setNavOpen(false)} style={{background:"none",border:"none",fontSize:20,color:B.textSoft,cursor:"pointer",padding:4,lineHeight:1}} aria-label="Close menu">✕</button>
+      </div>
+      <div style={{padding:"8px 0",flex:1}}>
+        {TABS.map(t=>{
+          const on=activeTab===t.id;
+          return <button key={t.id} onClick={()=>{setActiveTab(t.id);setNavOpen(false);}} aria-current={on?"page":undefined}
+            style={{display:"flex",alignItems:"center",gap:12,width:"100%",boxSizing:"border-box",background:on?"rgba(206,182,132,0.12)":"transparent",border:"none",borderLeft:on?`3px solid ${B.gold}`:"3px solid transparent",color:on?B.navy:B.textSoft,fontFamily:"inherit",fontSize:14,fontWeight:on?700:500,padding:"12px 18px",cursor:"pointer",textAlign:"left"}}>
+            {t.assistant&&<span aria-hidden="true" style={{color:on?B.gold:B.navyMid,fontSize:13,flexShrink:0}}>✦</span>}
+            <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.label}</span>
+          </button>;
+        })}
+      </div>
     </div>}
 
     {/* Content */}
