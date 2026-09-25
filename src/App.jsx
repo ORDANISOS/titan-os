@@ -8588,13 +8588,13 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         {clientHasWorkflows&&billingWorkflowUsage&&!billingWorkflowUsage.unlimited&&<div style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:14,padding:"20px 24px",marginBottom:16,boxShadow:B.shadow}}>
           <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10}}>Workflow Usage & Charges</div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:4}}>
-            <div style={{fontSize:13.5,color:B.text}}>{billingWorkflowUsage.used_this_month} of {billingWorkflowUsage.included} included workflows started this month</div>
+            <div style={{fontSize:13.5,color:B.text}}>{billingWorkflowUsage.active_count} of {billingWorkflowUsage.included} included workflows active</div>
             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600}}>{fmtMoney(billingWorkflowUsage.charged_this_month)}</div>
           </div>
           <div style={{fontSize:12,color:B.textSoft,marginBottom:overageHistory.length?14:0}}>
             {billingWorkflowUsage.overage_count>0
-              ? `${billingWorkflowUsage.overage_count} beyond your included ${billingWorkflowUsage.included} this month, at $${Number(billingWorkflowUsage.overage_price).toFixed(2)} each. There is no cap -- each additional workflow is billed, and you're notified of the cost when you start it.`
-              : `Additional workflows beyond your included ${billingWorkflowUsage.included} are $${Number(billingWorkflowUsage.overage_price).toFixed(2)} each, with no monthly cap. You'll be told the exact cost each time before it's added.`}
+              ? `${billingWorkflowUsage.overage_count} beyond your included ${billingWorkflowUsage.included}, at $${Number(billingWorkflowUsage.overage_price).toFixed(2)}/month each for as long as they stay active. Completing a workflow removes it from this count and stops its charge.`
+              : `Additional active workflows beyond your included ${billingWorkflowUsage.included} are $${Number(billingWorkflowUsage.overage_price).toFixed(2)}/month each, for as long as they stay active -- no cap. You'll see the exact cost when you start one.`}
           </div>
           {overageHistory.length>0&&<div style={{borderTop:`1px solid ${B.borderLight}`,paddingTop:12}}>
             <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:8}}>By Month</div>
@@ -9933,11 +9933,12 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
   const[review,setReview]=useState(null);   // outbound step being read before approval
   const accounts=(data.portfolio_accounts||[]).filter(a=>a.familyId===family.id);
 
-  // Monthly usage against plan_features.workflows_included -- the same number the
-  // enforce_workflow_monthly_quota DB trigger checks, read via the family_workflow_month_usage
-  // RPC so this card can never show a figure the database itself doesn't agree with. Null
-  // `usage` just means "still loading" or "unlimited plan" -- both render nothing here rather
-  // than a misleading zero.
+  // Live usage against plan_features.workflows_included -- Core gets 10 ACTIVE workflows
+  // included and $8/month for each one beyond that, for as long as it stays active; completing a
+  // workflow (see advance() below) drops it out of this count from the next monthly billing cycle
+  // on. Read via the family_workflow_month_usage RPC so this card can never show a figure the
+  // database itself doesn't agree with. Null `usage` just means "still loading" or "unlimited
+  // plan" -- both render nothing here rather than a misleading zero.
   const[usage,setUsage]=useState(null);
   const loadUsage=async()=>{
     const{data:rows,error}=await sb.rpc("family_workflow_month_usage",{p_family_id:family.id});
@@ -9997,19 +9998,19 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
     if(!t){toast("Choose a playbook on this obligation first","error");return;}
     if(instances.some(i=>i.obligation_id===ob.id&&i.due_date===ob.due_date)){
       toast("This cycle already exists","error");return;}
-    // Snapshot BEFORE creating the cycle, so used_this_month here is the count this new one is
-    // about to become #(used_this_month+1) of -- used to tell the household the cost of THIS
-    // cycle, not the running total after it. Core has no cap any more (plan_features
-    // .default_monthly_cap is null for it) -- workflows beyond the included 10 are simply billed,
-    // never blocked, but the household is told the cost every single time, right here.
-    const willBeBilled=usage&&!usage.unlimited&&usage.used_this_month>=usage.included;
+    // Snapshot BEFORE creating the cycle, so active_count here is the count this new one is
+    // about to become #(active_count+1) of -- used to tell the household the cost of THIS cycle.
+    // Core has no cap (plan_features.default_monthly_cap is null for it) -- workflows beyond the
+    // included 10 are simply billed every month they stay active, never blocked, but the
+    // household is told the cost every single time a new one pushes them over, right here.
+    const willBeBilled=usage&&!usage.unlimited&&usage.active_count>=usage.included;
     try{
       const inst=await generateWorkflowCycle({template:t,obligation:ob,dueDate:ob.due_date,familyId:family.id});
       const base=inst.status==="at_risk"?"Cycle started — flagged at risk.":"Cycle started.";
-      const costNote=willBeBilled?` This is workflow #${usage.used_this_month+1} this month — $${Number(usage.overage_price).toFixed(2)} has been added to this month's bill.`:"";
+      const costNote=willBeBilled?` This is active workflow #${usage.active_count+1} -- $${Number(usage.overage_price).toFixed(2)}/month has been added to your bill for as long as it stays active. Completing it removes it from the count.`:"";
       toast(base+costNote);
       setOpenInst(inst.id);load();loadUsage();
-    }catch(e){toast(e.message||"Could not start the cycle. If this plan has a monthly workflow allowance, this household may have reached it — see the usage note above.","error");}
+    }catch(e){toast(e.message||"Could not start the cycle.","error");}
   };
 
   // Approving records WHO approved it, which is the point of the gate.
@@ -10023,6 +10024,7 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
     if(!remaining.length&&["done","sent"].includes(to)){
       await sb.from("workflow_instances").update({status:"completed",completed_at:new Date().toISOString()}).eq("id",st.instance_id);
       toast("Cycle complete");
+      loadUsage(); // this instance just dropped out of the active/overage count
     }
     load();
   };
@@ -10042,18 +10044,17 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
     </div>
     <GoldLine/>
 
-    {/* Monthly workflow allowance -- only meaningful for a plan that meters (workflows_included
-        not null; Premier's is null so this renders nothing for them). Mirrors exactly what the
-        enforce_workflow_monthly_quota DB trigger will do to the NEXT "Start cycle" click, so a
-        household never sees "cycle started" then discovers the charge with no warning. */}
+    {/* Workflow allowance -- only meaningful for a plan that meters (workflows_included not
+        null; Premier's is null so this renders nothing for them). Active, not monthly-started:
+        10 workflows may be in progress at once for free, $8/month for each additional one that
+        stays active, and completing a workflow removes it from this count going forward. */}
     {usage&&!usage.unlimited&&<div style={{background:usage.remaining_before_cap===0?"#fdecec":"rgba(206,182,132,0.12)",border:`1px solid ${usage.remaining_before_cap===0?"#f3c6c6":B.gold}`,borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12.5,color:B.text,lineHeight:1.5}}>
-      <strong>{usage.used_this_month} of {usage.included} workflows started this month.</strong>{" "}
+      <strong>{usage.active_count} of {usage.included} included workflows active.</strong>{" "}
       {usage.remaining_before_cap>0
-        ? `${usage.remaining_before_cap} remaining before $${Number(usage.overage_price).toFixed(2)} each applies.`
+        ? `${usage.remaining_before_cap} more can be started at no extra cost.`
         : usage.overage_count>0
-          ? `${usage.overage_count} additional this month at $${Number(usage.overage_price).toFixed(2)} each ($${Number(usage.charged_this_month).toFixed(2)} so far)${usage.cap!=null?`, capped at $${Number(usage.cap).toFixed(2)}/mo`:""}.`
-          : `Additional workflows this month are $${Number(usage.overage_price).toFixed(2)} each${usage.cap!=null?`, capped at $${Number(usage.cap).toFixed(2)}/mo`:""}.`}
-      {usage.cap!=null&&usage.charged_this_month>=usage.cap&&" This household has reached its monthly cap -- new cycles are blocked until next month unless the cap is raised."}
+          ? `${usage.overage_count} beyond your included ${usage.included}, at $${Number(usage.overage_price).toFixed(2)}/month each for as long as they stay active (${fmtMoney(usage.charged_this_month)} this month). Completing a workflow removes it from this count.`
+          : `Additional active workflows beyond your included ${usage.included} are $${Number(usage.overage_price).toFixed(2)}/month each, for as long as they stay active. Completing a workflow removes it from the count.`}
     </div>}
 
     {!obs.length&&<Empty text="No obligations on file for this client yet."/>}
