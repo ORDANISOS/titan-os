@@ -725,7 +725,7 @@ const pctChange=(s,c)=>{const sv=Number(s)||0;const cv=Number(c)||0;if(!sv)retur
 
 const toClient=obj=>{
   if(!obj)return obj;
-  const m={family_id:"familyId",contact_id:"contactId",account_id:"accountId",account_period:"accountPeriod",as_of:"asOf",balance_as_of:"balanceAsOf",source_document_id:"sourceDocumentId",balance_source_document_id:"balanceSourceDocumentId",entered_by:"enteredBy",close_date:"closeDate",due_date:"dueDate",created_at:"createdAt",uploaded_at:"uploadedAt",advisor_name:"advisorName",advisor_email:"advisorEmail",owner_name:"ownerName",property_type:"propertyType",property_id:"propertyId",purchase_price:"purchasePrice",purchase_date:"purchaseDate",current_value:"currentValue",loan_balance:"loanBalance",interest_rate:"interestRate",loan_payment:"loanPayment",loan_maturity_date:"loanMaturityDate",loan_type:"loanType",rental_income:"rentalIncome",property_taxes:"propertyTaxes",flood_insurance:"floodInsurance",insurance_company:"insuranceCompany",insurance_premium:"insurancePremium",flood_insurance_company:"floodInsuranceCompany",flood_insurance_premium:"floodInsurancePremium",insurance_expiration:"insuranceExpiration",flood_insurance_expiration:"floodInsuranceExpiration",account_type:"accountType",starting_balance:"startingBalance",current_balance:"currentBalance",banker_name:"bankerName",make_model:"makeModel",estimated_value:"estimatedValue",file_type:"fileType",extracted_text:"extractedText",reminder_days:"reminderDays",reminder_sent:"reminderSent",full_name:"fullName",file_path:"filePath",file_size:"fileSize",uploaded_by:"uploadedBy",event_type:"eventType",start_date:"startDate",end_date:"endDate",tax_treatment:"taxTreatment",filing_status:"filingStatus",state_tax_rate:"stateTaxRate",base_income:"baseIncome",cash_flow_settings:"cashFlowSettings",hoa_fee:"hoaFee",property_management_fee_pct:"propertyManagementFeePct",include_mortgage_in_cashflow:"includeMortgageInCashflow",sort_order:"sortOrder",note_id:"noteId",recurrence_interval:"recurrenceInterval",recurrence_unit:"recurrenceUnit",completed_at:"completedAt",completed_by:"completedBy",item_key:"itemKey",item_label:"itemLabel",item_type:"itemType",occurrence_date:"occurrenceDate",second_mortgage_balance:"secondMortgageBalance",second_mortgage_payment:"secondMortgagePayment",assistant_name:"assistantName",is_advisor:"isAdvisor",is_primary:"isPrimary",updated_at:"updatedAt",is_secondary:"isSecondary",pcm_responsible:"pcmResponsible",paid_at:"paidAt",paid_by:"paidBy",vendor_family_contact_id:"vendorFamilyContactId",vendor_property_contact_id:"vendorPropertyContactId",event_id:"eventId",document_id:"documentId",downloaded_by:"downloadedBy",downloaded_at:"downloadedAt",owner_user_id:"ownerUserId",owner_email:"ownerEmail",owner_role:"ownerRole",prompt_type:"promptType",template_key:"templateKey",custom_prompt:"customPrompt",schedule_preset:"schedulePreset",schedule_dow:"scheduleDow",schedule_hour_utc:"scheduleHourUtc",last_run_at:"lastRunAt",last_run_status:"lastRunStatus",last_run_error:"lastRunError",data_source:"dataSource",can_run_scheduled_prompts:"canRunScheduledPrompts",property_section:"propertySection",expiry_date:"expiryDate",doc_type:"docType",mime_type:"mimeType"};
+  const m={family_id:"familyId",contact_id:"contactId",account_id:"accountId",account_period:"accountPeriod",as_of:"asOf",balance_as_of:"balanceAsOf",source_document_id:"sourceDocumentId",balance_source_document_id:"balanceSourceDocumentId",entered_by:"enteredBy",close_date:"closeDate",due_date:"dueDate",created_at:"createdAt",uploaded_at:"uploadedAt",advisor_name:"advisorName",advisor_email:"advisorEmail",owner_name:"ownerName",property_type:"propertyType",property_id:"propertyId",purchase_price:"purchasePrice",purchase_date:"purchaseDate",current_value:"currentValue",loan_balance:"loanBalance",interest_rate:"interestRate",loan_payment:"loanPayment",loan_maturity_date:"loanMaturityDate",loan_type:"loanType",rental_income:"rentalIncome",property_taxes:"propertyTaxes",flood_insurance:"floodInsurance",insurance_company:"insuranceCompany",insurance_premium:"insurancePremium",flood_insurance_company:"floodInsuranceCompany",flood_insurance_premium:"floodInsurancePremium",insurance_expiration:"insuranceExpiration",flood_insurance_expiration:"floodInsuranceExpiration",account_type:"accountType",starting_balance:"startingBalance",current_balance:"currentBalance",banker_name:"bankerName",make_model:"makeModel",estimated_value:"estimatedValue",file_type:"fileType",extracted_text:"extractedText",reminder_days:"reminderDays",reminder_sent:"reminderSent",full_name:"fullName",file_path:"filePath",file_size:"fileSize",uploaded_by:"uploadedBy",event_type:"eventType",start_date:"startDate",end_date:"endDate",tax_treatment:"taxTreatment",filing_status:"filingStatus",state_tax_rate:"stateTaxRate",base_income:"baseIncome",cash_flow_settings:"cashFlowSettings",hoa_fee:"hoaFee",property_management_fee_pct:"propertyManagementFeePct",include_mortgage_in_cashflow:"includeMortgageInCashflow",sort_order:"sortOrder",note_id:"noteId",recurrence_interval:"recurrenceInterval",recurrence_unit:"recurrenceUnit",completed_at:"completedAt",completed_by:"completedBy",item_key:"itemKey",item_label:"itemLabel",item_type:"itemType",occurrence_date:"occurrenceDate",second_mortgage_balance:"secondMortgageBalance",second_mortgage_payment:"secondMortgagePayment",assistant_name:"assistantName",is_advisor:"isAdvisor",is_primary:"isPrimary",updated_at:"updatedAt",is_secondary:"isSecondary",pcm_responsible:"pcmResponsible",contacts_import_enabled:"contactsImportEnabled",contacts_import_stripe_item_id:"contactsImportStripeItemId",paid_at:"paidAt",paid_by:"paidBy",vendor_family_contact_id:"vendorFamilyContactId",vendor_property_contact_id:"vendorPropertyContactId",event_id:"eventId",document_id:"documentId",downloaded_by:"downloadedBy",downloaded_at:"downloadedAt",owner_user_id:"ownerUserId",owner_email:"ownerEmail",owner_role:"ownerRole",prompt_type:"promptType",template_key:"templateKey",custom_prompt:"customPrompt",schedule_preset:"schedulePreset",schedule_dow:"scheduleDow",schedule_hour_utc:"scheduleHourUtc",last_run_at:"lastRunAt",last_run_status:"lastRunStatus",last_run_error:"lastRunError",data_source:"dataSource",can_run_scheduled_prompts:"canRunScheduledPrompts",property_section:"propertySection",expiry_date:"expiryDate",doc_type:"docType",mime_type:"mimeType"};
   return Object.fromEntries(Object.entries(obj).map(([k,v])=>[m[k]||k,v]));
 };
 
@@ -7944,6 +7944,79 @@ function ValuableQuickForm({onSave,onCancel,saving}){
   </div>;
 }
 
+const MEMBER_RELATIONSHIPS=["Spouse","Child","Parent","Sibling","Other family","Other"];
+
+// ── CONTACTS IMPORT (phone Contact Picker) ───────────────────────────────────
+// The $5/month self-serve add-on (see families.contacts_import_enabled / toggle-contacts-import):
+// tap a name from your phone's own contacts instead of typing it into the Member/Professional
+// QuickForm. `navigator.contacts.select` is a real Web API, but Android Chrome only -- there is no
+// iPhone Safari equivalent, so this feature-detects and simply doesn't render where unsupported,
+// same convention as shareAnswer's navigator.share/clipboard fallback above.
+const canUseContactPicker=()=>typeof navigator!=="undefined"&&!!navigator.contacts&&!!navigator.contacts.select;
+function ImportFromContactsButton({enabled,onPick,onLocked}){
+  if(!canUseContactPicker())return null;
+  const pick=async()=>{
+    if(!enabled){onLocked&&onLocked();return;}
+    try{
+      const props=["name","email","tel"];
+      const[picked]=await navigator.contacts.select(props,{multiple:false});
+      if(!picked)return;
+      onPick({
+        name:(picked.name&&picked.name[0])||"",
+        email:(picked.email&&picked.email[0])||"",
+        phone:(picked.tel&&picked.tel[0])||"",
+      });
+    }catch(e){ /* user cancelled, or the browser denied the request */ }
+  };
+  return <button type="button" onClick={pick} style={{background:enabled?"rgba(206,182,132,0.15)":B.bg,border:`1px solid ${enabled?B.gold:B.borderLight}`,color:enabled?B.navy:B.textMute,borderRadius:8,padding:"6px 12px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginBottom:14,display:"inline-flex",alignItems:"center",gap:6}}>
+    📇 {enabled?"Import from Contacts":"Import from Contacts — $5/mo add-on"}
+  </button>;
+}
+
+// Self-serve quick-add for a Household Member (contacts) / Professional Network contact
+// (family_contacts) -- same spirit as PropertyQuickForm/AccountQuickForm/ValuableQuickForm above:
+// a trimmed version of the fuller admin-side forms, reused as both a standalone "+ Add" modal and
+// a wizard step. contactsImportEnabled/onLockedImport are optional -- omitted, the import button
+// simply doesn't render (used from the plain "+ Add" modal, where showing the upsell again would
+// be redundant with the Household tab's own copy).
+function MemberQuickForm({onSave,onCancel,saving,contactsImportEnabled,onLockedImport}){
+  const[f,setF]=useState({name:"",relationship:MEMBER_RELATIONSHIPS[0],email:"",phone:""});
+  const set=(k,v)=>setF(m=>({...m,[k]:v}));
+  const valid=f.name.trim().length>0;
+  return <div>
+    <ImportFromContactsButton enabled={!!contactsImportEnabled} onLocked={onLockedImport} onPick={c=>setF(m=>({...m,name:c.name||m.name,email:c.email||m.email,phone:c.phone||m.phone}))}/>
+    <Field label="Name"><Inp value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Jane Smith"/></Field>
+    <Grid2>
+      <Field label="Relationship"><Sel value={f.relationship} onChange={e=>set("relationship",e.target.value)}>{MEMBER_RELATIONSHIPS.map(t=><option key={t} value={t}>{t}</option>)}</Sel></Field>
+      <Field label="Email (optional)"><Inp type="email" value={f.email} onChange={e=>set("email",e.target.value)} placeholder="jane@email.com"/></Field>
+      <Field label="Phone (optional)"><Inp value={f.phone} onChange={e=>set("phone",e.target.value)} placeholder="(555) 123-4567"/></Field>
+    </Grid2>
+    <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+      {onCancel&&<Btn variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Btn>}
+      <Btn onClick={()=>onSave(f)} disabled={saving||!valid}>{saving?"Saving…":"Add member"}</Btn>
+    </div>
+  </div>;
+}
+function ProfessionalQuickForm({onSave,onCancel,saving,contactsImportEnabled,onLockedImport}){
+  const[f,setF]=useState({name:"",role:"",company:"",email:"",phone:""});
+  const set=(k,v)=>setF(m=>({...m,[k]:v}));
+  const valid=f.name.trim().length>0;
+  return <div>
+    <ImportFromContactsButton enabled={!!contactsImportEnabled} onLocked={onLockedImport} onPick={c=>setF(m=>({...m,name:c.name||m.name,email:c.email||m.email,phone:c.phone||m.phone}))}/>
+    <Grid2>
+      <Field label="Name"><Inp value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Dr. John Reyes"/></Field>
+      <Field label="Role"><Inp value={f.role} onChange={e=>set("role",e.target.value)} placeholder="CPA, Attorney, Physician…"/></Field>
+      <Field label="Company (optional)"><Inp value={f.company} onChange={e=>set("company",e.target.value)}/></Field>
+      <Field label="Email (optional)"><Inp type="email" value={f.email} onChange={e=>set("email",e.target.value)}/></Field>
+      <Field label="Phone (optional)"><Inp value={f.phone} onChange={e=>set("phone",e.target.value)} placeholder="(555) 123-4567"/></Field>
+    </Grid2>
+    <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+      {onCancel&&<Btn variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Btn>}
+      <Btn onClick={()=>onSave(f)} disabled={saving||!valid}>{saving?"Saving…":"Add contact"}</Btn>
+    </div>
+  </div>;
+}
+
 // ── ONBOARDING WIZARD ─────────────────────────────────────────────────────────
 // Self-serve (Basic/Core, no assigned Expert) "getting started" flow. Opens automatically the
 // first time a household with nothing on file yet lands on its dashboard, and stays reachable
@@ -7951,8 +8024,8 @@ function ValuableQuickForm({onSave,onCancel,saving}){
 // only caller. Each step reuses the exact same QuickForm + save handler as that entity's
 // standalone "+ Add" button, so nothing about how the data is saved differs by how someone got to
 // the form; only the chrome around it (a wizard step vs. a popup modal) differs.
-const WIZARD_STEPS=["welcome","property","account","valuable","done"];
-function OnboardingWizard({onClose,addProperty,addAccount,addValuable,properties,accounts,valuables}){
+const WIZARD_STEPS=["welcome","member","professional","property","account","valuable","done"];
+function OnboardingWizard({onClose,addMember,addProfessional,addProperty,addAccount,addValuable,members,professionals,properties,accounts,valuables,contactsImportEnabled,onOpenBilling}){
   const[stepIdx,setStepIdx]=useState(0);
   const[saving,setSaving]=useState(false);
   const step=WIZARD_STEPS[stepIdx];
@@ -7962,6 +8035,8 @@ function OnboardingWizard({onClose,addProperty,addAccount,addValuable,properties
   const save=async(kind,f)=>{
     setSaving(true);
     try{
+      if(kind==="member")await addMember(f);
+      if(kind==="professional")await addProfessional(f);
       if(kind==="property")await addProperty(f);
       if(kind==="account")await addAccount(f);
       if(kind==="valuable")await addValuable(f);
@@ -7969,9 +8044,9 @@ function OnboardingWizard({onClose,addProperty,addAccount,addValuable,properties
   };
 
   const list=kind=>{
-    const rows=kind==="property"?properties:kind==="account"?accounts:valuables;
+    const rows=kind==="member"?members:kind==="professional"?professionals:kind==="property"?properties:kind==="account"?accounts:valuables;
     if(!rows.length)return null;
-    const label=r=>kind==="property"?r.address:kind==="account"?`${r.institution} · ${r.accountType}`:r.description;
+    const label=r=>kind==="member"?`${r.name}${r.relationship?` · ${r.relationship}`:""}`:kind==="professional"?`${r.name}${r.role?` · ${r.role}`:""}`:kind==="property"?r.address:kind==="account"?`${r.institution} · ${r.accountType}`:r.description;
     return <div style={{marginTop:2,marginBottom:18}}>
       <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:8}}>Added so far</div>
       <div style={{display:"flex",flexDirection:"column",gap:6}}>
@@ -8004,6 +8079,26 @@ function OnboardingWizard({onClose,addProperty,addAccount,addValuable,properties
     <>
       <button onClick={onClose} style={{background:"none",border:"none",color:B.textSoft,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Skip for now</button>
       <Btn onClick={next}>Get started →</Btn>
+    </>
+  );
+
+  if(step==="member")return shell(
+    "Add your household members",
+    "Spouse, children, anyone else in the household. Add one, several, or skip this entirely — you can always add more later from the Household tab.",
+    <>{list("member")}<MemberQuickForm saving={saving} contactsImportEnabled={contactsImportEnabled} onLockedImport={onOpenBilling} onSave={f=>save("member",f)}/></>,
+    <>
+      <button onClick={back} style={{background:"none",border:"none",color:B.textSoft,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>← Back</button>
+      <Btn variant="ghost" onClick={next}>{members.length?"Next":"Skip"}</Btn>
+    </>
+  );
+
+  if(step==="professional")return shell(
+    "Add your professional network",
+    "CPA, attorney, physician — anyone outside the household you work with. Entirely optional.",
+    <>{list("professional")}<ProfessionalQuickForm saving={saving} contactsImportEnabled={contactsImportEnabled} onLockedImport={onOpenBilling} onSave={f=>save("professional",f)}/></>,
+    <>
+      <button onClick={back} style={{background:"none",border:"none",color:B.textSoft,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>← Back</button>
+      <Btn variant="ghost" onClick={next}>{professionals.length?"Next":"Skip"}</Btn>
     </>
   );
 
@@ -8168,6 +8263,21 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     }catch(e){ setBillingMsg({type:"error",text:e&&e.message?e.message:"Could not change your plan."}); setBillingBusy(false); }
   };
   const cancelPendingChange=()=>requestPlanChange(clientPlan);
+  // ── Contacts Import add-on ($5/mo, self-serve) ──────────────────────────
+  const[addonBusy,setAddonBusy]=useState(false);
+  const[addonMsg,setAddonMsg]=useState(null); // {type:"success"|"error", text}
+  const toggleContactsImport=async()=>{
+    setAddonBusy(true); setAddonMsg(null);
+    try{
+      const enable=!fam.contactsImportEnabled;
+      const{data:resp,error}=await sb.functions.invoke("toggle-contacts-import",{body:{family_id:family.id,enable}});
+      if(error)throw new Error(error.message||"Could not update the Contacts Import add-on.");
+      if(resp&&resp.error)throw new Error(resp.error);
+      setAddonMsg({type:"success",text:resp.enabled?"Contacts Import is on -- $5/month added to your bill.":"Contacts Import is off."});
+      if(reload)await reload("families");
+    }catch(e){ setAddonMsg({type:"error",text:e&&e.message?e.message:"Could not update the Contacts Import add-on."}); }
+    finally{ setAddonBusy(false); }
+  };
   const planSelfServe=planIsSelfServe(clientPlan);
   const upgradeTargets=planSelfServe?SIGNUP_PLAN_ORDER.filter(p=>p!==clientPlan&&planIsSelfServe(p)&&SIGNUP_PLAN_ORDER.indexOf(p)>SIGNUP_PLAN_ORDER.indexOf(clientPlan)):[];
   const downgradeTargets=planSelfServe?SIGNUP_PLAN_ORDER.filter(p=>p!==clientPlan&&planIsSelfServe(p)&&SIGNUP_PLAN_ORDER.indexOf(p)<SIGNUP_PLAN_ORDER.indexOf(clientPlan)):[];
@@ -8198,6 +8308,8 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const properties=(data.properties||[]).filter(p=>p.familyId===family.id);
   const accounts=(data.portfolio_accounts||[]).filter(a=>a.familyId===family.id);
   const valuables=(data.valuables||[]).filter(v=>v.familyId===family.id);
+  const members=(data.contacts||[]).filter(c=>c.familyId===family.id);
+  const professionals=(data.family_contacts||[]).filter(p=>p.familyId===family.id);
   const tasks=(data.tasks||[]).filter(t=>t.familyId===family.id&&!t.done);
 
   // ── Self-serve quick-add (Basic/Core, no assigned Expert) ─────────────────
@@ -8217,9 +8329,27 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     const{error}=await sb.from("valuables").insert({family_id:family.id,category:f.category,description:f.description,make_model:f.makeModel||null,year:f.year||null,estimated_value:f.estimatedValue||null,notes:f.notes||null});
     if(error)toast(error.message,"error");else{toast("Valuable added");await reload("valuables");}
   };
+  const addMember=async f=>{
+    const{error}=await sb.from("contacts").insert({family_id:family.id,name:f.name,relationship:f.relationship||null,email:f.email||null,phone:f.phone||null,type:"Individual"});
+    if(error)toast(error.message,"error");else{toast("Member added");await reload("contacts");}
+  };
+  const delMember=async id=>{
+    const{error}=await sb.from("contacts").delete().eq("id",id);
+    if(error)toast(error.message,"error");else{toast("Member removed");await reload("contacts");}
+  };
+  const addProfessional=async f=>{
+    const{error}=await sb.from("family_contacts").insert({family_id:family.id,name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,is_advisor:false});
+    if(error)toast(error.message,"error");else{toast("Contact added");await reload("family_contacts");}
+  };
+  const delProfessional=async id=>{
+    const{error}=await sb.from("family_contacts").delete().eq("id",id);
+    if(error)toast(error.message,"error");else{toast("Contact removed");await reload("family_contacts");}
+  };
   const[addPropertyOpen,setAddPropertyOpen]=useState(false);
   const[addAccountOpen,setAddAccountOpen]=useState(false);
   const[addValuableOpen,setAddValuableOpen]=useState(false);
+  const[addMemberOpen,setAddMemberOpen]=useState(false);
+  const[addProfessionalOpen,setAddProfessionalOpen]=useState(false);
   const[savingQuickAdd,setSavingQuickAdd]=useState(false);
   const runQuickAdd=(fn,close)=>async f=>{setSavingQuickAdd(true);try{await fn(f);close();}finally{setSavingQuickAdd(false);}};
 
@@ -8230,7 +8360,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const wizardSeenKey=`ordanis_onboarding_wizard_seen_${family.id}`;
   useEffect(()=>{
     if(!clientSelfServe)return;
-    if(properties.length||accounts.length||valuables.length)return;
+    if(properties.length||accounts.length||valuables.length||members.length||professionals.length)return;
     let seen=false;
     try{seen=localStorage.getItem(wizardSeenKey)==="1";}catch{}
     if(!seen)setWizardOpen(true);
@@ -8249,6 +8379,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
 
   const TABS=[
     {id:"summary",   label:"Summary",    icon:"◈"},
+    ...(clientSelfServe?[{id:"household",label:"Household",icon:"◎"}]:[]),
     {id:"portfolio", label:"Portfolio",  icon:"◇"},
     {id:"properties",label:"Properties", icon:"⌂"},
     {id:"cashflow",  label:"Cash Flow",  icon:"$"},
@@ -8283,7 +8414,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
 
     {showAssistantGreeting&&!showNamePrompt&&<AssistantWelcome family={family} data={data} reload={reload} userProfile={userProfile} onClose={()=>setShowAssistantGreeting(false)} toast={toast}/>}
     {emailAdvisorOpen&&<EmailAdvisorModal family={family} userProfile={userProfile} data={data} onClose={()=>setEmailAdvisorOpen(false)}/>}
-    {wizardOpen&&<OnboardingWizard onClose={closeWizard} addProperty={addProperty} addAccount={addAccount} addValuable={addValuable} properties={properties} accounts={accounts} valuables={valuables}/>}
+    {wizardOpen&&<OnboardingWizard onClose={closeWizard} addMember={addMember} addProfessional={addProfessional} addProperty={addProperty} addAccount={addAccount} addValuable={addValuable} members={members} professionals={professionals} properties={properties} accounts={accounts} valuables={valuables} contactsImportEnabled={!!fam.contactsImportEnabled} onOpenBilling={()=>{setWizardOpen(false);setActiveTab("billing");}}/>}
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 
     {/* Header (white banner with logo, family name, sign out) */}
@@ -8491,6 +8622,47 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         })()}
       </div>}
 
+      {/* HOUSEHOLD -- Household Members (contacts) + Professional Network (family_contacts),
+          self-serve only. Same tables/RLS the onboarding wizard's member/professional steps write
+          to -- this tab is where a household reviews or adds to what it entered there, or adds
+          from scratch if it skipped the wizard. Premier doesn't get this tab: an assigned Expert
+          already maintains this for that household on the staff side. */}
+      {activeTab==="household"&&clientSelfServe&&<div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600}}>Household Members</div>
+          <Btn small onClick={()=>setAddMemberOpen(true)}>+ Add Member</Btn>
+        </div>
+        {addMemberOpen&&<Modal title="Add a household member" onClose={()=>setAddMemberOpen(false)}>
+          <MemberQuickForm saving={savingQuickAdd} contactsImportEnabled={!!fam.contactsImportEnabled} onLockedImport={()=>{setAddMemberOpen(false);setActiveTab("billing");}} onCancel={()=>setAddMemberOpen(false)} onSave={runQuickAdd(addMember,()=>setAddMemberOpen(false))}/>
+        </Modal>}
+        {members.length===0?<Empty text="No household members on file."/>:<div style={{marginBottom:28}}>
+          {members.map(m=><div key={m.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"14px 18px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:B.shadow,gap:12,flexWrap:"wrap"}}>
+            <div>
+              <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{m.name}{m.relationship&&<span style={{fontWeight:400,color:B.textSoft,marginLeft:8}}>· {m.relationship}</span>}</div>
+              <div style={{fontSize:12,color:B.textSoft,display:"flex",gap:10,flexWrap:"wrap",marginTop:2}}>{m.phone&&<span>📞 <PhoneLink value={m.phone}/></span>}{m.email&&<span>✉ <EmailLink value={m.email}/></span>}</div>
+            </div>
+            <button onClick={()=>delMember(m.id)} style={{background:"none",border:"none",color:B.textMute,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Remove</button>
+          </div>)}
+        </div>}
+
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600}}>Professional Network</div>
+          <Btn small onClick={()=>setAddProfessionalOpen(true)}>+ Add Contact</Btn>
+        </div>
+        {addProfessionalOpen&&<Modal title="Add a professional contact" onClose={()=>setAddProfessionalOpen(false)}>
+          <ProfessionalQuickForm saving={savingQuickAdd} contactsImportEnabled={!!fam.contactsImportEnabled} onLockedImport={()=>{setAddProfessionalOpen(false);setActiveTab("billing");}} onCancel={()=>setAddProfessionalOpen(false)} onSave={runQuickAdd(addProfessional,()=>setAddProfessionalOpen(false))}/>
+        </Modal>}
+        {professionals.length===0?<Empty text="No professional contacts on file."/>:<div>
+          {professionals.map(p=><div key={p.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"14px 18px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:B.shadow,gap:12,flexWrap:"wrap"}}>
+            <div>
+              <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{p.name}{p.role&&<span style={{fontWeight:400,color:B.textSoft,marginLeft:8}}>· {p.role}</span>}</div>
+              <div style={{fontSize:12,color:B.textSoft,display:"flex",gap:10,flexWrap:"wrap",marginTop:2}}>{p.company&&<span>{p.company}</span>}{p.phone&&<span>📞 <PhoneLink value={p.phone}/></span>}{p.email&&<span>✉ <EmailLink value={p.email}/></span>}</div>
+            </div>
+            <button onClick={()=>delProfessional(p.id)} style={{background:"none",border:"none",color:B.textMute,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Remove</button>
+          </div>)}
+        </div>}
+      </div>}
+
       {/* CASH FLOW -- self-directed (Basic/Core) can add/edit their own events; Premier's
           assigned Expert manages this for them, so Premier stays read-only here. */}
       {activeTab==="cashflow"&&<div>
@@ -8581,6 +8753,21 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
             </div>
           </div>
         </div>
+
+        {/* Contacts Import add-on -- self-serve only (Premier's assigned Expert already enters
+            contacts for them, no import shortcut needed). A real, recurring second Stripe
+            subscription item; see toggle-contacts-import. */}
+        {clientSelfServe&&<div style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:14,padding:"20px 24px",marginBottom:16,boxShadow:B.shadow}}>
+          <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10}}>Add-ons</div>
+          {addonMsg&&<div style={{background:addonMsg.type==="error"?"#fde8e8":"#e0f5e9",border:`1px solid ${addonMsg.type==="error"?"#f5c6c6":"#bfe8cf"}`,color:addonMsg.type==="error"?"#8b1a1a":"#0d5c2b",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12.5,lineHeight:1.5}}>{addonMsg.text}</div>}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+            <div>
+              <div style={{fontWeight:700,color:B.navy,fontSize:14}}>Contacts Import — $5.00/mo</div>
+              <div style={{fontSize:12,color:B.textSoft,marginTop:2,maxWidth:420}}>Tap a name from your phone's contacts to autopopulate the Household Members / Professional Network forms, instead of typing everything by hand. Manual entry is always free.</div>
+            </div>
+            <Btn small variant={fam.contactsImportEnabled?"ghost":undefined} onClick={toggleContactsImport} disabled={addonBusy}>{addonBusy?"Working…":fam.contactsImportEnabled?"Turn off":"Turn on — $5/mo"}</Btn>
+          </div>
+        </div>}
 
         {/* Workflow usage & overage charges -- the exact breakdown behind whatever this month's
             bill includes beyond the base plan price. Unlimited plans (Premier) show nothing here;
