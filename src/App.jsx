@@ -6779,17 +6779,6 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
   // leaves the Signups & Revenue tab, matching how the rest of the admin shell navigates.
   const[drill,setDrill]=useState(null); // {type:"plan",plan} | {type:"user",familyId}
   const[savingContactId,setSavingContactId]=useState(null); // family_id currently being marked contacted, or null
-  // Danger Zone: honoring a household's request to leave the platform. Two separate confirm
-  // panels rather than one button -- see the archive-family / purge-family edge functions and the
-  // family_deletion migration for why archiving (reversible-in-spirit, immediate) and purging
-  // (permanent, gated on already being archived) are kept apart.
-  const[showArchiveConfirm,setShowArchiveConfirm]=useState(false);
-  const[archiving,setArchiving]=useState(false);
-  const[showPurgeConfirm,setShowPurgeConfirm]=useState(false);
-  const[purgeConfirmText,setPurgeConfirmText]=useState("");
-  const[purging,setPurging]=useState(false);
-  const[dangerMsg,setDangerMsg]=useState(null); // {type:"success"|"error", text} | null
-
   useEffect(()=>{
     let stopped=false;
     (async()=>{
@@ -6961,37 +6950,6 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
     if(reload)await reload("families");
   };
 
-  // Step 1: immediate, non-destructive. Cancels billing and disables login; nothing is deleted.
-  const archiveFamily=async familyId=>{
-    setArchiving(true); setDangerMsg(null);
-    try{
-      const{data:resp,error}=await sb.functions.invoke("archive-family",{body:{familyId}});
-      if(error)throw new Error(error.message||"Could not archive this household.");
-      if(resp&&resp.error)throw new Error(resp.error);
-      setShowArchiveConfirm(false);
-      setDangerMsg({type:"success",text:resp?.alreadyArchived?"Already archived.":`Archived. ${resp?.loginsDisabled||0} login${resp?.loginsDisabled===1?"":"s"} disabled.${resp?.stripeError?" (Stripe: "+resp.stripeError+")":""}`});
-      toast&&toast("Household archived");
-      if(reload)await reload("families");
-    }catch(e){ setDangerMsg({type:"error",text:e&&e.message?e.message:"Could not archive this household."}); }
-    finally{ setArchiving(false); }
-  };
-
-  // Step 2: permanent. The edge function itself refuses unless the family is already archived --
-  // this client-side confirm text match is a UX guard against a mis-click, not the real gate.
-  const purgeFamily=async(familyId,familyName)=>{
-    setPurging(true); setDangerMsg(null);
-    try{
-      const{data:resp,error}=await sb.functions.invoke("purge-family",{body:{familyId,confirmName:purgeConfirmText.trim()}});
-      if(error)throw new Error(error.message||"Could not delete this household.");
-      if(resp&&resp.error)throw new Error(resp.error);
-      setShowPurgeConfirm(false); setPurgeConfirmText("");
-      toast&&toast(`${familyName} permanently deleted`);
-      setDrill({type:"plan",plan:families.find(f=>f.id===familyId)?.plan||"basic"});
-      if(reload)await reload("families");
-    }catch(e){ setDangerMsg({type:"error",text:e&&e.message?e.message:"Could not delete this household."}); }
-    finally{ setPurging(false); }
-  };
-
   const byPlan=SIGNUP_PLAN_ORDER.map(plan=>{
     const inPlan=selfServe.filter(f=>f.plan===plan);
     const pending=inPlan.filter(f=>onboardingStatusFor(f).state!=="contacted");
@@ -7156,44 +7114,6 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
         </div>
       </div>
 
-      {/* Danger Zone: honoring a household's request to be removed from the platform. Two
-          deliberate steps -- archive (immediate, non-destructive) then, only once archived,
-          permanently delete. See archive-family / purge-family and the family_deletion migration. */}
-      <div style={{background:family.archived_at?"#fde8e8":B.bgCard,borderRadius:12,padding:isMobile?"18px 16px":"20px 22px",border:`1px solid ${family.archived_at?"#f0b8b8":B.borderLight}`,boxShadow:B.shadow,marginTop:18}}>
-        <div style={{fontSize:10,color:family.archived_at?"#8b1a1a":B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12}}>Danger Zone — Deletion Request</div>
-
-        {family.archived_at?<>
-          <div style={{fontSize:13,color:B.text,marginBottom:14,lineHeight:1.5}}>
-            Archived {fmtDate(family.archived_at)}{family.archived_by?` by ${family.archived_by}`:""}. Billing is cancelled and their login is disabled. No data has been deleted yet.
-          </div>
-          {!showPurgeConfirm?
-            <button onClick={()=>{setShowPurgeConfirm(true);setPurgeConfirmText("");setDangerMsg(null);}} style={{background:"#d43030",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Permanently Delete All Data…</button>
-          :<div style={{background:B.white,border:"1px solid #f0b8b8",borderRadius:10,padding:16}}>
-            <div style={{fontSize:13,color:"#8b1a1a",fontWeight:700,marginBottom:8}}>This cannot be undone.</div>
-            <div style={{fontSize:12.5,color:B.textSoft,marginBottom:12,lineHeight:1.5}}>This permanently erases every record for <strong>{family.name}</strong> — properties, documents, valuables, tasks, notes, deals, workflows, obligations, and their login. Type the household name below to confirm.</div>
-            <input value={purgeConfirmText} onChange={e=>setPurgeConfirmText(e.target.value)} placeholder={family.name} autoFocus style={{...inp,marginBottom:12,width:"100%"}}/>
-            <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-              <button disabled={purging||purgeConfirmText.trim()!==family.name} onClick={()=>purgeFamily(family.id,family.name)} style={{background:"#d43030",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontSize:12.5,fontWeight:700,fontFamily:"inherit",cursor:(purging||purgeConfirmText.trim()!==family.name)?"not-allowed":"pointer",opacity:(purging||purgeConfirmText.trim()!==family.name)?0.5:1}}>{purging?"Deleting…":"Confirm Permanent Deletion"}</button>
-              <button onClick={()=>{setShowPurgeConfirm(false);setPurgeConfirmText("");}} style={{background:"none",border:`1px solid ${B.border}`,color:B.textSoft,borderRadius:8,padding:"9px 18px",fontSize:12.5,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Cancel</button>
-            </div>
-          </div>}
-        </>:<>
-          <div style={{fontSize:13,color:B.textSoft,marginBottom:14,lineHeight:1.5}}>
-            If this household has asked to be removed from the platform, archiving cancels their subscription and disables their login immediately. Their data stays in place until a separate, deliberate step permanently deletes it.
-          </div>
-          {!showArchiveConfirm?
-            <button onClick={()=>{setShowArchiveConfirm(true);setDangerMsg(null);}} style={{background:"none",border:"1px solid #d43030",color:"#d43030",borderRadius:8,padding:"9px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Archive This Household…</button>
-          :<div style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:16}}>
-            <div style={{fontSize:12.5,color:B.textSoft,marginBottom:12,lineHeight:1.5}}>Cancels their Stripe subscription and disables sign-in immediately. Nothing is deleted — permanent deletion is a separate step available once this household is archived.</div>
-            <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-              <button disabled={archiving} onClick={()=>archiveFamily(family.id)} style={{background:"#d43030",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontSize:12.5,fontWeight:700,fontFamily:"inherit",cursor:archiving?"not-allowed":"pointer",opacity:archiving?0.6:1}}>{archiving?"Archiving…":"Confirm Archive"}</button>
-              <button onClick={()=>setShowArchiveConfirm(false)} style={{background:"none",border:`1px solid ${B.border}`,color:B.textSoft,borderRadius:8,padding:"9px 18px",fontSize:12.5,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Cancel</button>
-            </div>
-          </div>}
-        </>}
-
-        {dangerMsg&&<div style={{marginTop:12,fontSize:12.5,fontWeight:600,padding:"8px 12px",borderRadius:8,color:dangerMsg.type==="error"?"#8b1a1a":"#0d5c2b",background:dangerMsg.type==="error"?"#fde8e8":"#e0f5e9"}}>{dangerMsg.text}</div>}
-      </div>
     </div>;
   }
 
