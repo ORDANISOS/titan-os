@@ -725,12 +725,12 @@ const pctChange=(s,c)=>{const sv=Number(s)||0;const cv=Number(c)||0;if(!sv)retur
 
 const toClient=obj=>{
   if(!obj)return obj;
-  const m={family_id:"familyId",contact_id:"contactId",account_id:"accountId",account_period:"accountPeriod",as_of:"asOf",balance_as_of:"balanceAsOf",source_document_id:"sourceDocumentId",balance_source_document_id:"balanceSourceDocumentId",entered_by:"enteredBy",close_date:"closeDate",due_date:"dueDate",created_at:"createdAt",uploaded_at:"uploadedAt",advisor_name:"advisorName",advisor_email:"advisorEmail",owner_name:"ownerName",property_type:"propertyType",property_id:"propertyId",purchase_price:"purchasePrice",purchase_date:"purchaseDate",current_value:"currentValue",loan_balance:"loanBalance",interest_rate:"interestRate",loan_payment:"loanPayment",loan_maturity_date:"loanMaturityDate",loan_type:"loanType",rental_income:"rentalIncome",property_taxes:"propertyTaxes",flood_insurance:"floodInsurance",insurance_company:"insuranceCompany",insurance_premium:"insurancePremium",flood_insurance_company:"floodInsuranceCompany",flood_insurance_premium:"floodInsurancePremium",insurance_expiration:"insuranceExpiration",flood_insurance_expiration:"floodInsuranceExpiration",account_type:"accountType",starting_balance:"startingBalance",current_balance:"currentBalance",banker_name:"bankerName",make_model:"makeModel",estimated_value:"estimatedValue",file_type:"fileType",extracted_text:"extractedText",reminder_days:"reminderDays",reminder_sent:"reminderSent",full_name:"fullName",file_path:"filePath",file_size:"fileSize",uploaded_by:"uploadedBy",event_type:"eventType",start_date:"startDate",end_date:"endDate",tax_treatment:"taxTreatment",filing_status:"filingStatus",state_tax_rate:"stateTaxRate",base_income:"baseIncome",cash_flow_settings:"cashFlowSettings",hoa_fee:"hoaFee",property_management_fee_pct:"propertyManagementFeePct",include_mortgage_in_cashflow:"includeMortgageInCashflow",sort_order:"sortOrder",note_id:"noteId",recurrence_interval:"recurrenceInterval",recurrence_unit:"recurrenceUnit",completed_at:"completedAt",completed_by:"completedBy",item_key:"itemKey",item_label:"itemLabel",item_type:"itemType",occurrence_date:"occurrenceDate",second_mortgage_balance:"secondMortgageBalance",second_mortgage_payment:"secondMortgagePayment",assistant_name:"assistantName",is_advisor:"isAdvisor",is_primary:"isPrimary",updated_at:"updatedAt",is_secondary:"isSecondary",pcm_responsible:"pcmResponsible",contacts_import_enabled:"contactsImportEnabled",contacts_import_stripe_item_id:"contactsImportStripeItemId",paid_at:"paidAt",paid_by:"paidBy",vendor_family_contact_id:"vendorFamilyContactId",vendor_property_contact_id:"vendorPropertyContactId",event_id:"eventId",document_id:"documentId",downloaded_by:"downloadedBy",downloaded_at:"downloadedAt",owner_user_id:"ownerUserId",owner_email:"ownerEmail",owner_role:"ownerRole",prompt_type:"promptType",template_key:"templateKey",custom_prompt:"customPrompt",schedule_preset:"schedulePreset",schedule_dow:"scheduleDow",schedule_hour_utc:"scheduleHourUtc",last_run_at:"lastRunAt",last_run_status:"lastRunStatus",last_run_error:"lastRunError",data_source:"dataSource",can_run_scheduled_prompts:"canRunScheduledPrompts",property_section:"propertySection",expiry_date:"expiryDate",doc_type:"docType",mime_type:"mimeType"};
+  const m={family_id:"familyId",contact_id:"contactId",account_id:"accountId",account_period:"accountPeriod",as_of:"asOf",balance_as_of:"balanceAsOf",source_document_id:"sourceDocumentId",balance_source_document_id:"balanceSourceDocumentId",entered_by:"enteredBy",close_date:"closeDate",due_date:"dueDate",created_at:"createdAt",uploaded_at:"uploadedAt",advisor_name:"advisorName",advisor_email:"advisorEmail",owner_name:"ownerName",property_type:"propertyType",property_id:"propertyId",purchase_price:"purchasePrice",purchase_date:"purchaseDate",current_value:"currentValue",loan_balance:"loanBalance",interest_rate:"interestRate",loan_payment:"loanPayment",loan_maturity_date:"loanMaturityDate",loan_type:"loanType",rental_income:"rentalIncome",property_taxes:"propertyTaxes",flood_insurance:"floodInsurance",insurance_company:"insuranceCompany",insurance_premium:"insurancePremium",flood_insurance_company:"floodInsuranceCompany",flood_insurance_premium:"floodInsurancePremium",insurance_expiration:"insuranceExpiration",flood_insurance_expiration:"floodInsuranceExpiration",account_type:"accountType",starting_balance:"startingBalance",current_balance:"currentBalance",banker_name:"bankerName",make_model:"makeModel",estimated_value:"estimatedValue",file_type:"fileType",extracted_text:"extractedText",reminder_days:"reminderDays",reminder_sent:"reminderSent",full_name:"fullName",file_path:"filePath",file_size:"fileSize",uploaded_by:"uploadedBy",event_type:"eventType",start_date:"startDate",end_date:"endDate",tax_treatment:"taxTreatment",filing_status:"filingStatus",state_tax_rate:"stateTaxRate",base_income:"baseIncome",cash_flow_settings:"cashFlowSettings",hoa_fee:"hoaFee",property_management_fee_pct:"propertyManagementFeePct",include_mortgage_in_cashflow:"includeMortgageInCashflow",sort_order:"sortOrder",note_id:"noteId",recurrence_interval:"recurrenceInterval",recurrence_unit:"recurrenceUnit",completed_at:"completedAt",completed_by:"completedBy",item_key:"itemKey",item_label:"itemLabel",item_type:"itemType",occurrence_date:"occurrenceDate",second_mortgage_balance:"secondMortgageBalance",second_mortgage_payment:"secondMortgagePayment",assistant_name:"assistantName",is_advisor:"isAdvisor",is_primary:"isPrimary",updated_at:"updatedAt",is_secondary:"isSecondary",pcm_responsible:"pcmResponsible",contacts_import_enabled:"contactsImportEnabled",contacts_import_stripe_item_id:"contactsImportStripeItemId",invited_at:"invitedAt",partner_kind:"partnerKind",business_partner_seats_stripe_item_id:"businessPartnerSeatsStripeItemId",user_id:"userId",paid_at:"paidAt",paid_by:"paidBy",vendor_family_contact_id:"vendorFamilyContactId",vendor_property_contact_id:"vendorPropertyContactId",event_id:"eventId",document_id:"documentId",downloaded_by:"downloadedBy",downloaded_at:"downloadedAt",owner_user_id:"ownerUserId",owner_email:"ownerEmail",owner_role:"ownerRole",prompt_type:"promptType",template_key:"templateKey",custom_prompt:"customPrompt",schedule_preset:"schedulePreset",schedule_dow:"scheduleDow",schedule_hour_utc:"scheduleHourUtc",last_run_at:"lastRunAt",last_run_status:"lastRunStatus",last_run_error:"lastRunError",data_source:"dataSource",can_run_scheduled_prompts:"canRunScheduledPrompts",property_section:"propertySection",expiry_date:"expiryDate",doc_type:"docType",mime_type:"mimeType"};
   return Object.fromEntries(Object.entries(obj).map(([k,v])=>[m[k]||k,v]));
 };
 
-const TABLES=["families","contacts","properties","deals","notes","tasks","portfolio_accounts","account_balances","valuables","documents","cash_flow_events","cash_flow_payment_log","note_attachments","deadline_acks","family_contacts","property_contacts"];
-const FAMILY_SCOPED=["contacts","properties","deals","notes","tasks","portfolio_accounts","account_balances","valuables","documents","cash_flow_events","cash_flow_payment_log","deadline_acks","family_contacts","property_contacts"];
+const TABLES=["families","contacts","properties","deals","notes","tasks","portfolio_accounts","account_balances","valuables","documents","cash_flow_events","cash_flow_payment_log","note_attachments","deadline_acks","family_contacts","property_contacts","family_partners"];
+const FAMILY_SCOPED=["contacts","properties","deals","notes","tasks","portfolio_accounts","account_balances","valuables","documents","cash_flow_events","cash_flow_payment_log","deadline_acks","family_contacts","property_contacts","family_partners"];
 // Display label of the signed-in user, set at login; used to stamp task completions.
 let CURRENT_USER_LABEL="";
 // Display-only rename: the underlying role value stored in the DB/permissions stays "advisor";
@@ -1159,6 +1159,38 @@ function _drawIntroCube(ctx,x,y,s,rot,hex,alpha){
 }
 
 // ── LOGIN SCREEN ──────────────────────────────────────────────────────────────
+// Shown the moment a recovery/invite link lands the person in a real session but they've never
+// actually chosen a password yet (see the PASSWORD_RECOVERY handler above) -- without this, an
+// invited Business Partner (or anyone using "forgot password") would be signed straight into
+// their dashboard with no password ever set, and have no way to log back in next time.
+function SetPasswordGate({onDone}){
+  const[pw,setPw]=useState("");
+  const[pw2,setPw2]=useState("");
+  const[error,setError]=useState("");
+  const[saving,setSaving]=useState(false);
+  const submit=async e=>{
+    e.preventDefault();
+    setError("");
+    if(pw.length<8){setError("Password must be at least 8 characters");return;}
+    if(pw!==pw2){setError("Passwords don\'t match");return;}
+    setSaving(true);
+    const{error:err}=await sb.auth.updateUser({password:pw});
+    setSaving(false);
+    if(err){setError(err.message||"Could not set your password.");return;}
+    onDone();
+  };
+  return <div style={{minHeight:"100vh",background:B.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"\'DM Sans\',sans-serif",padding:20}}>
+    <form onSubmit={submit} style={{background:B.white,borderRadius:16,padding:"32px 34px",maxWidth:400,width:"100%",boxShadow:B.shadowMd,border:`1px solid ${B.borderLight}`}}>
+      <div style={{fontFamily:"\'Cormorant Garamond\',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:6}}>Set your password</div>
+      <div style={{fontSize:13,color:B.textSoft,marginBottom:20,lineHeight:1.5}}>Choose a password for your new account. You\'ll use it to sign in from now on.</div>
+      {error&&<div style={{background:"#fde8e8",border:"1px solid #f5c6c6",color:"#8b1a1a",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12.5}}>{error}</div>}
+      <Field label="New password"><Inp type="password" autoFocus value={pw} onChange={e=>setPw(e.target.value)} placeholder="At least 8 characters"/></Field>
+      <Field label="Confirm password"><Inp type="password" value={pw2} onChange={e=>setPw2(e.target.value)}/></Field>
+      <Btn onClick={submit} disabled={saving}>{saving?"Saving…":"Set password & continue"}</Btn>
+    </form>
+  </div>;
+}
+
 function LoginScreen(){
   const[mode,setMode]=useState("login");
   const[email,setEmail]=useState("");
@@ -7997,19 +8029,29 @@ function MemberQuickForm({onSave,onCancel,saving,contactsImportEnabled,onLockedI
     </div>
   </div>;
 }
-function ProfessionalQuickForm({onSave,onCancel,saving,contactsImportEnabled,onLockedImport}){
-  const[f,setF]=useState({name:"",role:"",company:"",email:"",phone:""});
+// allowPortalGrant: only self-serve households (Basic/Core) may offer this -- Premier already has
+// an assigned Expert, and the server-side check in manage-business-partner enforces the same rule
+// independently of whatever this prop is set to.
+function ProfessionalQuickForm({onSave,onCancel,saving,contactsImportEnabled,onLockedImport,allowPortalGrant}){
+  const[f,setF]=useState({name:"",role:"",company:"",email:"",phone:"",grantPortalAccess:false});
   const set=(k,v)=>setF(m=>({...m,[k]:v}));
-  const valid=f.name.trim().length>0;
+  const emailOk=EMAIL_RE.test(f.email.trim());
+  const valid=f.name.trim().length>0&&(!f.grantPortalAccess||emailOk);
   return <div>
     <ImportFromContactsButton enabled={!!contactsImportEnabled} onLocked={onLockedImport} onPick={c=>setF(m=>({...m,name:c.name||m.name,email:c.email||m.email,phone:c.phone||m.phone}))}/>
     <Grid2>
       <Field label="Name"><Inp value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Dr. John Reyes"/></Field>
       <Field label="Role"><Inp value={f.role} onChange={e=>set("role",e.target.value)} placeholder="CPA, Attorney, Physician…"/></Field>
       <Field label="Company (optional)"><Inp value={f.company} onChange={e=>set("company",e.target.value)}/></Field>
-      <Field label="Email (optional)"><Inp type="email" value={f.email} onChange={e=>set("email",e.target.value)}/></Field>
+      <Field label={f.grantPortalAccess?"Email (required for portal access)":"Email (optional)"}><Inp type="email" value={f.email} onChange={e=>set("email",e.target.value)}/></Field>
       <Field label="Phone (optional)"><Inp value={f.phone} onChange={e=>set("phone",e.target.value)} placeholder="(555) 123-4567"/></Field>
     </Grid2>
+    {allowPortalGrant&&<label style={{display:"flex",gap:10,alignItems:"flex-start",background:B.bg,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"12px 14px",marginBottom:16,cursor:"pointer"}}>
+      <input type="checkbox" checked={f.grantPortalAccess} onChange={e=>set("grantPortalAccess",e.target.checked)} style={{marginTop:2}}/>
+      <span style={{fontSize:12.5,color:B.text,lineHeight:1.5}}>
+        <strong style={{color:B.navy}}>Also give this Business Partner their own portal login</strong> — a read-only account so they can see this household's dashboard on their own (properties, cash flow, documents, and more). We'll email them a secure link to set it up. <strong style={{color:B.navy}}>$5.00/month</strong>, billed to this household until removed.
+      </span>
+    </label>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
       {onCancel&&<Btn variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Btn>}
       <Btn onClick={()=>onSave(f)} disabled={saving||!valid}>{saving?"Saving…":"Add contact"}</Btn>
@@ -8025,7 +8067,7 @@ function ProfessionalQuickForm({onSave,onCancel,saving,contactsImportEnabled,onL
 // standalone "+ Add" button, so nothing about how the data is saved differs by how someone got to
 // the form; only the chrome around it (a wizard step vs. a popup modal) differs.
 const WIZARD_STEPS=["welcome","member","professional","property","account","valuable","done"];
-function OnboardingWizard({onClose,addMember,addProfessional,addProperty,addAccount,addValuable,members,professionals,properties,accounts,valuables,contactsImportEnabled,onOpenBilling}){
+function OnboardingWizard({onClose,addMember,addProfessional,addBusinessPartner,addProperty,addAccount,addValuable,members,professionals,properties,accounts,valuables,contactsImportEnabled,onOpenBilling}){
   const[stepIdx,setStepIdx]=useState(0);
   const[saving,setSaving]=useState(false);
   const step=WIZARD_STEPS[stepIdx];
@@ -8036,7 +8078,7 @@ function OnboardingWizard({onClose,addMember,addProfessional,addProperty,addAcco
     setSaving(true);
     try{
       if(kind==="member")await addMember(f);
-      if(kind==="professional")await addProfessional(f);
+      if(kind==="professional"){await addProfessional(f);if(f.grantPortalAccess)await addBusinessPartner(f.email,f.name);}
       if(kind==="property")await addProperty(f);
       if(kind==="account")await addAccount(f);
       if(kind==="valuable")await addValuable(f);
@@ -8095,7 +8137,7 @@ function OnboardingWizard({onClose,addMember,addProfessional,addProperty,addAcco
   if(step==="professional")return shell(
     "Add your professional network",
     "CPA, attorney, physician — anyone outside the household you work with. Entirely optional.",
-    <>{list("professional")}<ProfessionalQuickForm saving={saving} contactsImportEnabled={contactsImportEnabled} onLockedImport={onOpenBilling} onSave={f=>save("professional",f)}/></>,
+    <>{list("professional")}<ProfessionalQuickForm saving={saving} contactsImportEnabled={contactsImportEnabled} onLockedImport={onOpenBilling} allowPortalGrant={true} onSave={f=>save("professional",f)}/></>,
     <>
       <button onClick={back} style={{background:"none",border:"none",color:B.textSoft,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>← Back</button>
       <Btn variant="ghost" onClick={next}>{professionals.length?"Next":"Skip"}</Btn>
@@ -8310,6 +8352,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const valuables=(data.valuables||[]).filter(v=>v.familyId===family.id);
   const members=(data.contacts||[]).filter(c=>c.familyId===family.id);
   const professionals=(data.family_contacts||[]).filter(p=>p.familyId===family.id);
+  const businessPartners=(data.family_partners||[]).filter(p=>p.familyId===family.id&&p.source==="household");
   const tasks=(data.tasks||[]).filter(t=>t.familyId===family.id&&!t.done);
 
   // ── Self-serve quick-add (Basic/Core, no assigned Expert) ─────────────────
@@ -8344,6 +8387,25 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const delProfessional=async id=>{
     const{error}=await sb.from("family_contacts").delete().eq("id",id);
     if(error)toast(error.message,"error");else{toast("Contact removed");await reload("family_contacts");}
+  };
+  // ── Business Partner portal seats ($5/mo each, self-serve only) ──────────
+  // All of the actual work -- creating the login, emailing the invite, and the Stripe seat count
+  // -- happens in manage-business-partner; this just calls it and reloads. See that function for
+  // why an existing family_contacts row and a portal login are two separate things (one free, one
+  // billed) rather than the same record.
+  const addBusinessPartner=async(email,fullName)=>{
+    const{data:resp,error}=await sb.functions.invoke("manage-business-partner",{body:{family_id:family.id,action:"invite",email,full_name:fullName,redirect_to:window.location.origin}});
+    if(error){toast(error.message||"Could not send the invite.","error");return;}
+    if(resp&&resp.error){toast(resp.error,"error");return;}
+    toast(resp&&resp.already_linked?"Already has portal access":"Invite sent");
+    await reload("family_partners");await reload("families");
+  };
+  const removeBusinessPartner=async partnerUserId=>{
+    const{data:resp,error}=await sb.functions.invoke("manage-business-partner",{body:{family_id:family.id,action:"remove",partner_user_id:partnerUserId}});
+    if(error){toast(error.message||"Could not remove portal access.","error");return;}
+    if(resp&&resp.error){toast(resp.error,"error");return;}
+    toast("Portal access removed");
+    await reload("family_partners");await reload("families");
   };
   const[addPropertyOpen,setAddPropertyOpen]=useState(false);
   const[addAccountOpen,setAddAccountOpen]=useState(false);
@@ -8414,7 +8476,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
 
     {showAssistantGreeting&&!showNamePrompt&&<AssistantWelcome family={family} data={data} reload={reload} userProfile={userProfile} onClose={()=>setShowAssistantGreeting(false)} toast={toast}/>}
     {emailAdvisorOpen&&<EmailAdvisorModal family={family} userProfile={userProfile} data={data} onClose={()=>setEmailAdvisorOpen(false)}/>}
-    {wizardOpen&&<OnboardingWizard onClose={closeWizard} addMember={addMember} addProfessional={addProfessional} addProperty={addProperty} addAccount={addAccount} addValuable={addValuable} members={members} professionals={professionals} properties={properties} accounts={accounts} valuables={valuables} contactsImportEnabled={!!fam.contactsImportEnabled} onOpenBilling={()=>{setWizardOpen(false);setActiveTab("billing");}}/>}
+    {wizardOpen&&<OnboardingWizard onClose={closeWizard} addMember={addMember} addProfessional={addProfessional} addBusinessPartner={addBusinessPartner} addProperty={addProperty} addAccount={addAccount} addValuable={addValuable} members={members} professionals={professionals} properties={properties} accounts={accounts} valuables={valuables} contactsImportEnabled={!!fam.contactsImportEnabled} onOpenBilling={()=>{setWizardOpen(false);setActiveTab("billing");}}/>}
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 
     {/* Header (white banner with logo, family name, sign out) */}
@@ -8650,15 +8712,35 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           <Btn small onClick={()=>setAddProfessionalOpen(true)}>+ Add Contact</Btn>
         </div>
         {addProfessionalOpen&&<Modal title="Add a professional contact" onClose={()=>setAddProfessionalOpen(false)}>
-          <ProfessionalQuickForm saving={savingQuickAdd} contactsImportEnabled={!!fam.contactsImportEnabled} onLockedImport={()=>{setAddProfessionalOpen(false);setActiveTab("billing");}} onCancel={()=>setAddProfessionalOpen(false)} onSave={runQuickAdd(addProfessional,()=>setAddProfessionalOpen(false))}/>
+          <ProfessionalQuickForm saving={savingQuickAdd} contactsImportEnabled={!!fam.contactsImportEnabled} onLockedImport={()=>{setAddProfessionalOpen(false);setActiveTab("billing");}} allowPortalGrant={true} onCancel={()=>setAddProfessionalOpen(false)} onSave={async f=>{setSavingQuickAdd(true);try{await addProfessional(f);if(f.grantPortalAccess)await addBusinessPartner(f.email,f.name);setAddProfessionalOpen(false);}finally{setSavingQuickAdd(false);}}}/>
         </Modal>}
-        {professionals.length===0?<Empty text="No professional contacts on file."/>:<div>
+        {professionals.length===0?<Empty text="No professional contacts on file."/>:<div style={{marginBottom:28}}>
           {professionals.map(p=><div key={p.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"14px 18px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:B.shadow,gap:12,flexWrap:"wrap"}}>
             <div>
               <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{p.name}{p.role&&<span style={{fontWeight:400,color:B.textSoft,marginLeft:8}}>· {p.role}</span>}</div>
               <div style={{fontSize:12,color:B.textSoft,display:"flex",gap:10,flexWrap:"wrap",marginTop:2}}>{p.company&&<span>{p.company}</span>}{p.phone&&<span>📞 <PhoneLink value={p.phone}/></span>}{p.email&&<span>✉ <EmailLink value={p.email}/></span>}</div>
             </div>
             <button onClick={()=>delProfessional(p.id)} style={{background:"none",border:"none",color:B.textMute,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Remove</button>
+          </div>)}
+        </div>}
+
+        {/* Business Partner portal seats -- $5/mo each, separate from the free contact list
+            above. A person can be in the Professional Network with no portal login (free), have a
+            login without being listed there (e.g. invited straight from here), or both -- the two
+            are deliberately independent records (see manage-business-partner). */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12,flexWrap:"wrap",gap:10}}>
+          <div>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600}}>Business Partner Portal Access</div>
+            <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>Read-only logins to this household's portal — $5.00/month each. Add one from the Professional Network form above.</div>
+          </div>
+        </div>
+        {businessPartners.length===0?<Empty text="No portal seats granted yet."/>:<div>
+          {businessPartners.map(p=><div key={p.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid ${B.gold}`,borderRadius:10,padding:"14px 18px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:B.shadow,gap:12,flexWrap:"wrap"}}>
+            <div>
+              <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{p.fullName||p.email}</div>
+              <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>{p.email} · invited {fmt(p.invitedAt)} · $5.00/mo</div>
+            </div>
+            <button onClick={()=>removeBusinessPartner(p.userId)} style={{background:"none",border:"none",color:B.textMute,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Revoke access</button>
           </div>)}
         </div>}
       </div>}
@@ -8767,6 +8849,17 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
             </div>
             <Btn small variant={fam.contactsImportEnabled?"ghost":undefined} onClick={toggleContactsImport} disabled={addonBusy}>{addonBusy?"Working…":fam.contactsImportEnabled?"Turn off":"Turn on — $5/mo"}</Btn>
           </div>
+
+          {/* Business Partner portal seats -- a running total, not a toggle (there can be
+              several). Managed from the Household tab; this is just the cost roll-up so it shows
+              up where billing questions actually get asked. */}
+          {businessPartners.length>0&&<div style={{borderTop:`1px solid ${B.borderLight}`,marginTop:16,paddingTop:16,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+            <div>
+              <div style={{fontWeight:700,color:B.navy,fontSize:14}}>Business Partner Portal Access — {businessPartners.length} seat{businessPartners.length===1?"":"s"} × $5.00/mo</div>
+              <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>Manage who has a seat from the Household tab.</div>
+            </div>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600}}>{fmtMoney(businessPartners.length*5)}<span style={{fontSize:11,color:B.textSoft,fontWeight:400}}>/mo</span></div>
+          </div>}
         </div>}
 
         {/* Workflow usage & overage charges -- the exact breakdown behind whatever this month's
@@ -11247,9 +11340,19 @@ export default function App(){
     if(!allowedTabIds.includes(tab))setTab("dashboard");
   },[userProfile,tab,allowedTabIds]);
 
+  const[needsPasswordSetup,setNeedsPasswordSetup]=useState(false);
   useEffect(()=>{
     sb.auth.getSession().then(({data:{session}})=>{if(session?.user){setAuthed(true);loadProfile(session.user.id);}setAuthLoading(false);});
-    const{data:{subscription}}=sb.auth.onAuthStateChange((_,session)=>{if(session?.user){setAuthed(true);loadProfile(session.user.id);}else{setAuthed(false);setUserProfile(null);}setAuthLoading(false);});
+    const{data:{subscription}}=sb.auth.onAuthStateChange((event,session)=>{
+      if(session?.user){setAuthed(true);loadProfile(session.user.id);}else{setAuthed(false);setUserProfile(null);}
+      // Fired for BOTH a "forgot password" reset link and an invite link (e.g. the Business
+      // Partner portal invite) -- Supabase routes an invite through the same recovery-token
+      // mechanism. Until this, nothing here ever prompted for a new password: the link just
+      // signed the person straight into their dashboard with no password ever set, so they could
+      // never log back in on their own afterward.
+      if(event==="PASSWORD_RECOVERY")setNeedsPasswordSetup(true);
+      setAuthLoading(false);
+    });
     return()=>subscription.unsubscribe();
   },[loadProfile]);
 
@@ -11357,6 +11460,7 @@ export default function App(){
   // screen never flashes the previously active tenant's colours or logo.
   if(!brandReady||authLoading)return <div style={{minHeight:"100vh",background:B.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><Spinner/></div>;
   if(!authed||!userProfile)return <LoginScreen/>;
+  if(needsPasswordSetup)return <SetPasswordGate onDone={()=>setNeedsPasswordSetup(false)}/>;
   if(userProfile.active===false)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:B.bg,fontFamily:"'DM Sans',sans-serif",color:B.navy,fontSize:16,flexDirection:"column",gap:12}}><div style={{fontSize:40}}>🔒</div>Your account has been deactivated. Contact your administrator.</div>;
 
   // Client role — show read-only family dashboard
