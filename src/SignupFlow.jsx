@@ -223,11 +223,39 @@ function AccountStep({ planKey, prices, onBack, onDone }) {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // Disclosures: fetched live from signup_disclosures (public_read RLS -- see that table's
+  // migration) rather than hardcoded here, same reasoning as plan_features pricing above -- the
+  // text a person actually saw has to be the same text public-signup validates and records
+  // against, and a hardcoded copy here could drift from it. is_draft on either row means it is
+  // placeholder language pending legal review, not final compliant copy -- see the banner below.
+  const [disclosures, setDisclosures] = useState({ subscription_terms: null, sms_consent: null });
+  const [disclosuresLoading, setDisclosuresLoading] = useState(true);
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [agreeSms, setAgreeSms] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    sb.from("signup_disclosures")
+      .select("id, kind, version, title, body_html, is_draft")
+      .in("kind", ["subscription_terms", "sms_consent"])
+      .order("version", { ascending: false })
+      .then(({ data, error }) => {
+        if (cancelled || error || !data) return;
+        const next = {};
+        for (const row of data) if (!next[row.kind]) next[row.kind] = row; // highest version per kind, first one seen
+        setDisclosures(next);
+        setDisclosuresLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   const validate = () => {
     if (!fullName.trim()) return "Enter your name.";
     if (!EMAIL_RE.test(email.trim())) return "Enter a valid email address.";
     if (password.length < MIN_PASSWORD_LENGTH) return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
     if (!householdName.trim()) return "Tell us what to call the household.";
+    if (!disclosures.subscription_terms || !disclosures.sms_consent) return "Disclosures are still loading -- one moment and try again.";
+    if (!agreeTerms) return "Please read and agree to the Subscription Terms to continue.";
+    if (!agreeSms) return "Please read and respond to the SMS consent notice to continue.";
     return "";
   };
 
@@ -249,6 +277,13 @@ function AccountStep({ planKey, prices, onBack, onDone }) {
           plan: planKey,
           success_url: `${origin}/?welcome=1`,
           cancel_url: `${origin}/signup`,
+          // public-signup re-validates these are the CURRENT version of each disclosure and
+          // records the acknowledgment server-side -- this isn't just UI state, the account
+          // isn't created without it. See that function's disclosure-check block.
+          disclosures_acknowledged: {
+            subscription_terms_disclosure_id: disclosures.subscription_terms?.id,
+            sms_consent_disclosure_id: disclosures.sms_consent?.id,
+          },
         }),
       });
       const json = await resp.json().catch(() => ({}));
@@ -285,6 +320,44 @@ function AccountStep({ planKey, prices, onBack, onDone }) {
           <Field label="Email" type="email" placeholder="james@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
           <Field label="Password" type="password" placeholder="At least 12 characters" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
           <Field label="What should we call the household?" type="text" placeholder="The Harrington Family" value={householdName} onChange={(e) => setHouseholdName(e.target.value)} autoComplete="off" />
+        </div>
+
+        <div style={{ marginTop: 8, marginBottom: 8, maxWidth: 520 }}>
+          {disclosuresLoading ? (
+            <div style={{ fontSize: ".82rem", color: C.muted }}>Loading disclosures…</div>
+          ) : (
+            <>
+              {[disclosures.subscription_terms, disclosures.sms_consent].some((d) => d?.is_draft) && (
+                <div style={{ background: "#fff8e6", border: "1px solid #e8d38a", borderRadius: 4, padding: "9px 12px", fontSize: ".76rem", color: "#7a5a19", marginBottom: 12, fontWeight: 600, letterSpacing: ".02em" }}>
+                  DRAFT LANGUAGE — placeholder text pending legal review.
+                </div>
+              )}
+              {disclosures.subscription_terms && (
+                <div style={{ marginBottom: 14 }}>
+                  <div
+                    style={{ maxHeight: 130, overflowY: "auto", border: `1px solid ${C.rule}`, borderRadius: 4, padding: "10px 12px", fontSize: ".8rem", color: C.slate, lineHeight: 1.5, background: "#fafaf8" }}
+                    dangerouslySetInnerHTML={{ __html: disclosures.subscription_terms.body_html }}
+                  />
+                  <label style={{ display: "flex", gap: 8, alignItems: "flex-start", marginTop: 8, fontSize: ".82rem", color: C.navy, cursor: "pointer" }}>
+                    <input type="checkbox" checked={agreeTerms} onChange={(e) => setAgreeTerms(e.target.checked)} style={{ marginTop: 2 }} />
+                    I have read and agree to the Subscription Terms above.
+                  </label>
+                </div>
+              )}
+              {disclosures.sms_consent && (
+                <div style={{ marginBottom: 4 }}>
+                  <div
+                    style={{ maxHeight: 130, overflowY: "auto", border: `1px solid ${C.rule}`, borderRadius: 4, padding: "10px 12px", fontSize: ".8rem", color: C.slate, lineHeight: 1.5, background: "#fafaf8" }}
+                    dangerouslySetInnerHTML={{ __html: disclosures.sms_consent.body_html }}
+                  />
+                  <label style={{ display: "flex", gap: 8, alignItems: "flex-start", marginTop: 8, fontSize: ".82rem", color: C.navy, cursor: "pointer" }}>
+                    <input type="checkbox" checked={agreeSms} onChange={(e) => setAgreeSms(e.target.checked)} style={{ marginTop: 2 }} />
+                    I have read the SMS consent notice above and agree as described.
+                  </label>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         {error && (

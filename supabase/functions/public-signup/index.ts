@@ -79,6 +79,7 @@ Deno.serve(async (req) => {
   let body: {
     email?: string; password?: string; full_name?: string; household_name?: string;
     plan?: string; success_url?: string; cancel_url?: string;
+    disclosures_acknowledged?: { subscription_terms_disclosure_id?: string; sms_consent_disclosure_id?: string };
   };
   try {
     body = await req.json();
@@ -86,7 +87,7 @@ Deno.serve(async (req) => {
     return json({ error: "Invalid JSON body" }, 400);
   }
 
-  const { email, password, full_name, household_name, plan, success_url, cancel_url } = body;
+  const { email, password, full_name, household_name, plan, success_url, cancel_url, disclosures_acknowledged } = body;
   if (!email || !password || !full_name || !household_name || !plan || !success_url || !cancel_url) {
     return json({
       error: "email, password, full_name, household_name, plan, success_url and cancel_url are required",
@@ -96,6 +97,34 @@ Deno.serve(async (req) => {
   // a client-side check alone is just a suggestion to anyone calling this endpoint directly.
   if (password.length < 12) {
     return json({ error: "Password must be at least 12 characters." }, 400);
+  }
+
+  // Disclosure acknowledgment is required, not just shown -- this is what SignupFlow.jsx's two
+  // checkboxes gate. Re-validated against the database's CURRENT (highest version) row of each
+  // kind rather than trusting the id the client sent: a stale page held open across a text
+  // update, or a direct call to this endpoint, must not be able to record an acknowledgment of
+  // text nobody actually saw. See the signup_disclosures / signup_disclosure_acknowledgments
+  // migration for the schema this checks against.
+  const submittedTermsId = disclosures_acknowledged?.subscription_terms_disclosure_id;
+  const submittedSmsId = disclosures_acknowledged?.sms_consent_disclosure_id;
+  if (!submittedTermsId || !submittedSmsId) {
+    return json({ error: "You must read and agree to the Subscription Terms and the SMS consent notice to continue." }, 400);
+  }
+  const { data: currentDisclosures, error: discErr } = await admin
+    .from("signup_disclosures")
+    .select("id, kind, version")
+    .in("kind", ["subscription_terms", "sms_consent"])
+    .order("version", { ascending: false });
+  if (discErr) return json({ error: discErr.message }, 500);
+  const currentTerms = (currentDisclosures ?? []).find((d) => d.kind === "subscription_terms");
+  const currentSms = (currentDisclosures ?? []).find((d) => d.kind === "sms_consent");
+  if (!currentTerms || !currentSms) {
+    return json({ error: "Disclosures are not configured yet. Contact support before signing up." }, 500);
+  }
+  if (submittedTermsId !== currentTerms.id || submittedSmsId !== currentSms.id) {
+    return json({
+      error: "The Subscription Terms or SMS consent notice changed since this page loaded. Please refresh and try again.",
+    }, 409);
   }
 
   // Service role read -- there is no session yet for RLS to key off, same reasoning as the rest of
@@ -164,6 +193,23 @@ Deno.serve(async (req) => {
     authUserId = existingUserId;
     resumed = true;
   }
+
+  // Record the acknowledgment now that we have a real auth_user_id, before Stripe is involved at
+  // all -- consent is about the account, not the payment, and this way a Stripe failure below
+  // doesn't leave a paid household with no consent record (it leaves neither, which is correct;
+  // this endpoint's account-creation is already recoverable via the RESUME path above, and a
+  // resumed attempt is intentionally asked to re-acknowledge and gets a fresh row here each time).
+  const { error: ackErr } = await admin.from("signup_disclosure_acknowledgments").insert({
+    auth_user_id: authUserId,
+    email,
+    subscription_terms_disclosure_id: currentTerms.id,
+    sms_consent_disclosure_id: currentSms.id,
+    ip_address: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+      ?? req.headers.get("cf-connecting-ip")
+      ?? null,
+    user_agent: req.headers.get("user-agent"),
+  });
+  if (ackErr) return json({ error: `Could not record disclosure acknowledgment: ${ackErr.message}` }, 500);
 
   try {
     // On a resume, reuse the Stripe Customer created on the earlier attempt if one exists, rather

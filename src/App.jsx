@@ -7892,6 +7892,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   // email to the wrong person.
   const clientPlan=fam.plan;
   const clientHasExpert=planAllows(clientPlan,"assignedExpert");
+  const clientHasWorkflows=planAllows(clientPlan,"workflows");
 
   // ── Billing (upgrade / downgrade) ──────────────────────────────────────
   // Only Basic <-> Core is ever self-serve here (plan_features.self_serve / plans.js
@@ -8005,6 +8006,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     {id:"portfolio", label:"Portfolio",  icon:"◇"},
     {id:"properties",label:"Properties", icon:"⌂"},
     {id:"cashflow",  label:"Cash Flow",  icon:"$"},
+    ...(clientHasWorkflows?[{id:"workflows",label:"Workflows",icon:"▦"}]:[]),
     {id:"valuables", label:"Valuables",  icon:"◆"},
     {id:"tasks",     label:"Tasks",      icon:"◻"},
     {id:"documents", label:"Vault",  icon:"📁"},
@@ -8235,6 +8237,13 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         <div style={{fontSize:14,color:B.textSoft,marginBottom:20}}>Projection of expected cash flow events configured by {clientHasExpert?"your Ordanis Expert":"your lead partner"}.</div>
         {/* fam, not the `family` prop, so the bill-pay gate reads the current plan. */}
         <CashFlowView family={fam} events={(data.cash_flow_events||[]).filter(e=>e.familyId===family.id)} paymentLog={(data.cash_flow_payment_log||[]).filter(p=>p.familyId===family.id)} properties={properties} vendors={vendorOptions} reload={()=>{}} toast={toast||(()=>{})} readOnly={true}/>
+      </div>}
+
+      {/* WORKFLOWS -- self-directed on Core: the household runs its own obligations/playbooks
+          here, same component the admin/advisor side uses (ObligationsSection), with canEdit
+          always true since there is no assigned Expert on this plan to gate it behind. */}
+      {activeTab==="workflows"&&clientHasWorkflows&&<div>
+        <ObligationsSection family={fam} data={data} toast={toast} canEdit={true} userProfile={userProfile}/>
       </div>}
 
       {/* VALUABLES */}
@@ -9626,6 +9635,18 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
   const[review,setReview]=useState(null);   // outbound step being read before approval
   const accounts=(data.portfolio_accounts||[]).filter(a=>a.familyId===family.id);
 
+  // Monthly usage against plan_features.workflows_included -- the same number the
+  // enforce_workflow_monthly_quota DB trigger checks, read via the family_workflow_month_usage
+  // RPC so this card can never show a figure the database itself doesn't agree with. Null
+  // `usage` just means "still loading" or "unlimited plan" -- both render nothing here rather
+  // than a misleading zero.
+  const[usage,setUsage]=useState(null);
+  const loadUsage=async()=>{
+    const{data:rows,error}=await sb.rpc("family_workflow_month_usage",{p_family_id:family.id});
+    if(!error&&rows&&rows[0])setUsage(rows[0]);
+  };
+  useEffect(()=>{loadUsage();},[family.id]);
+
   const load=async()=>{
     const[o,t,i]=await Promise.all([
       sb.from("obligations").select("*").eq("family_id",family.id).order("due_date"),
@@ -9681,8 +9702,8 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
     try{
       const inst=await generateWorkflowCycle({template:t,obligation:ob,dueDate:ob.due_date,familyId:family.id});
       toast(inst.status==="at_risk"?"Cycle started — flagged at risk":"Cycle started");
-      setOpenInst(inst.id);load();
-    }catch(e){toast(e.message||"Could not start the cycle","error");}
+      setOpenInst(inst.id);load();loadUsage();
+    }catch(e){toast(e.message||"Could not start the cycle. If this plan has a monthly workflow allowance, this household may have reached it — see the usage note above.","error");}
   };
 
   // Approving records WHO approved it, which is the point of the gate.
@@ -9714,6 +9735,20 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
       {canEdit&&<Btn onClick={()=>setModal({row:{...BLANK_OBLIGATION},isNew:true})}>+ New Obligation</Btn>}
     </div>
     <GoldLine/>
+
+    {/* Monthly workflow allowance -- only meaningful for a plan that meters (workflows_included
+        not null; Premier's is null so this renders nothing for them). Mirrors exactly what the
+        enforce_workflow_monthly_quota DB trigger will do to the NEXT "Start cycle" click, so a
+        household never sees "cycle started" then discovers the charge with no warning. */}
+    {usage&&!usage.unlimited&&<div style={{background:usage.remaining_before_cap===0?"#fdecec":"rgba(206,182,132,0.12)",border:`1px solid ${usage.remaining_before_cap===0?"#f3c6c6":B.gold}`,borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12.5,color:B.text,lineHeight:1.5}}>
+      <strong>{usage.used_this_month} of {usage.included} workflows started this month.</strong>{" "}
+      {usage.remaining_before_cap>0
+        ? `${usage.remaining_before_cap} remaining before $${Number(usage.overage_price).toFixed(2)} each applies.`
+        : usage.overage_count>0
+          ? `${usage.overage_count} additional this month at $${Number(usage.overage_price).toFixed(2)} each ($${Number(usage.charged_this_month).toFixed(2)} so far)${usage.cap!=null?`, capped at $${Number(usage.cap).toFixed(2)}/mo`:""}.`
+          : `Additional workflows this month are $${Number(usage.overage_price).toFixed(2)} each${usage.cap!=null?`, capped at $${Number(usage.cap).toFixed(2)}/mo`:""}.`}
+      {usage.cap!=null&&usage.charged_this_month>=usage.cap&&" This household has reached its monthly cap -- new cycles are blocked until next month unless the cap is raised."}
+    </div>}
 
     {!obs.length&&<Empty text="No obligations on file for this client yet."/>}
 
