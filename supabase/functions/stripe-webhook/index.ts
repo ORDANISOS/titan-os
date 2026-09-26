@@ -279,8 +279,7 @@ async function sendWelcomeEmail(familyId: string, email: string, fullName: strin
     `<a href="${esc(sender.appUrl)}" style="display:inline-block;background:#C9A961;color:#051423;text-decoration:none;font-weight:600;font-size:13px;letter-spacing:0.04em;padding:14px 28px;border-radius:4px">Sign In to Your Portal</a>` +
     `</p>`;
 
-  const closingParagraph =
-    `<p>We're glad you're here, and we're looking forward to bringing that same sense of order to what matters most to your family.</p>`;
+  const closingParagraph = `<p>We're glad you've joined!!</p>`;
 
   // sender.label + "Onboarding Team" rather than a hardcoded brand name, so a white-label tenant
   // gets its own team name here too, the same way it gets its own brand name everywhere else in
