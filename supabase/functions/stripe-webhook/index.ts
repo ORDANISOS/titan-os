@@ -201,14 +201,16 @@ const esc = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g,
 // address is wrong for every white-label tenant but one. See that function's own header comment
 // for the history of that bug. Kept independent (not imported) because Edge Functions deploy as
 // separate isolates with no shared source between them in this project.
-async function resolveSender(): Promise<{ from: string; label: string }> {
+async function resolveSender(): Promise<{ from: string; label: string; appUrl: string }> {
   let brandName = "";
   let brandDomain = "";
+  let brandAppUrl = "";
   try {
     const { data } = await admin.from("brand_profiles")
-      .select("brand_name, email_domain").eq("is_active", true).maybeSingle();
+      .select("brand_name, email_domain, app_url").eq("is_active", true).maybeSingle();
     brandName = clean(data?.brand_name);
     brandDomain = String(data?.email_domain || "").trim().toLowerCase();
+    brandAppUrl = String(data?.app_url || "").trim();
   } catch (_e) { /* table may not exist on an older project -- fall through */ }
 
   let fixed = "";
@@ -223,12 +225,17 @@ async function resolveSender(): Promise<{ from: string; label: string }> {
   } catch (_e) { /* ditto */ }
 
   const label = orgLabel || brandName || clean(BRAND_NAME_ENV) || "ORDANIS";
+  // Same "never send a dead link" reasoning as the sender-address fallbacks below: brand_profiles
+  // is the source of truth (and what a white-label tenant would set), BRAND_APP_URL is an env
+  // override for a project that hasn't populated that row, and the hardcoded value is this
+  // project's own known-good domain as a last resort, not a guess.
+  const appUrl = brandAppUrl || Deno.env.get("BRAND_APP_URL") || "https://portal.ordanisos.com";
 
-  if (fixed) return { from: fixed, label };
-  if (sendingDomain) return { from: `alerts@${sendingDomain}`, label };
-  if (ADVISOR_EMAIL_FROM) return { from: ADVISOR_EMAIL_FROM, label };
-  if (brandDomain) return { from: `alerts@${brandDomain}`, label };
-  return { from: "", label };
+  if (fixed) return { from: fixed, label, appUrl };
+  if (sendingDomain) return { from: `alerts@${sendingDomain}`, label, appUrl };
+  if (ADVISOR_EMAIL_FROM) return { from: ADVISOR_EMAIL_FROM, label, appUrl };
+  if (brandDomain) return { from: `alerts@${brandDomain}`, label, appUrl };
+  return { from: "", label, appUrl };
 }
 
 // Fires once, right after a new household is created by the public sign-up flow (never for the
@@ -252,8 +259,8 @@ async function sendWelcomeEmail(familyId: string, email: string, fullName: strin
   // Onboarding Assistant every plan tier includes -- a real person will still reach out to help,
   // just not a permanently-assigned one -- alongside the standing invitation to sign in now.
   const onboardingParagraph = hasExpert
-    ? `<p>As a Premier household, you now have a named ${esc(sender.label)} Expert dedicated to <strong>${esc(householdName)}</strong> -- they will reach out directly within <strong>24-48 hours</strong> to get everything set up around you. In the meantime, feel free to sign in and start exploring the platform for yourself.</p>`
-    : `<p>Your plan includes a complimentary <strong>30-day Onboarding Assistant</strong> -- someone from our team will be in touch shortly to help you get the <strong>${esc(householdName)}</strong> household fully set up. In the meantime, you're welcome to sign in and start exploring the platform on your own.</p>`;
+    ? `<p>As a Premier household, you now have a named ${esc(sender.label)} Expert dedicated to your family -- they will reach out directly within <strong>24-48 hours</strong> to get everything set up around you. In the meantime, feel free to sign in and start exploring the platform for yourself.</p>`
+    : `<p>Your plan includes a complimentary <strong>30-day Onboarding Assistant</strong> -- someone from our team will be in touch shortly to help get your family's household fully set up. In the meantime, you're welcome to sign in and start exploring the platform on your own.</p>`;
 
   // Opens on the decision itself -- congratulating them and naming what the brand stands for --
   // before the operational plan/onboarding details. sender.label is forced to "ORDANIS" (see the
@@ -261,10 +268,25 @@ async function sendWelcomeEmail(familyId: string, email: string, fullName: strin
   // resolves, including here.
   const introParagraph =
     `<p>Congratulations, and welcome to ${esc(sender.label)}.</p>` +
-    `<p>The name comes from the Latin <em>ordo</em> -- order: the clarity and structure we believe every family's wealth deserves, no matter how complex it becomes. That is what ${esc(sender.label)} is built to bring you, and it is why joining us was the right call.</p>`;
+    `<p>The name comes from the Latin <em>ordo</em> -- order: the clarity and structure we believe every family's wealth deserves, no matter how complex it becomes. That is what ${esc(sender.label)} is built to bring your family, and it is why joining us was the right call.</p>`;
+
+  // A real button, not a plain text link -- this is the one action the email actually wants
+  // taken, so it gets the same gold-fill treatment as the platform's own primary buttons rather
+  // than competing with the sign-off/footer text around it. sender.appUrl always resolves to
+  // something (see resolveSender's fallback chain), so this never links nowhere.
+  const signInButton =
+    `<p style="margin:26px 0;text-align:center">` +
+    `<a href="${esc(sender.appUrl)}" style="display:inline-block;background:#C9A961;color:#051423;text-decoration:none;font-weight:600;font-size:13px;letter-spacing:0.04em;padding:14px 28px;border-radius:4px">Sign In to Your Portal</a>` +
+    `</p>`;
 
   const closingParagraph =
-    `<p>We're glad you're here, and we're looking forward to bringing that same sense of order to what matters most to you.</p>`;
+    `<p>We're glad you're here, and we're looking forward to bringing that same sense of order to what matters most to your family.</p>`;
+
+  // sender.label + "Onboarding Team" rather than a hardcoded brand name, so a white-label tenant
+  // gets its own team name here too, the same way it gets its own brand name everywhere else in
+  // this email. The exact wording of the team name itself ("Onboarding Team") is a placeholder
+  // pending a final decision -- easy to change here later, in one place.
+  const signature = `<p style="margin-top:24px">Best,<br>${esc(sender.label)} Onboarding Team</p>`;
 
   const html =
     `<div style="font-family:Arial,sans-serif;font-size:14px;color:#0A2540;line-height:1.6">` +
@@ -272,7 +294,9 @@ async function sendWelcomeEmail(familyId: string, email: string, fullName: strin
     `${introParagraph}` +
     `<p>Your <strong>${esc(planLabel)}</strong> plan for ${esc(householdName)} is now active.</p>` +
     `${onboardingParagraph}` +
+    `${signInButton}` +
     `${closingParagraph}` +
+    `${signature}` +
     `<hr style="border:none;border-top:1px solid #E2E0D8;margin:20px 0">` +
     `<div style="font-size:12px;color:#8A94A3">${esc(sender.label)} -- Private Wealth Administration</div>` +
     `</div>`;
