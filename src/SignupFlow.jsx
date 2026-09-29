@@ -55,10 +55,11 @@ const C = {
 // (fetched below) overrides them whenever that fetch succeeds, and that same column is what
 // public-signup actually bills, so the two can't quietly drift apart for long even if this fetch
 // fails once.
-// Feature lists mirror the marketing site's tier cards exactly (see ordanis-site
-// preview/index.html): each tier lists everything the tier below it has, plus its own
-// additions flagged `isNew` -- no crossed-out/excluded items anywhere, so the growth
-// reads as purely additive going up in price.
+// Feature lists mirror the marketing site's tier cards (see ordanis-site
+// preview/index.html): each tier rolls the one below it up into a single "Everything in
+// <tier>" line rather than repeating every bullet, then lists only its own additions,
+// flagged `isNew` -- no crossed-out/excluded items anywhere, so the growth reads as
+// purely additive going up in price.
 const BASE_FEATURES = [
   { text: "Client portal access" },
   { text: "Properties, portfolio and balance history" },
@@ -86,8 +87,7 @@ const PLAN_COPY = {
     tagline: "Self-directed, with the work running.",
     price: 100,
     features: [
-      ...BASE_FEATURES,
-      { text: "Complimentary 30-day Onboarding Assistant" },
+      { text: "Everything in Basic" },
       { text: "Scheduled prompts", isNew: true },
       { text: "10 workflows and obligations included", isNew: true },
       { text: "Add up to 40 additional workflows anytime", isNew: true },
@@ -100,8 +100,7 @@ const PLAN_COPY = {
     tagline: "Someone who knows the household.",
     price: 500,
     features: [
-      ...BASE_FEATURES,
-      { text: "Complimentary 30-day Onboarding Assistant" },
+      { text: "Everything in Core" },
       { text: "Named ORDANIS Expert leads the household", isNew: true },
       { text: "Scheduled prompts and concierge research", isNew: true },
       { text: "Workflows and obligations, run end to end", isNew: true },
