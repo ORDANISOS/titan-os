@@ -132,7 +132,7 @@ function StackedLogo({ width = 220 }) {
     <svg viewBox="0 0 760 200" width={width} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND_NAME}>
       <text x="380" y="105" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="bold" fontSize="70" letterSpacing="9" fill={C.navy}>{BRAND_NAME.toUpperCase()}</text>
       <line x1="280" y1="133" x2="480" y2="133" stroke={C.gold} strokeWidth="2" />
-      <text x="380" y="160" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="14" letterSpacing="5" fill={C.slate} fontWeight="bold">{BRAND_TAGLINE.toUpperCase()}</text>
+      <text x="380" y="160" textAnchor="middle" fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" fontSize="14" letterSpacing="3.1" fill={C.slate} fontWeight="600">{BRAND_TAGLINE.toUpperCase()}</text>
     </svg>
   );
 }
