@@ -725,7 +725,7 @@ const pctChange=(s,c)=>{const sv=Number(s)||0;const cv=Number(c)||0;if(!sv)retur
 
 const toClient=obj=>{
   if(!obj)return obj;
-  const m={family_id:"familyId",contact_id:"contactId",account_id:"accountId",account_period:"accountPeriod",as_of:"asOf",balance_as_of:"balanceAsOf",source_document_id:"sourceDocumentId",balance_source_document_id:"balanceSourceDocumentId",entered_by:"enteredBy",close_date:"closeDate",due_date:"dueDate",created_at:"createdAt",uploaded_at:"uploadedAt",advisor_name:"advisorName",advisor_email:"advisorEmail",owner_name:"ownerName",property_type:"propertyType",property_id:"propertyId",purchase_price:"purchasePrice",purchase_date:"purchaseDate",current_value:"currentValue",loan_balance:"loanBalance",interest_rate:"interestRate",loan_payment:"loanPayment",loan_maturity_date:"loanMaturityDate",loan_type:"loanType",rental_income:"rentalIncome",property_taxes:"propertyTaxes",flood_insurance:"floodInsurance",insurance_company:"insuranceCompany",insurance_premium:"insurancePremium",flood_insurance_company:"floodInsuranceCompany",flood_insurance_premium:"floodInsurancePremium",insurance_expiration:"insuranceExpiration",flood_insurance_expiration:"floodInsuranceExpiration",account_type:"accountType",starting_balance:"startingBalance",current_balance:"currentBalance",banker_name:"bankerName",make_model:"makeModel",estimated_value:"estimatedValue",file_type:"fileType",extracted_text:"extractedText",reminder_days:"reminderDays",reminder_sent:"reminderSent",full_name:"fullName",file_path:"filePath",file_size:"fileSize",uploaded_by:"uploadedBy",event_type:"eventType",start_date:"startDate",end_date:"endDate",tax_treatment:"taxTreatment",filing_status:"filingStatus",state_tax_rate:"stateTaxRate",base_income:"baseIncome",cash_flow_settings:"cashFlowSettings",hoa_fee:"hoaFee",property_management_fee_pct:"propertyManagementFeePct",include_mortgage_in_cashflow:"includeMortgageInCashflow",sort_order:"sortOrder",note_id:"noteId",recurrence_interval:"recurrenceInterval",recurrence_unit:"recurrenceUnit",completed_at:"completedAt",completed_by:"completedBy",item_key:"itemKey",item_label:"itemLabel",item_type:"itemType",occurrence_date:"occurrenceDate",second_mortgage_balance:"secondMortgageBalance",second_mortgage_payment:"secondMortgagePayment",assistant_name:"assistantName",is_advisor:"isAdvisor",is_primary:"isPrimary",updated_at:"updatedAt",is_secondary:"isSecondary",pcm_responsible:"pcmResponsible",invited_at:"invitedAt",partner_kind:"partnerKind",business_partner_seats_stripe_item_id:"businessPartnerSeatsStripeItemId",user_id:"userId",paid_at:"paidAt",paid_by:"paidBy",vendor_family_contact_id:"vendorFamilyContactId",vendor_property_contact_id:"vendorPropertyContactId",event_id:"eventId",document_id:"documentId",downloaded_by:"downloadedBy",downloaded_at:"downloadedAt",owner_user_id:"ownerUserId",owner_email:"ownerEmail",owner_role:"ownerRole",prompt_type:"promptType",template_key:"templateKey",custom_prompt:"customPrompt",schedule_preset:"schedulePreset",schedule_dow:"scheduleDow",schedule_hour_utc:"scheduleHourUtc",last_run_at:"lastRunAt",last_run_status:"lastRunStatus",last_run_error:"lastRunError",data_source:"dataSource",can_run_scheduled_prompts:"canRunScheduledPrompts",property_section:"propertySection",expiry_date:"expiryDate",doc_type:"docType",mime_type:"mimeType"};
+  const m={family_id:"familyId",contact_id:"contactId",account_id:"accountId",account_period:"accountPeriod",as_of:"asOf",balance_as_of:"balanceAsOf",source_document_id:"sourceDocumentId",balance_source_document_id:"balanceSourceDocumentId",entered_by:"enteredBy",close_date:"closeDate",due_date:"dueDate",created_at:"createdAt",uploaded_at:"uploadedAt",advisor_name:"advisorName",advisor_email:"advisorEmail",owner_name:"ownerName",property_type:"propertyType",property_id:"propertyId",purchase_price:"purchasePrice",purchase_date:"purchaseDate",current_value:"currentValue",loan_balance:"loanBalance",interest_rate:"interestRate",loan_payment:"loanPayment",loan_maturity_date:"loanMaturityDate",loan_type:"loanType",rental_income:"rentalIncome",property_taxes:"propertyTaxes",flood_insurance:"floodInsurance",insurance_company:"insuranceCompany",insurance_premium:"insurancePremium",flood_insurance_company:"floodInsuranceCompany",flood_insurance_premium:"floodInsurancePremium",insurance_expiration:"insuranceExpiration",flood_insurance_expiration:"floodInsuranceExpiration",account_type:"accountType",starting_balance:"startingBalance",current_balance:"currentBalance",banker_name:"bankerName",account_advisor_name:"accountAdvisorName",account_advisor_phone:"accountAdvisorPhone",account_advisor_email:"accountAdvisorEmail",make_model:"makeModel",estimated_value:"estimatedValue",file_type:"fileType",extracted_text:"extractedText",reminder_days:"reminderDays",reminder_sent:"reminderSent",full_name:"fullName",file_path:"filePath",file_size:"fileSize",uploaded_by:"uploadedBy",event_type:"eventType",start_date:"startDate",end_date:"endDate",tax_treatment:"taxTreatment",filing_status:"filingStatus",state_tax_rate:"stateTaxRate",base_income:"baseIncome",cash_flow_settings:"cashFlowSettings",hoa_fee:"hoaFee",property_management_fee_pct:"propertyManagementFeePct",include_mortgage_in_cashflow:"includeMortgageInCashflow",sort_order:"sortOrder",note_id:"noteId",recurrence_interval:"recurrenceInterval",recurrence_unit:"recurrenceUnit",completed_at:"completedAt",completed_by:"completedBy",item_key:"itemKey",item_label:"itemLabel",item_type:"itemType",occurrence_date:"occurrenceDate",second_mortgage_balance:"secondMortgageBalance",second_mortgage_payment:"secondMortgagePayment",assistant_name:"assistantName",is_advisor:"isAdvisor",is_primary:"isPrimary",updated_at:"updatedAt",is_secondary:"isSecondary",pcm_responsible:"pcmResponsible",invited_at:"invitedAt",partner_kind:"partnerKind",business_partner_seats_stripe_item_id:"businessPartnerSeatsStripeItemId",user_id:"userId",paid_at:"paidAt",paid_by:"paidBy",vendor_family_contact_id:"vendorFamilyContactId",vendor_property_contact_id:"vendorPropertyContactId",event_id:"eventId",document_id:"documentId",downloaded_by:"downloadedBy",downloaded_at:"downloadedAt",owner_user_id:"ownerUserId",owner_email:"ownerEmail",owner_role:"ownerRole",prompt_type:"promptType",template_key:"templateKey",custom_prompt:"customPrompt",schedule_preset:"schedulePreset",schedule_dow:"scheduleDow",schedule_hour_utc:"scheduleHourUtc",last_run_at:"lastRunAt",last_run_status:"lastRunStatus",last_run_error:"lastRunError",data_source:"dataSource",can_run_scheduled_prompts:"canRunScheduledPrompts",property_section:"propertySection",expiry_date:"expiryDate",doc_type:"docType",mime_type:"mimeType"};
   return Object.fromEntries(Object.entries(obj).map(([k,v])=>[m[k]||k,v]));
 };
 
@@ -796,7 +796,12 @@ function MoneyInput({value,onChange,placeholder,style,disabled}){
     // Pass back the cleaned numeric string (or empty)
     onChange&&onChange({target:{value:raw}});
   };
-  return <input type="text" inputMode="decimal" style={style||inp} disabled={disabled} value={fmt(value)} onChange={handleChange} placeholder={placeholder||"0"}/>;
+  // Docked "$" prefix so every money field in the app shows it automatically, rather than each
+  // caller having to spell "($)" into its own label (a few still do, harmlessly, from before this).
+  return <div style={{position:"relative"}}>
+    <span aria-hidden="true" style={{position:"absolute",left:13,top:"50%",transform:"translateY(-50%)",color:B.textMute,fontSize:14,pointerEvents:"none"}}>$</span>
+    <input type="text" inputMode="decimal" style={{...(style||inp),paddingLeft:24}} disabled={disabled} value={fmt(value)} onChange={handleChange} placeholder={placeholder||"0"}/>
+  </div>;
 }
 const Sel=({children,...p})=><select {...p} style={{...inp,cursor:"pointer",...(p.style||{})}}>{children}</select>;
 function AdvisorScopeBar({userProfile,value,onChange,label="ORDANIS Expert"}){
@@ -862,6 +867,26 @@ function formatPhoneInput(raw){
 function formatPhoneDisplay(raw){
   const out=formatPhoneInput(raw);
   return out||String(raw||"");
+}
+
+// Used to block Save until a hand-typed phone number is either empty or one this app can
+// actually recognise: a US 10-digit number, an extension format ("555-0142 x203"), or a number
+// that already declared itself international with a leading "+". Mirrors formatPhoneInput's own
+// idea of "a shape it recognises" so nothing that formatter left untouched gets rejected here.
+function isValidPhone(raw){
+  const s=String(raw||"").trim();
+  if(!s)return true; // optional everywhere this is used; whether blank is acceptable is the caller's call
+  if(/[a-zA-Z]/.test(s)){
+    const digits=s.replace(/\D/g,"");
+    return digits.length>=10;
+  }
+  if(s.startsWith("+")){
+    const digits=s.replace(/\D/g,"");
+    return digits.length>=8&&digits.length<=15; // loose E.164 sanity check
+  }
+  const d=s.replace(/\D/g,"");
+  const us=d.length===11&&d.startsWith("1")?d.slice(1):d;
+  return us.length===10;
 }
 
 function PhoneLink({value,style}){
@@ -2896,11 +2921,11 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
 
   // Add portfolio account
   const addAccount=async(f)=>{
-    const{error}=await sb.from("portfolio_accounts").insert({family_id:family.id,institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,notes:f.notes||null});
+    const{error}=await sb.from("portfolio_accounts").insert({family_id:family.id,institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,account_advisor_name:f.accountAdvisorName||null,account_advisor_phone:f.accountAdvisorPhone||null,account_advisor_email:f.accountAdvisorEmail||null,notes:f.notes||null});
     if(error)toast(error.message,"error");else{toast("Account added");reload("portfolio_accounts");}
   };
   const editAccount=async(id,f)=>{
-    const{error}=await sb.from("portfolio_accounts").update({institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,notes:f.notes||null}).eq("id",id);
+    const{error}=await sb.from("portfolio_accounts").update({institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,account_advisor_name:f.accountAdvisorName||null,account_advisor_phone:f.accountAdvisorPhone||null,account_advisor_email:f.accountAdvisorEmail||null,notes:f.notes||null}).eq("id",id);
     if(error)toast(error.message,"error");else{toast("Account updated");reload("portfolio_accounts");}
   };
   const delAccount=async(id)=>{
@@ -3818,10 +3843,12 @@ function SimpleDealForm({contacts=[],onSave,onClose}){
 
 // ── ACCOUNT FORM ──────────────────────────────────────────────────────────────
 function AccountForm({initial,onSave,onClose}){
-  const[f,setF]=useState(initial||{institution:"",bankerName:"",accountType:"Investment",startingBalance:"",currentBalance:"",notes:""});
+  const[f,setF]=useState(initial||{institution:"",bankerName:"",accountType:"Investment",startingBalance:"",currentBalance:"",accountAdvisorName:"",accountAdvisorPhone:"",accountAdvisorEmail:"",notes:""});
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-  const save=async()=>{if(!f.institution.trim())return;setSaving(true);await onSave(f);onClose();};
+  const advisorPhoneOk=isValidPhone(f.accountAdvisorPhone||"");
+  const advisorEmailOk=!(f.accountAdvisorEmail||"").trim()||EMAIL_RE.test((f.accountAdvisorEmail||"").trim());
+  const save=async()=>{if(!f.institution.trim()||!advisorPhoneOk||!advisorEmailOk)return;setSaving(true);await onSave(f);onClose();};
   const pct=pctChange(f.startingBalance,f.currentBalance);
   return <div>
     <Grid2><Field label="Institution"><Inp placeholder="Merrill Lynch" value={f.institution} onChange={set("institution")}/></Field><Field label="Banker Name"><Inp value={f.bankerName||""} onChange={set("bankerName")}/></Field></Grid2>
@@ -3831,6 +3858,18 @@ function AccountForm({initial,onSave,onClose}){
       <span style={{fontSize:20}}>{Number(pct)>=0?"📈":"📉"}</span>
       <div style={{fontSize:18,fontFamily:"'Cormorant Garamond',serif",fontWeight:600,color:Number(pct)>=0?"#0d5c2b":"#8b1a1a"}}>{Number(pct)>=0?"+":""}{pct}% performance</div>
     </div>}
+    <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",margin:"4px 0 8px"}}>Household's advisor on this account</div>
+    <Grid2>
+      <Field label="Advisor Name"><Inp value={f.accountAdvisorName||""} onChange={set("accountAdvisorName")}/></Field>
+      <Field label="Advisor Phone">
+        <Inp value={f.accountAdvisorPhone||""} onChange={e=>setF(p=>({...p,accountAdvisorPhone:formatPhoneInput(e.target.value)}))} placeholder="(555) 123-4567"/>
+        {!advisorPhoneOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid phone number, or leave it blank.</div>}
+      </Field>
+      <Field label="Advisor Email">
+        <Inp type="email" value={f.accountAdvisorEmail||""} onChange={set("accountAdvisorEmail")}/>
+        {!advisorEmailOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid email address, or leave it blank.</div>}
+      </Field>
+    </Grid2>
     <Field label="Notes"><Tex value={f.notes||""} onChange={set("notes")}/></Field>
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save Account"}</Btn></div>
   </div>;
@@ -8034,12 +8073,55 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
 // Each is a plain form (no <Modal> wrapper of its own) so it can render either inside a standalone
 // popup modal (the tab's own "+ Add" button) or directly as a step in OnboardingWizard below --
 // same fields, same save handler, two different frames around it.
+// ── ADDRESS AUTOCOMPLETE (Google Places) ─────────────────────────────────────
+// Feature-detects on VITE_GOOGLE_MAPS_API_KEY being configured -- with no key set (or if Google's
+// script fails to load), this renders as a perfectly ordinary text input, same "quietly do nothing
+// unsupported" convention as canUseContactPicker above, rather than a half-wired autocomplete that
+// looks broken. Requires a Google Cloud API key with the Places API enabled and billing on, HTTP-
+// referrer restricted to this app's own domains -- set as VITE_GOOGLE_MAPS_API_KEY at deploy time,
+// never hardcoded here.
+const GOOGLE_MAPS_API_KEY=import.meta.env.VITE_GOOGLE_MAPS_API_KEY||"";
+let googleMapsLoadPromise=null;
+function loadGoogleMapsPlaces(){
+  if(!GOOGLE_MAPS_API_KEY)return Promise.reject(new Error("VITE_GOOGLE_MAPS_API_KEY not configured"));
+  if(typeof window!=="undefined"&&window.google?.maps?.places)return Promise.resolve();
+  if(googleMapsLoadPromise)return googleMapsLoadPromise;
+  googleMapsLoadPromise=new Promise((resolve,reject)=>{
+    const script=document.createElement("script");
+    script.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}&libraries=places`;
+    script.async=true;
+    script.onload=()=>resolve();
+    script.onerror=()=>reject(new Error("Google Maps failed to load"));
+    document.head.appendChild(script);
+  });
+  return googleMapsLoadPromise;
+}
+// Same value/onChange contract as <Inp>, so it drops into a Field unchanged. Renders its own
+// <input> (not <Inp>, which isn't ref-forwarding) so the DOM node is available to hand to
+// google.maps.places.Autocomplete once the script loads.
+function AddressInput({value,onChange,placeholder}){
+  const ref=useRef(null);
+  useEffect(()=>{
+    if(!GOOGLE_MAPS_API_KEY||!ref.current)return;
+    let autocomplete,cancelled=false;
+    loadGoogleMapsPlaces().then(()=>{
+      if(cancelled||!ref.current)return;
+      autocomplete=new window.google.maps.places.Autocomplete(ref.current,{types:["address"]});
+      autocomplete.addListener("place_changed",()=>{
+        const place=autocomplete.getPlace();
+        if(place&&place.formatted_address)onChange({target:{value:place.formatted_address}});
+      });
+    }).catch(()=>{ /* no key configured, or the script failed to load -- stays a plain text input */ });
+    return()=>{cancelled=true;};
+  },[]);
+  return <input ref={ref} type="text" style={inp} value={value} onChange={onChange} placeholder={placeholder} autoComplete="off"/>;
+}
 function PropertyQuickForm({onSave,onCancel,saving}){
   const[f,setF]=useState({address:"",propertyType:PROP_TYPES[0],purchasePrice:"",purchaseDate:"",currentValue:"",notes:""});
   const set=(k,v)=>setF(m=>({...m,[k]:v}));
   const valid=f.address.trim().length>0;
   return <div>
-    <Field label="Address"><Inp value={f.address} onChange={e=>set("address",e.target.value)} placeholder="123 Main St, Springfield"/></Field>
+    <Field label="Address"><AddressInput value={f.address} onChange={e=>set("address",e.target.value)} placeholder="Start typing an address…"/></Field>
     <Grid2>
       <Field label="Property type"><Sel value={f.propertyType} onChange={e=>set("propertyType",e.target.value)}>{PROP_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</Sel></Field>
       <Field label="Current value (if known)"><MoneyInput value={f.currentValue} onChange={v=>set("currentValue",v)} placeholder="850,000"/></Field>
@@ -8055,15 +8137,29 @@ function PropertyQuickForm({onSave,onCancel,saving}){
   </div>;
 }
 function AccountQuickForm({onSave,onCancel,saving}){
-  const[f,setF]=useState({institution:"",accountType:ACCT_TYPES[0],startingBalance:"",currentBalance:"",notes:""});
+  const[f,setF]=useState({institution:"",accountType:ACCT_TYPES[0],startingBalance:"",currentBalance:"",accountAdvisorName:"",accountAdvisorPhone:"",accountAdvisorEmail:"",notes:""});
   const set=(k,v)=>setF(m=>({...m,[k]:v}));
-  const valid=f.institution.trim().length>0;
+  const advisorPhoneOk=isValidPhone(f.accountAdvisorPhone);
+  const advisorEmailOk=!f.accountAdvisorEmail.trim()||EMAIL_RE.test(f.accountAdvisorEmail.trim());
+  const valid=f.institution.trim().length>0&&advisorPhoneOk&&advisorEmailOk;
   return <div>
     <Grid2>
       <Field label="Institution"><Inp value={f.institution} onChange={e=>set("institution",e.target.value)} placeholder="Fidelity, Chase, Schwab…"/></Field>
       <Field label="Account type"><Sel value={f.accountType} onChange={e=>set("accountType",e.target.value)}>{ACCT_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</Sel></Field>
       <Field label="Current balance"><MoneyInput value={f.currentBalance} onChange={v=>set("currentBalance",v)} placeholder="240,000"/></Field>
       <Field label="Starting balance (optional)"><MoneyInput value={f.startingBalance} onChange={v=>set("startingBalance",v)} placeholder="200,000"/></Field>
+    </Grid2>
+    <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",margin:"4px 0 8px"}}>Your advisor on this account (optional)</div>
+    <Grid2>
+      <Field label="Advisor name"><Inp value={f.accountAdvisorName} onChange={e=>set("accountAdvisorName",e.target.value)} placeholder="Jordan Lee"/></Field>
+      <Field label="Advisor phone">
+        <Inp value={f.accountAdvisorPhone} onChange={e=>set("accountAdvisorPhone",formatPhoneInput(e.target.value))} placeholder="(555) 123-4567"/>
+        {!advisorPhoneOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid phone number, or leave it blank.</div>}
+      </Field>
+      <Field label="Advisor email">
+        <Inp type="email" value={f.accountAdvisorEmail} onChange={e=>set("accountAdvisorEmail",e.target.value)} placeholder="jordan@fidelity.com"/>
+        {!advisorEmailOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid email address, or leave it blank.</div>}
+      </Field>
     </Grid2>
     <Field label="Notes (optional)"><textarea value={f.notes} onChange={e=>set("notes",e.target.value)} rows={2} style={{...inp,resize:"vertical",fontFamily:"inherit"}}/></Field>
     <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
@@ -8131,14 +8227,18 @@ function ImportFromContactsButton({onPick}){
 function MemberQuickForm({onSave,onCancel,saving}){
   const[f,setF]=useState({name:"",relationship:MEMBER_RELATIONSHIPS[0],email:"",phone:""});
   const set=(k,v)=>setF(m=>({...m,[k]:v}));
-  const valid=f.name.trim().length>0;
+  const phoneOk=isValidPhone(f.phone);
+  const valid=f.name.trim().length>0&&phoneOk;
   return <div>
-    <ImportFromContactsButton onPick={c=>setF(m=>({...m,name:c.name||m.name,email:c.email||m.email,phone:c.phone||m.phone}))}/>
+    <ImportFromContactsButton onPick={c=>setF(m=>({...m,name:c.name||m.name,email:c.email||m.email,phone:c.phone?formatPhoneInput(c.phone):m.phone}))}/>
     <Field label="Name"><Inp value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Jane Smith"/></Field>
     <Grid2>
       <Field label="Relationship"><Sel value={f.relationship} onChange={e=>set("relationship",e.target.value)}>{MEMBER_RELATIONSHIPS.map(t=><option key={t} value={t}>{t}</option>)}</Sel></Field>
       <Field label="Email (optional)"><Inp type="email" value={f.email} onChange={e=>set("email",e.target.value)} placeholder="jane@email.com"/></Field>
-      <Field label="Phone (optional)"><Inp value={f.phone} onChange={e=>set("phone",e.target.value)} placeholder="(555) 123-4567"/></Field>
+      <Field label="Phone (optional)">
+        <Inp value={f.phone} onChange={e=>set("phone",formatPhoneInput(e.target.value))} placeholder="(555) 123-4567"/>
+        {!phoneOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid phone number, or leave it blank.</div>}
+      </Field>
     </Grid2>
     <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
       {onCancel&&<Btn variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Btn>}
@@ -8153,15 +8253,20 @@ function ProfessionalQuickForm({onSave,onCancel,saving,allowPortalGrant,partnerS
   const[f,setF]=useState({name:"",role:"",company:"",email:"",phone:"",grantPortalAccess:false});
   const set=(k,v)=>setF(m=>({...m,[k]:v}));
   const emailOk=EMAIL_RE.test(f.email.trim());
-  const valid=f.name.trim().length>0&&(!f.grantPortalAccess||emailOk);
+  const phoneOk=isValidPhone(f.phone);
+  const companyOk=f.company.trim().length>0;
+  const valid=f.name.trim().length>0&&companyOk&&phoneOk&&(!f.grantPortalAccess||emailOk);
   return <div>
-    <ImportFromContactsButton onPick={c=>setF(m=>({...m,name:c.name||m.name,email:c.email||m.email,phone:c.phone||m.phone}))}/>
+    <ImportFromContactsButton onPick={c=>setF(m=>({...m,name:c.name||m.name,email:c.email||m.email,phone:c.phone?formatPhoneInput(c.phone):m.phone}))}/>
     <Grid2>
       <Field label="Name"><Inp value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Dr. John Reyes"/></Field>
       <Field label="Role"><Inp value={f.role} onChange={e=>set("role",e.target.value)} placeholder="CPA, Attorney, Physician…"/></Field>
-      <Field label="Company (optional)"><Inp value={f.company} onChange={e=>set("company",e.target.value)}/></Field>
+      <Field label="Company"><Inp value={f.company} onChange={e=>set("company",e.target.value)} placeholder="Reyes Family Medicine"/></Field>
       <Field label={f.grantPortalAccess?"Email (required for portal access)":"Email (optional)"}><Inp type="email" value={f.email} onChange={e=>set("email",e.target.value)}/></Field>
-      <Field label="Phone (optional)"><Inp value={f.phone} onChange={e=>set("phone",e.target.value)} placeholder="(555) 123-4567"/></Field>
+      <Field label="Phone (optional)">
+        <Inp value={f.phone} onChange={e=>set("phone",formatPhoneInput(e.target.value))} placeholder="(555) 123-4567"/>
+        {!phoneOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid phone number, or leave it blank.</div>}
+      </Field>
     </Grid2>
     {allowPortalGrant&&<label style={{display:"flex",gap:10,alignItems:"flex-start",background:B.bg,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"12px 14px",marginBottom:16,cursor:"pointer"}}>
       <input type="checkbox" checked={f.grantPortalAccess} onChange={e=>set("grantPortalAccess",e.target.checked)} style={{marginTop:2}}/>
@@ -8467,7 +8572,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     if(error)toast(error.message,"error");else{toast("Property added");await reload("properties");}
   };
   const addAccount=async f=>{
-    const{error}=await sb.from("portfolio_accounts").insert({family_id:family.id,institution:f.institution,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,notes:f.notes||null});
+    const{error}=await sb.from("portfolio_accounts").insert({family_id:family.id,institution:f.institution,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,account_advisor_name:f.accountAdvisorName||null,account_advisor_phone:f.accountAdvisorPhone||null,account_advisor_email:f.accountAdvisorEmail||null,notes:f.notes||null});
     if(error)toast(error.message,"error");else{toast("Account added");await reload("portfolio_accounts");}
   };
   const addValuable=async f=>{
