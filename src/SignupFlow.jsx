@@ -124,29 +124,36 @@ function EyebrowLine({ children }) {
   );
 }
 
-// Ordanis_Lockup_Stacked, on-white variant (see the brand Logo Kit): centred wordmark,
-// gold dividing rule, tagline below. The wordmark is inline SVG (not an image asset)
-// so it stays crisp at any size and follows BRAND_NAME for white-label tenants. The
-// tagline is plain HTML text rather than SVG content, sized off the wordmark's own
-// rendered height at the same ratio the marketing site's brand-tagline CSS uses
-// (tagline ~= 0.196x logo height, margin-top ~= 0.16x logo height, checked against
-// its nav/footer/detail-topbar variants in shared.css) -- not a fixed pixel size and
-// not a legibility floor. Earlier attempts got the ratio wrong in both directions:
-// baking it into the scaled SVG shrank it to an unreadable ~3px smudge on mobile,
-// and a flat 9px floor after that made it read noticeably chunkier than ordanisos.com.
+// Ordanis_Lockup_Stacked (see the ORDANIS Logo Kit doc): centred wordmark, gold
+// dividing rule, tagline below, per the kit's own spec -- Arial Bold, letter-
+// spacing 5 at font-size 15.5 (the kit's shipped 14 plus the +1.5 bump the team
+// applied on top of it). Built as inline SVG (not an image asset) so it stays
+// crisp at any size and follows BRAND_NAME/BRAND_TAGLINE for white-label tenants.
+//
+// The kit documents a hard minimum width for this lockup (210px) below which the
+// tagline is dropped entirely rather than shrunk further -- "keeping the wordmark
+// alone." That's honored here instead of independently rescaling the tagline: two
+// earlier attempts at a separate scaling formula either shrank it to an unreadable
+// ~3px smudge on the mobile signup header, or made it read too big relative to the
+// wordmark. Below the floor it's wordmark-only, matching the kit exactly; at or
+// above it, the whole lockup (including the tagline's small size) matches the kit
+// exactly too, because nothing is being freelanced anymore.
+const STACKED_LOCKUP_MIN_WIDTH = 210;
 function StackedLogo({ width = 220 }) {
-  const wordmarkHeight = width * (140 / 760);
-  const taglineSize = wordmarkHeight * 0.196;
+  const showTagline = width >= STACKED_LOCKUP_MIN_WIDTH;
   return (
-    <div style={{ display: "inline-block", textAlign: "center" }}>
-      <svg viewBox="0 0 760 140" width={width} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND_NAME}>
-        <text x="380" y="105" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="bold" fontSize="70" letterSpacing="9" fill={C.navy}>{BRAND_NAME.toUpperCase()}</text>
-        <line x1="280" y1="133" x2="480" y2="133" stroke={C.gold} strokeWidth="2" />
-      </svg>
-      <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif", fontWeight: 600, fontSize: taglineSize, letterSpacing: "0.22em", color: C.slate, marginTop: wordmarkHeight * 0.16, whiteSpace: "nowrap" }}>
-        {BRAND_TAGLINE.toUpperCase()}
-      </div>
-    </div>
+    <svg viewBox="0 0 760 200" width={width} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND_NAME}>
+      <text x="380" y="105" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="bold" fontSize="70" letterSpacing="9" fill={C.navy}>{BRAND_NAME.toUpperCase()}</text>
+      {showTagline && (
+        <>
+          {/* Rule spans the tagline's own rendered width (measured via getComputedTextLength
+              at this exact font-family/size/letter-spacing) so it runs from the P to the n,
+              not an arbitrary fixed span. */}
+          <line x1="172" y1="133" x2="588" y2="133" stroke={C.gold} strokeWidth="2" />
+          <text x="380" y="160" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="15.5" letterSpacing="5" fill={C.slate} fontWeight="bold">{BRAND_TAGLINE.toUpperCase()}</text>
+        </>
+      )}
+    </svg>
   );
 }
 

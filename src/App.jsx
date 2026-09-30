@@ -1156,31 +1156,35 @@ function BrandImg({src,alt,style}){
   return <img src={src} alt={alt} style={style} onError={()=>setFailed(true)}/>;
 }
 // Crisp, text-drawn lockup for the default ORDANIS brand (wordmark + gold rule +
-// tagline). Mirrors StackedLogo in SignupFlow.jsx font-for-font so the same
-// wordmark reads identically on the signup page, the login screen, and the
-// in-app sidebar. Only used when no tenant-specific VITE_BRAND_LOGO_URL is
-// set -- a white-label tenant's own uploaded artwork still renders as-is via
-// BrandImg, since it may be arbitrary graphic artwork, not just text.
+// tagline), per the ORDANIS Logo Kit doc's Ordanis_Lockup_Stacked spec. Mirrors
+// StackedLogo in SignupFlow.jsx font-for-font so the same wordmark reads
+// identically on the signup page, the login screen, and the in-app sidebar.
+// Only used when no tenant-specific VITE_BRAND_LOGO_URL is set -- a white-label
+// tenant's own uploaded artwork still renders as-is via BrandImg, since it may
+// be arbitrary graphic artwork, not just text.
 //
-// The tagline is plain HTML text with a clamped minimum font-size, not part of
-// the scaled SVG -- shrinking it in lockstep with the wordmark (as one shape)
-// made it dissolve into an unreadable smudge at compact sidebar/header sizes.
+// The kit's tagline spec is Arial Bold, letter-spacing 5 at font-size 15.5 (the
+// kit's shipped 14 plus the +1.5 bump the team applied on top of it), embedded
+// in the same scaled SVG shape as the wordmark -- not sized off an independent
+// formula. The kit also documents a hard minimum lockup width (210px) below
+// which the tagline is dropped entirely rather than shrunk further, so it's
+// hidden below that width here instead of dissolving into an unreadable smudge.
+const STACKED_LOCKUP_MIN_WIDTH=210;
 function BrandLockupSVG({width=220}){
-  // Ratio matches the marketing site's brand-tagline CSS (tagline size and
-  // margin-top as a fraction of logo height, consistent across its nav/footer/
-  // detail-topbar variants) -- see the comment on StackedLogo in SignupFlow.jsx.
-  const wordmarkHeight=width*(140/760);
-  const taglineSize=wordmarkHeight*0.196;
+  const showTagline=width>=STACKED_LOCKUP_MIN_WIDTH;
   return (
-    <div style={{display:"inline-block",textAlign:"center",maxWidth:"100%"}}>
-      <svg viewBox="0 0 760 140" width={width} style={{maxWidth:"100%",height:"auto",display:"block",margin:"0 auto"}} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND.name}>
-        <text x="380" y="105" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="bold" fontSize="70" letterSpacing="9" fill={B.navy}>{BRAND.name.toUpperCase()}</text>
-        <line x1="280" y1="133" x2="480" y2="133" stroke={B.gold} strokeWidth="2" />
-      </svg>
-      <div style={{fontFamily:"-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",fontWeight:600,fontSize:taglineSize,letterSpacing:"0.22em",color:"#3F5470",marginTop:wordmarkHeight*0.16,whiteSpace:"nowrap"}}>
-        {BRAND.tagline.toUpperCase()}
-      </div>
-    </div>
+    <svg viewBox="0 0 760 200" width={width} style={{maxWidth:"100%",height:"auto",display:"block",margin:"0 auto"}} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND.name}>
+      <text x="380" y="105" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="bold" fontSize="70" letterSpacing="9" fill={B.navy}>{BRAND.name.toUpperCase()}</text>
+      {showTagline && (
+        <>
+          {/* Rule spans the tagline's own rendered width (measured via getComputedTextLength
+              at this exact font-family/size/letter-spacing) so it runs from the P to the n,
+              not an arbitrary fixed span. */}
+          <line x1="172" y1="133" x2="588" y2="133" stroke={B.gold} strokeWidth="2" />
+          <text x="380" y="160" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="15.5" letterSpacing="5" fill="#3F5470" fontWeight="bold">{BRAND.tagline.toUpperCase()}</text>
+        </>
+      )}
+    </svg>
   );
 }
 function PCMLogo({dark=false,compact=false}){
