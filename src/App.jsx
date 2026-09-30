@@ -1161,23 +1161,33 @@ function BrandImg({src,alt,style}){
 // in-app sidebar. Only used when no tenant-specific VITE_BRAND_LOGO_URL is
 // set -- a white-label tenant's own uploaded artwork still renders as-is via
 // BrandImg, since it may be arbitrary graphic artwork, not just text.
-function BrandLockupSVG({style}){
+//
+// The tagline is plain HTML text with a clamped minimum font-size, not part of
+// the scaled SVG -- shrinking it in lockstep with the wordmark (as one shape)
+// made it dissolve into an unreadable smudge at compact sidebar/header sizes.
+function BrandLockupSVG({width=220}){
+  const taglineSize=Math.max(9,width*(14/760));
   return (
-    <svg viewBox="0 0 760 200" width="760" height="200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND.name} style={style}>
-      <text x="380" y="105" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="bold" fontSize="70" letterSpacing="9" fill={B.navy}>{BRAND.name.toUpperCase()}</text>
-      <line x1="280" y1="133" x2="480" y2="133" stroke={B.gold} strokeWidth="2" />
-      <text x="380" y="160" textAnchor="middle" fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" fontSize="14" letterSpacing="3.1" fill="#3F5470" fontWeight="600">{BRAND.tagline.toUpperCase()}</text>
-    </svg>
+    <div style={{display:"inline-block",textAlign:"center",maxWidth:"100%"}}>
+      <svg viewBox="0 0 760 140" width={width} style={{maxWidth:"100%",height:"auto",display:"block",margin:"0 auto"}} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND.name}>
+        <text x="380" y="105" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="bold" fontSize="70" letterSpacing="9" fill={B.navy}>{BRAND.name.toUpperCase()}</text>
+        <line x1="280" y1="133" x2="480" y2="133" stroke={B.gold} strokeWidth="2" />
+      </svg>
+      <div style={{fontFamily:"-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",fontWeight:600,fontSize:taglineSize,letterSpacing:"0.22em",color:"#3F5470",marginTop:Math.max(4,taglineSize*0.3),whiteSpace:"nowrap"}}>
+        {BRAND.tagline.toUpperCase()}
+      </div>
+    </div>
   );
 }
 function PCMLogo({dark=false,compact=false}){
-  // max constraints (not a fixed height) so wide white-label wordmarks scale
-  // down to fit their container instead of overflowing the sidebar.
+  // Explicit target widths (not a fixed height) so wide white-label raster
+  // wordmarks scale down to fit their container instead of overflowing it.
   const usingDefaultLogo=!import.meta.env.VITE_BRAND_LOGO_URL;
-  const content=(style)=>usingDefaultLogo?<BrandLockupSVG style={style}/>:<BrandImg src={BRAND.logo} alt={BRAND.name} style={style}/>;
-  if(dark)return <div style={{background:"rgba(255,255,255,0.97)",borderRadius:8,padding:"8px 14px",display:"inline-block"}}>{content({maxHeight:64,maxWidth:"100%",width:"auto",height:"auto",display:"block"})}</div>;
-  if(compact)return content({maxHeight:64,maxWidth:"100%",width:"auto",height:"auto",display:"block"});
-  return content({maxHeight:110,maxWidth:"100%",width:"auto",height:"auto",display:"block",margin:"0 auto"});
+  const rasterStyle={maxHeight:compact||dark?64:110,maxWidth:"100%",width:"auto",height:"auto",display:"block",margin:dark||compact?0:"0 auto"};
+  const content=(w)=>usingDefaultLogo?<BrandLockupSVG width={w}/>:<BrandImg src={BRAND.logo} alt={BRAND.name} style={rasterStyle}/>;
+  if(dark)return <div style={{background:"rgba(255,255,255,0.97)",borderRadius:8,padding:"8px 14px",display:"inline-block"}}>{content(190)}</div>;
+  if(compact)return content(190);
+  return content(320);
 }
 
 // ── LOGIN INTRO (tumbling cubes) ────────────────────────────────────────────

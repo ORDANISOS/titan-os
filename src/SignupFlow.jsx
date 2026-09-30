@@ -125,15 +125,23 @@ function EyebrowLine({ children }) {
 }
 
 // Ordanis_Lockup_Stacked, on-white variant (see the brand Logo Kit): centred wordmark,
-// gold dividing rule, tagline below. Built as inline SVG (not an image asset) so it
-// stays crisp at any size and follows BRAND_NAME/BRAND_TAGLINE for white-label tenants.
+// gold dividing rule, tagline below. The wordmark is inline SVG (not an image asset)
+// so it stays crisp at any size and follows BRAND_NAME for white-label tenants. The
+// tagline is plain HTML text rather than SVG content, and its font-size is clamped to
+// a legible floor -- scaling it down with the SVG (as one shape) made it shrink to
+// ~3px and dissolve into an unreadable smudge at the compact mobile header width.
 function StackedLogo({ width = 220 }) {
+  const taglineSize = Math.max(9, width * (14 / 760));
   return (
-    <svg viewBox="0 0 760 200" width={width} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND_NAME}>
-      <text x="380" y="105" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="bold" fontSize="70" letterSpacing="9" fill={C.navy}>{BRAND_NAME.toUpperCase()}</text>
-      <line x1="280" y1="133" x2="480" y2="133" stroke={C.gold} strokeWidth="2" />
-      <text x="380" y="160" textAnchor="middle" fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" fontSize="14" letterSpacing="3.1" fill={C.slate} fontWeight="600">{BRAND_TAGLINE.toUpperCase()}</text>
-    </svg>
+    <div style={{ display: "inline-block", textAlign: "center" }}>
+      <svg viewBox="0 0 760 140" width={width} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND_NAME}>
+        <text x="380" y="105" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="bold" fontSize="70" letterSpacing="9" fill={C.navy}>{BRAND_NAME.toUpperCase()}</text>
+        <line x1="280" y1="133" x2="480" y2="133" stroke={C.gold} strokeWidth="2" />
+      </svg>
+      <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif", fontWeight: 600, fontSize: taglineSize, letterSpacing: "0.22em", color: C.slate, marginTop: Math.max(4, taglineSize * 0.3), whiteSpace: "nowrap" }}>
+        {BRAND_TAGLINE.toUpperCase()}
+      </div>
+    </div>
   );
 }
 
