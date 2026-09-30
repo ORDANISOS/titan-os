@@ -1166,14 +1166,18 @@ function BrandImg({src,alt,style}){
 // the scaled SVG -- shrinking it in lockstep with the wordmark (as one shape)
 // made it dissolve into an unreadable smudge at compact sidebar/header sizes.
 function BrandLockupSVG({width=220}){
-  const taglineSize=Math.max(9,width*(14/760));
+  // Ratio matches the marketing site's brand-tagline CSS (tagline size and
+  // margin-top as a fraction of logo height, consistent across its nav/footer/
+  // detail-topbar variants) -- see the comment on StackedLogo in SignupFlow.jsx.
+  const wordmarkHeight=width*(140/760);
+  const taglineSize=wordmarkHeight*0.196;
   return (
     <div style={{display:"inline-block",textAlign:"center",maxWidth:"100%"}}>
       <svg viewBox="0 0 760 140" width={width} style={{maxWidth:"100%",height:"auto",display:"block",margin:"0 auto"}} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND.name}>
         <text x="380" y="105" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="bold" fontSize="70" letterSpacing="9" fill={B.navy}>{BRAND.name.toUpperCase()}</text>
         <line x1="280" y1="133" x2="480" y2="133" stroke={B.gold} strokeWidth="2" />
       </svg>
-      <div style={{fontFamily:"-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",fontWeight:600,fontSize:taglineSize,letterSpacing:"0.22em",color:"#3F5470",marginTop:Math.max(4,taglineSize*0.3),whiteSpace:"nowrap"}}>
+      <div style={{fontFamily:"-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",fontWeight:600,fontSize:taglineSize,letterSpacing:"0.22em",color:"#3F5470",marginTop:wordmarkHeight*0.16,whiteSpace:"nowrap"}}>
         {BRAND.tagline.toUpperCase()}
       </div>
     </div>

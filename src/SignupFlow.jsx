@@ -127,18 +127,23 @@ function EyebrowLine({ children }) {
 // Ordanis_Lockup_Stacked, on-white variant (see the brand Logo Kit): centred wordmark,
 // gold dividing rule, tagline below. The wordmark is inline SVG (not an image asset)
 // so it stays crisp at any size and follows BRAND_NAME for white-label tenants. The
-// tagline is plain HTML text rather than SVG content, and its font-size is clamped to
-// a legible floor -- scaling it down with the SVG (as one shape) made it shrink to
-// ~3px and dissolve into an unreadable smudge at the compact mobile header width.
+// tagline is plain HTML text rather than SVG content, sized off the wordmark's own
+// rendered height at the same ratio the marketing site's brand-tagline CSS uses
+// (tagline ~= 0.196x logo height, margin-top ~= 0.16x logo height, checked against
+// its nav/footer/detail-topbar variants in shared.css) -- not a fixed pixel size and
+// not a legibility floor. Earlier attempts got the ratio wrong in both directions:
+// baking it into the scaled SVG shrank it to an unreadable ~3px smudge on mobile,
+// and a flat 9px floor after that made it read noticeably chunkier than ordanisos.com.
 function StackedLogo({ width = 220 }) {
-  const taglineSize = Math.max(9, width * (14 / 760));
+  const wordmarkHeight = width * (140 / 760);
+  const taglineSize = wordmarkHeight * 0.196;
   return (
     <div style={{ display: "inline-block", textAlign: "center" }}>
       <svg viewBox="0 0 760 140" width={width} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND_NAME}>
         <text x="380" y="105" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="bold" fontSize="70" letterSpacing="9" fill={C.navy}>{BRAND_NAME.toUpperCase()}</text>
         <line x1="280" y1="133" x2="480" y2="133" stroke={C.gold} strokeWidth="2" />
       </svg>
-      <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif", fontWeight: 600, fontSize: taglineSize, letterSpacing: "0.22em", color: C.slate, marginTop: Math.max(4, taglineSize * 0.3), whiteSpace: "nowrap" }}>
+      <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif", fontWeight: 600, fontSize: taglineSize, letterSpacing: "0.22em", color: C.slate, marginTop: wordmarkHeight * 0.16, whiteSpace: "nowrap" }}>
         {BRAND_TAGLINE.toUpperCase()}
       </div>
     </div>
