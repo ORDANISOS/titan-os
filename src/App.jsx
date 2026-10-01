@@ -740,9 +740,16 @@ const roleLabel=r=>ROLE_LABELS[(r||"").toLowerCase()]||r;
 
 
 // ── UI PRIMITIVES ─────────────────────────────────────────────────────────────
-function Badge({children,scheme}){
+// onClick is optional: badges that are just status labels (e.g. the "N due in 30
+// days" summary inside the Tasks tab itself, where there's nowhere further to go)
+// render as a plain, inert span exactly as before. Badges that point at something
+// elsewhere -- like the header's "N due soon" summary -- pass onClick and render
+// as a reset-styled button instead, so they're keyboard/screen-reader operable
+// rather than a span with a click handler bolted on.
+function Badge({children,scheme,onClick}){
   const s=scheme||{bg:B.borderLight,text:B.navyMid,dot:B.navyMid};
-  return <span style={{display:"inline-flex",alignItems:"center",gap:5,background:s.bg,color:s.text,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,letterSpacing:"0.04em",whiteSpace:"nowrap"}}><span style={{width:6,height:6,borderRadius:"50%",background:s.dot,flexShrink:0}}/>{children}</span>;
+  const Tag=onClick?"button":"span";
+  return <Tag onClick={onClick} style={{display:"inline-flex",alignItems:"center",gap:5,background:s.bg,color:s.text,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,letterSpacing:"0.04em",whiteSpace:"nowrap",fontFamily:"inherit",border:"none",...(onClick?{cursor:"pointer"}:{})}}><span style={{width:6,height:6,borderRadius:"50%",background:s.dot,flexShrink:0}}/>{children}</Tag>;
 }
 function GoldLine(){return <div style={{height:1,background:`linear-gradient(90deg,transparent,${B.gold},transparent)`,margin:"0 0 16px"}}/>;}
 function Spinner({size=34}){return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",flexDirection:"column",gap:14}}><div style={{width:size,height:size,border:`3px solid ${B.borderLight}`,borderTop:`3px solid ${B.gold}`,borderRadius:"50%",animation:"pcmspin 0.8s linear infinite"}}/><style>{`@keyframes pcmspin{to{transform:rotate(360deg)}}`}</style></div>;}
@@ -2994,8 +3001,11 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
           {isMobile&&hasAssignedExpert&&family.advisorName&&<div style={{fontSize:11,color:B.textSoft,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{family.advisorName}</div>}
         </div>
         <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-          {overdueTasks.length>0&&<Badge scheme={{bg:"#fde8e8",text:"#8b1a1a",dot:"#d43030"}}>{overdueTasks.length} overdue</Badge>}
-          {soonTasks.length>0&&<Badge scheme={{bg:"#fef3e2",text:"#8a5c00",dot:"#d4900a"}}>{soonTasks.length} due soon</Badge>}
+          {/* Clicking either badge jumps straight to the Tasks tab, where the
+              overdue/due-soon items they're summarizing actually live -- otherwise
+              they're a count with no way to act on it from here. */}
+          {overdueTasks.length>0&&<Badge scheme={{bg:"#fde8e8",text:"#8b1a1a",dot:"#d43030"}} onClick={()=>setActiveTab("tasks")}>{overdueTasks.length} overdue</Badge>}
+          {soonTasks.length>0&&<Badge scheme={{bg:"#fef3e2",text:"#8a5c00",dot:"#d4900a"}} onClick={()=>setActiveTab("tasks")}>{soonTasks.length} due soon</Badge>}
           <Btn variant="gold" small={isMobile} onClick={()=>setReportOpen(true)}>🖨{!isMobile&&" Print Report"}</Btn>
         </div>
       </div>
