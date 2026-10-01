@@ -7648,20 +7648,28 @@ async function suggestFolder(text,fileName,folders){
   const{data,error}=await sb.functions.invoke("suggest-document-folder",{
     body:{text:String(text).slice(0,4000),fileName:fileName||"",folders},
   });
-  if(error||!data)return null;
-  // An existing folder, checked against the list rather than trusted.
-  if(data.folder)
-    return folders.includes(data.folder)
-      ?{folder:data.folder,newFolder:null,why:data.why||"",confidence:data.confidence||"low"}
-      :null;
-  // A proposed NEW folder. Validated against the same rules the Add-folder form
-  // uses, so a suggestion can never create something the form itself would reject.
-  if(data.newFolder){
-    const v=validateFolderName(data.newFolder,folders);
-    if(!v.ok)return null;
-    return{folder:null,newFolder:v.name,why:data.why||"",confidence:data.confidence||"low"};
+  if(error||!data||!Array.isArray(data.options))return null;
+  // Each option, re-checked against the household's real folder list rather than
+  // trusted outright -- same rule a single suggestion always had to pass. Usually
+  // there's exactly one; occasionally the document genuinely fits more than one
+  // folder and there are up to three, for the person to choose between.
+  const seen=new Set();
+  const options=[];
+  for(const opt of data.options){
+    if(!opt)continue;
+    let entry=null;
+    if(opt.folder&&folders.includes(opt.folder)){
+      entry={folder:opt.folder,newFolder:null,why:opt.why||""};
+    }else if(opt.newFolder){
+      const v=validateFolderName(opt.newFolder,folders);
+      if(v.ok)entry={folder:null,newFolder:v.name,why:opt.why||""};
+    }
+    if(!entry)continue;
+    const key=entry.folder||`new:${entry.newFolder.toLowerCase()}`;
+    if(seen.has(key))continue;
+    seen.add(key);options.push(entry);
   }
-  return null;
+  return options.length?{options,confidence:data.confidence||"low"}:null;
 }
 
 function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canEditMetadata,toast,reload,attachIntent,onAttachHandled}){
@@ -7828,6 +7836,71 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
   // Most recent download of a given document, if any (downloads is pre-sorted newest first).
   const lastDownloadFor=docId=>downloads.find(d=>d.documentId===docId)||null;
 
+  // Usually there's one clear answer and this is a single-line nudge. Occasionally
+  // a document genuinely fits more than one of the household's folders about
+  // equally well (an NDA tied to a specific property deal, say) -- forcing a
+  // single auto-pick there would just be a guess dressed up as an answer, so
+  // instead this hands the actual choice to the person, each option with its own
+  // reason, and nothing is filed until they pick one.
+  const SuggestionPanel=()=>{
+    if(!suggestion||!suggestion.options||!suggestion.options.length)return null;
+    const applyExisting=folder=>{setCategory(folder);setSuggestion(null);};
+    const applyNew=async newFolder=>{
+      setCreatingSuggested(true);
+      const{error}=await sb.from("document_folders").insert({family_id:familyId,name:newFolder});
+      setCreatingSuggested(false);
+      if(error&&!/duplicate key/i.test(error.message)){toast(error.message,"error");return;}
+      await loadFolders();
+      setCategory(newFolder);
+      setSuggestion(null);
+      toast(`Created "${newFolder}"`);
+    };
+    if(suggestion.options.length===1){
+      const o=suggestion.options[0];
+      if(!(o.newFolder||o.folder!==category))return null;
+      return <div style={{margin:"-6px 0 12px",padding:"10px 12px",background:"rgba(206,182,132,0.12)",
+        borderLeft:`2px solid ${B.gold}`,borderRadius:6,fontSize:12.5,color:B.textMid,lineHeight:1.5}}>
+        {o.newFolder?<>
+          <strong style={{color:B.navy}}>Nothing here fits this. A "{o.newFolder}" folder would.</strong>
+          {o.why?` ${o.why}`:""}
+          <button disabled={creatingSuggested} onClick={()=>applyNew(o.newFolder)}
+            style={{marginLeft:8,background:"none",border:"none",color:B.navyMid,
+              cursor:creatingSuggested?"default":"pointer",fontSize:12.5,fontFamily:"inherit",
+              fontWeight:700,padding:0,textDecoration:"underline"}}>
+            {creatingSuggested?"Creating…":"Create it and file this here"}</button>
+        </>:<>
+          <strong style={{color:B.navy}}>Reading it, this looks like {o.folder}.</strong>
+          {o.why?` ${o.why}`:""}
+          <button onClick={()=>applyExisting(o.folder)}
+            style={{marginLeft:8,background:"none",border:"none",color:B.navyMid,cursor:"pointer",
+              fontSize:12.5,fontFamily:"inherit",fontWeight:700,padding:0,textDecoration:"underline"}}>
+            File it there</button>
+        </>}
+      </div>;
+    }
+    return <div style={{margin:"-6px 0 14px",padding:"14px 14px 10px",background:"rgba(206,182,132,0.10)",
+      border:`1px solid ${B.gold}`,borderRadius:10}}>
+      <div style={{fontSize:12.5,fontWeight:700,color:B.navy,marginBottom:2}}>This could file in more than one place</div>
+      <div style={{fontSize:11.5,color:B.textMute,marginBottom:10}}>Reading it, here's what fits — pick one, or choose a different folder below.</div>
+      <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:4}}>
+        {suggestion.options.map((o,i)=>(
+          <button key={o.folder||o.newFolder||i} disabled={creatingSuggested}
+            onClick={()=>o.newFolder?applyNew(o.newFolder):applyExisting(o.folder)}
+            style={{textAlign:"left",background:B.white,border:`1px solid ${B.border}`,borderRadius:8,
+              padding:"9px 11px",cursor:creatingSuggested?"default":"pointer",fontFamily:"inherit"}}>
+            <div style={{fontSize:12.5,fontWeight:700,color:B.navy}}>
+              {o.newFolder?`Create "${o.newFolder}"`:o.folder}
+            </div>
+            {o.why&&<div style={{fontSize:11.5,color:B.textMute,marginTop:1}}>{o.why}</div>}
+          </button>
+        ))}
+      </div>
+      <button onClick={()=>setSuggestion(null)} style={{background:"none",border:"none",color:B.textMute,
+        cursor:"pointer",fontSize:11,fontFamily:"inherit",padding:"2px 0",textDecoration:"underline"}}>
+        I'll choose a folder myself</button>
+    </div>;
+  };
+
   // Reads a newly-picked file and asks where it belongs, before a single byte
   // has been uploaded. Non-fatal at every step: a failed read or a failed
   // suggestion must never block picking the file or uploading it plain.
@@ -7872,7 +7945,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
           setUploadPhase("Working out where this belongs…");
           const sug=await suggestFolder(text,name||f.name,
             [...DOC_CATEGORIES,...customFolders.map(x=>x.name)]);
-          if(sug&&(sug.folder||sug.newFolder))setSuggestion(sug);
+          if(sug&&sug.options&&sug.options.length)setSuggestion(sug);
         }catch(_e){/* a failed suggestion must never block an upload */}
       }
     } finally {
@@ -8252,35 +8325,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     {modal==="upload"&&<Modal title="Upload Document" onClose={()=>{setModal(null);resetForm();}}>
       <Field label="Document Name"><Inp placeholder="Q4 2024 Statement" value={name} onChange={e=>setName(e.target.value)}/></Field>
       <Field label="Category"><Sel value={category} onChange={e=>{setCategory(e.target.value);setSuggestion(null);}}>{[...DOC_CATEGORIES,...customFolders.map(f=>f.name)].map(c=><option key={c}>{c}</option>)}</Sel></Field>
-      {suggestion&&(suggestion.newFolder||suggestion.folder!==category)&&
-        <div style={{margin:"-6px 0 12px",padding:"10px 12px",background:"rgba(206,182,132,0.12)",
-          borderLeft:`2px solid ${B.gold}`,borderRadius:6,fontSize:12.5,color:B.textMid,lineHeight:1.5}}>
-          {suggestion.newFolder?<>
-            <strong style={{color:B.navy}}>Nothing here fits this. A “{suggestion.newFolder}” folder would.</strong>
-            {suggestion.why?` ${suggestion.why}`:""}
-            <button disabled={creatingSuggested} onClick={async()=>{
-                setCreatingSuggested(true);
-                const{error}=await sb.from("document_folders").insert({family_id:familyId,name:suggestion.newFolder});
-                setCreatingSuggested(false);
-                if(error&&!/duplicate key/i.test(error.message)){toast(error.message,"error");return;}
-                await loadFolders();
-                setCategory(suggestion.newFolder);
-                setSuggestion(null);
-                toast(`Created “${suggestion.newFolder}”`);
-              }}
-              style={{marginLeft:8,background:"none",border:"none",color:B.navyMid,
-                cursor:creatingSuggested?"default":"pointer",fontSize:12.5,fontFamily:"inherit",
-                fontWeight:700,padding:0,textDecoration:"underline"}}>
-              {creatingSuggested?"Creating…":"Create it and file this here"}</button>
-          </>:<>
-            <strong style={{color:B.navy}}>Reading it, this looks like {suggestion.folder}.</strong>
-            {suggestion.why?` ${suggestion.why}`:""}
-            <button onClick={()=>{setCategory(suggestion.folder);setSuggestion(null);}}
-              style={{marginLeft:8,background:"none",border:"none",color:B.navyMid,cursor:"pointer",
-                fontSize:12.5,fontFamily:"inherit",fontWeight:700,padding:0,textDecoration:"underline"}}>
-              File it there</button>
-          </>}
-        </div>}
+      <SuggestionPanel/>
       <Field label="Description"><Inp placeholder="Optional description" value={description} onChange={e=>setDescription(e.target.value)}/></Field>
       {linkFields()}
       <Field label="File">
@@ -8298,35 +8343,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     {modal&&modal.edit&&<Modal title="Edit Document" onClose={()=>{setModal(null);resetForm();}}>
       <Field label="Document Name"><Inp placeholder="Q4 2024 Statement" value={name} onChange={e=>setName(e.target.value)}/></Field>
       <Field label="Category"><Sel value={category} onChange={e=>{setCategory(e.target.value);setSuggestion(null);}}>{[...DOC_CATEGORIES,...customFolders.map(f=>f.name)].map(c=><option key={c}>{c}</option>)}</Sel></Field>
-      {suggestion&&(suggestion.newFolder||suggestion.folder!==category)&&
-        <div style={{margin:"-6px 0 12px",padding:"10px 12px",background:"rgba(206,182,132,0.12)",
-          borderLeft:`2px solid ${B.gold}`,borderRadius:6,fontSize:12.5,color:B.textMid,lineHeight:1.5}}>
-          {suggestion.newFolder?<>
-            <strong style={{color:B.navy}}>Nothing here fits this. A “{suggestion.newFolder}” folder would.</strong>
-            {suggestion.why?` ${suggestion.why}`:""}
-            <button disabled={creatingSuggested} onClick={async()=>{
-                setCreatingSuggested(true);
-                const{error}=await sb.from("document_folders").insert({family_id:familyId,name:suggestion.newFolder});
-                setCreatingSuggested(false);
-                if(error&&!/duplicate key/i.test(error.message)){toast(error.message,"error");return;}
-                await loadFolders();
-                setCategory(suggestion.newFolder);
-                setSuggestion(null);
-                toast(`Created “${suggestion.newFolder}”`);
-              }}
-              style={{marginLeft:8,background:"none",border:"none",color:B.navyMid,
-                cursor:creatingSuggested?"default":"pointer",fontSize:12.5,fontFamily:"inherit",
-                fontWeight:700,padding:0,textDecoration:"underline"}}>
-              {creatingSuggested?"Creating…":"Create it and file this here"}</button>
-          </>:<>
-            <strong style={{color:B.navy}}>Reading it, this looks like {suggestion.folder}.</strong>
-            {suggestion.why?` ${suggestion.why}`:""}
-            <button onClick={()=>{setCategory(suggestion.folder);setSuggestion(null);}}
-              style={{marginLeft:8,background:"none",border:"none",color:B.navyMid,cursor:"pointer",
-                fontSize:12.5,fontFamily:"inherit",fontWeight:700,padding:0,textDecoration:"underline"}}>
-              File it there</button>
-          </>}
-        </div>}
+      <SuggestionPanel/>
       <Field label="Description"><Inp placeholder="Optional description" value={description} onChange={e=>setDescription(e.target.value)}/></Field>
       {linkFields(modal.edit.id)}
       <div style={{fontSize:11,color:B.textMute,marginBottom:14}}>Renaming changes the display title only; the stored file itself is unchanged.</div>
