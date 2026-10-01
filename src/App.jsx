@@ -1176,7 +1176,7 @@ const STACKED_LOCKUP_MIN_WIDTH=210;
 function BrandLockupSVG({width=220}){
   const showTagline=width>=STACKED_LOCKUP_MIN_WIDTH;
   return (
-    <svg viewBox="0 0 760 200" width={width} style={{maxWidth:"100%",height:"auto",display:"block",margin:"0 auto"}} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND.name}>
+    <svg viewBox="0 0 760 172" width={width} style={{maxWidth:"100%",height:"auto",display:"block",margin:"0 auto"}} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND.name}>
       <text x="380" y="105" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="bold" fontSize="70" letterSpacing="9" fill={B.navy}>{BRAND.name.toUpperCase()}</text>
       {showTagline && (
         <>

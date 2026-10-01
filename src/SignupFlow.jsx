@@ -145,7 +145,7 @@ const STACKED_LOCKUP_MIN_WIDTH = 210;
 function StackedLogo({ width = 220 }) {
   const showTagline = width >= STACKED_LOCKUP_MIN_WIDTH;
   return (
-    <svg viewBox="0 0 760 200" width={width} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND_NAME}>
+    <svg viewBox="0 0 760 172" width={width} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND_NAME}>
       <text x="380" y="105" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="bold" fontSize="70" letterSpacing="9" fill={C.navy}>{BRAND_NAME.toUpperCase()}</text>
       {showTagline && (
         <>
