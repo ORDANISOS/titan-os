@@ -125,10 +125,13 @@ function EyebrowLine({ children }) {
 }
 
 // Ordanis_Lockup_Stacked (see the ORDANIS Logo Kit doc): centred wordmark, gold
-// dividing rule, tagline below, per the kit's own spec -- Arial Bold, letter-
-// spacing 5 at font-size 15.5 (the kit's shipped 14 plus the +1.5 bump the team
-// applied on top of it). Built as inline SVG (not an image asset) so it stays
-// crisp at any size and follows BRAND_NAME/BRAND_TAGLINE for white-label tenants.
+// dividing rule, tagline below. Font-size 15.5 is the kit's shipped 14 plus the
+// +1.5 bump the team applied on top of it; letter-spacing 3.35 (not the kit's
+// own 5) is tuned so the tagline's rendered width lands at ~87% of the wordmark's,
+// matching the team's actual reference lockup image rather than the kit's fixed
+// letter-spacing value, which renders noticeably wider relative to the wordmark.
+// Built as inline SVG (not an image asset) so it stays crisp at any size and
+// follows BRAND_NAME/BRAND_TAGLINE for white-label tenants.
 //
 // The kit documents a hard minimum width for this lockup (210px) below which the
 // tagline is dropped entirely rather than shrunk further -- "keeping the wordmark
@@ -149,8 +152,8 @@ function StackedLogo({ width = 220 }) {
           {/* Rule spans the tagline's own rendered width (measured via getComputedTextLength
               at this exact font-family/size/letter-spacing) so it runs from the P to the n,
               not an arbitrary fixed span. */}
-          <line x1="172" y1="133" x2="588" y2="133" stroke={C.gold} strokeWidth="2" />
-          <text x="380" y="160" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="15.5" letterSpacing="5" fill={C.slate} fontWeight="bold">{BRAND_TAGLINE.toUpperCase()}</text>
+          <line x1="195.8" y1="133" x2="564.2" y2="133" stroke={C.gold} strokeWidth="2" />
+          <text x="380" y="160" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="15.5" letterSpacing="3.35" fill={C.slate} fontWeight="bold">{BRAND_TAGLINE.toUpperCase()}</text>
         </>
       )}
     </svg>

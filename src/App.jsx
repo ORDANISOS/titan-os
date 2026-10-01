@@ -1163,12 +1163,15 @@ function BrandImg({src,alt,style}){
 // tenant's own uploaded artwork still renders as-is via BrandImg, since it may
 // be arbitrary graphic artwork, not just text.
 //
-// The kit's tagline spec is Arial Bold, letter-spacing 5 at font-size 15.5 (the
-// kit's shipped 14 plus the +1.5 bump the team applied on top of it), embedded
-// in the same scaled SVG shape as the wordmark -- not sized off an independent
-// formula. The kit also documents a hard minimum lockup width (210px) below
-// which the tagline is dropped entirely rather than shrunk further, so it's
-// hidden below that width here instead of dissolving into an unreadable smudge.
+// Font-size 15.5 is the kit's shipped 14 plus the +1.5 bump the team applied on
+// top of it; letter-spacing 3.35 (not the kit's own 5) is tuned so the tagline's
+// rendered width lands at ~87% of the wordmark's, matching the team's actual
+// reference lockup image rather than the kit's fixed letter-spacing value, which
+// renders noticeably wider relative to the wordmark. Embedded in the same scaled
+// SVG shape as the wordmark, not sized off an independent formula. The kit also
+// documents a hard minimum lockup width (210px) below which the tagline is
+// dropped entirely rather than shrunk further, so it's hidden below that width
+// here instead of dissolving into an unreadable smudge.
 const STACKED_LOCKUP_MIN_WIDTH=210;
 function BrandLockupSVG({width=220}){
   const showTagline=width>=STACKED_LOCKUP_MIN_WIDTH;
@@ -1180,8 +1183,8 @@ function BrandLockupSVG({width=220}){
           {/* Rule spans the tagline's own rendered width (measured via getComputedTextLength
               at this exact font-family/size/letter-spacing) so it runs from the P to the n,
               not an arbitrary fixed span. */}
-          <line x1="172" y1="133" x2="588" y2="133" stroke={B.gold} strokeWidth="2" />
-          <text x="380" y="160" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="15.5" letterSpacing="5" fill="#3F5470" fontWeight="bold">{BRAND.tagline.toUpperCase()}</text>
+          <line x1="195.8" y1="133" x2="564.2" y2="133" stroke={B.gold} strokeWidth="2" />
+          <text x="380" y="160" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="15.5" letterSpacing="3.35" fill="#3F5470" fontWeight="bold">{BRAND.tagline.toUpperCase()}</text>
         </>
       )}
     </svg>
