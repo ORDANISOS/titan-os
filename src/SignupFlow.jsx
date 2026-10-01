@@ -163,7 +163,7 @@ function StackedLogo({ width = 220 }) {
 function Header({ onBack, backLabel }) {
   const isMobile = useIsMobile();
   return (
-    <div style={{ padding: isMobile ? "12px 18px" : "14px 32px", borderBottom: `1px solid ${C.rule}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+    <div style={{ padding: isMobile ? "12px 18px" : "6px 32px", borderBottom: `1px solid ${C.rule}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
       <div style={{ textAlign: "center" }}>
         <StackedLogo width={isMobile ? 150 : 480} />
       </div>
