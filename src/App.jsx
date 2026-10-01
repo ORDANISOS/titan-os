@@ -11487,6 +11487,137 @@ function BrandingView({toast}){
   </div>;
 }
 
+// ── STATE RULE REVIEW ────────────────────────────────────────────────────────
+// The admin screen for the part of state-rule maintenance that needs judgement.
+//
+// The agent proposes; nothing here is fact until a person approves it. The queue
+// arrives already triaged by state_review_queue() — priority 1 needs a person,
+// priority 3 is routine — so the reviewer is not sorting a flat list in their head.
+//
+// Rejecting deliberately leaves the rule UNVERIFIED rather than stale: a failed
+// check is not a verification, and pretending otherwise is how a reference table
+// starts quietly asserting wrong figures with citations attached.
+function StateRulesView({userProfile,toast}){
+  const[summary,setSummary]=useState(null);
+  const[queue,setQueue]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[busyId,setBusyId]=useState(null);
+  const[note,setNote]=useState({});
+
+  const load=useCallback(async()=>{
+    setLoading(true);
+    const[{data:s,error:se},{data:q,error:qe}]=await Promise.all([
+      sb.rpc("state_review_summary"),
+      sb.rpc("state_review_queue"),
+    ]);
+    if(se||qe)toast((se||qe).message,"error");
+    setSummary(s?.[0]||null);
+    setQueue(q||[]);
+    setLoading(false);
+  },[toast]);
+  useEffect(()=>{load();},[load]);
+
+  const decide=async(id,approve)=>{
+    setBusyId(id);
+    const{data,error}=await sb.rpc(approve?"approve_state_rule_proposal":"reject_state_rule_proposal",{
+      p_proposal_id:id,p_reviewer:userProfile?.email||"unknown",p_note:note[id]||null,
+    });
+    setBusyId(null);
+    if(error)toast(error.message,"error"); else toast(data||"Saved");
+    load();
+  };
+
+  const clearRoutine=async()=>{
+    if(!window.confirm("Approve every unchanged, high-confidence proposal?\n\nEach one stamps a verification date on its rule. Spot-check a few first — that is the step that makes the data trustworthy."))return;
+    setBusyId("bulk");
+    const{data,error}=await sb.rpc("approve_routine_state_proposals",{p_reviewer:userProfile?.email||"unknown",p_note:null});
+    setBusyId(null);
+    if(error)toast(error.message,"error");
+    else toast(`Cleared ${data?.[0]?.approved||0}. ${data?.[0]?.skipped||0} still need a person.`);
+    load();
+  };
+
+  const bandFor=(p)=>p===1?{bg:"#fdf0ee",bd:"#b3261e",label:"Needs a person"}
+                 :p===2?{bg:"rgba(206,182,132,0.12)",bd:B.gold,label:"Confirm the change"}
+                       :{bg:B.bg,bd:B.border,label:"Routine"};
+
+  if(loading)return <Spinner/>;
+
+  return <div style={{maxWidth:980}}>
+    <h2 style={{fontSize:22,fontWeight:700,color:B.navy,margin:"0 0 4px",letterSpacing:"-0.01em"}}>State Rule Review</h2>
+    <p style={{fontSize:13,color:B.textSoft,margin:"0 0 16px",maxWidth:680,lineHeight:1.6}}>
+      The agent checks each published fact against its source and proposes what it found.
+      Nothing is treated as verified until you approve it — and rejecting leaves the rule
+      unverified rather than stale.
+    </p>
+    <GoldLine/>
+
+    {summary&&<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:18}}>
+      {[["Waiting",summary.pending],["Need a decision",summary.needs_judgement],
+        ["Routine",summary.routine],["Never verified",summary.rules_unverified]].map(([l,n])=>
+        <div key={l} style={{background:B.bgCard,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"14px 16px",boxShadow:B.shadow}}>
+          <div style={{fontSize:24,fontWeight:700,color:B.navy,lineHeight:1.1}}>{n}</div>
+          <div style={{fontSize:11,color:B.textMute,marginTop:2}}>{l}</div>
+        </div>)}
+    </div>}
+
+    {summary?.routine>0&&<div style={{display:"flex",alignItems:"center",gap:14,marginBottom:18}}>
+      <Btn variant="ghost" small disabled={busyId==="bulk"} onClick={clearRoutine}>
+        {busyId==="bulk"?"Clearing…":`Clear ${summary.routine} routine`}
+      </Btn>
+      <span style={{fontSize:12,color:B.textMute}}>Unchanged and high confidence. Spot-check a few before clearing the rest.</span>
+    </div>}
+
+    {queue.length===0
+      ?<div style={{background:B.bgCard,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"28px 20px",textAlign:"center",boxShadow:B.shadow}}>
+         <div style={{fontSize:15,fontWeight:700,color:B.navy}}>Nothing waiting</div>
+         <Empty text="The queue is clear. The agent runs annually, or whenever you trigger it."/>
+       </div>
+      :queue.map(p=>{
+        const b=bandFor(p.priority);
+        return <div key={p.id} style={{background:b.bg,border:`1px solid ${B.borderLight}`,borderLeft:`3px solid ${b.bd}`,borderRadius:10,padding:"16px 18px",marginBottom:12,boxShadow:B.shadow}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+            <div style={{fontSize:15,fontWeight:700,color:B.navy}}>
+              {p.state_code} · {String(p.topic||"").replace(/_/g," ")}
+              {p.applies_to?<span style={{color:B.textMute,fontWeight:400}}> · {p.applies_to}</span>:null}
+            </div>
+            <Badge scheme={p.priority===1?{bg:"#fde8e8",text:"#8b1a1a",dot:"#b3261e"}
+                          :p.priority===2?{bg:"rgba(206,182,132,0.3)",text:B.navy,dot:B.gold}
+                                         :{bg:B.borderLight,text:B.navyMid,dot:B.navyMid}}>{b.label}</Badge>
+          </div>
+
+          <div style={{fontSize:12.5,color:B.textMid,marginTop:6,lineHeight:1.55}}>{p.attention}</div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginTop:12}}>
+            <div><div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:B.textMute}}>On record</div>
+              <div style={{fontSize:13,color:B.text,fontWeight:600}}>{p.current_value||"—"}</div></div>
+            <div><div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:B.gold}}>Agent proposes</div>
+              <div style={{fontSize:13,color:B.text,fontWeight:600}}>{p.proposed_value||(p.finding==="unchanged"?"no change":"—")}</div></div>
+          </div>
+
+          {p.evidence&&<div style={{fontSize:12.5,fontStyle:"italic",color:B.textSoft,marginTop:10,lineHeight:1.55}}>“{p.evidence}”</div>}
+
+          {p.source_url&&<div style={{marginTop:8}}>
+            <a href={p.source_url} target="_blank" rel="noreferrer" style={{fontSize:12,color:B.navyMid,fontWeight:600}}>Open the source the agent read →</a>
+          </div>}
+
+          <input type="text" placeholder="Note (optional) — what you checked, or why you are rejecting"
+            value={note[p.id]||""} onChange={e=>setNote({...note,[p.id]:e.target.value})}
+            style={{width:"100%",boxSizing:"border-box",marginTop:12,padding:"9px 12px",fontSize:13,
+                    fontFamily:"inherit",color:B.text,border:`1px solid ${B.border}`,borderRadius:8,background:B.white}}/>
+
+          <div style={{display:"flex",gap:10,marginTop:12,alignItems:"center",flexWrap:"wrap"}}>
+            <Btn variant="gold" small disabled={busyId===p.id} onClick={()=>decide(p.id,true)}>
+              {busyId===p.id?"Saving…":"Approve & verify"}
+            </Btn>
+            <Btn variant="ghost" small disabled={busyId===p.id} onClick={()=>decide(p.id,false)}>Reject</Btn>
+            <span style={{fontSize:11.5,color:B.textMute}}>Rejecting leaves the rule unverified — the honest outcome of a failed check.</span>
+          </div>
+        </div>;
+      })}
+  </div>;
+}
+
 const NAV_SECTIONS=[
   {section:"CLIENT MANAGEMENT",items:[
     {id:"dashboard",label:"Dashboard",icon:"⬡"},
@@ -11507,6 +11638,7 @@ const NAV_SECTIONS=[
   {section:"ADMIN",items:[
     {id:"users",label:"Users",icon:"⊕"},
     {id:"signups",label:"Signups",icon:"◈"},
+    {id:"staterules",label:"State Rules",icon:"⚖"},
     // Only surfaced on instances running database-driven branding (the demo /
     // pitch instance); a normal tenant deploy has no use for it.
     ...(BRAND_ADMIN?[{id:"branding",label:"Branding",icon:"◐"}]:[]),
@@ -11814,6 +11946,7 @@ export default function App(){
               open. */}
           {tab==="users"       &&isAdminRole&&<UserManagementView key={navNonce} userProfile={userProfile} data={data} toast={showToast}/>}
           {tab==="signups"     &&isAdminRole&&<SignupsRevenueView key={navNonce} data={data} toast={showToast} userProfile={userProfile} reload={reload}/>}
+          {tab==="staterules"  &&isAdminRole&&<StateRulesView key={navNonce} userProfile={userProfile} toast={showToast}/>}
           {tab==="branding"    &&isAdminRole&&BRAND_ADMIN&&<BrandingView key={navNonce} toast={showToast}/>}
           {tab==="resources"   &&<ResourcesView key={navNonce} data={data} userProfile={userProfile} toast={showToast}/>}
           {tab==="p-contacts"  &&<ProspectContactsView key={navNonce} data={data} reload={reload} toast={showToast} userProfile={userProfile}/>}
