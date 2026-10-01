@@ -8261,9 +8261,6 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
           {file?<><div style={{fontSize:24,marginBottom:6}}>✅</div><div style={{fontSize:13,color:B.navy,fontWeight:600}}>{file.name}</div><div style={{fontSize:11,color:B.textSoft}}>{(file.size/1024/1024).toFixed(2)} MB</div></>:<><div style={{fontSize:32,marginBottom:6}}>📁</div><div style={{fontSize:13,color:B.textSoft}}>Click to select a file</div><div style={{fontSize:11,color:B.textMute,marginTop:4}}>PDF, Word, Excel, images supported</div></>}
         </div>
       </Field>
-      <div style={{background:"#e8f0f8",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12,color:B.navyMid}}>
-        ⚠️ First create a Storage bucket named <strong>documents</strong> in Supabase → Storage → New Bucket (Private)
-      </div>
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
         <Btn variant="ghost" onClick={()=>setModal(null)}>Cancel</Btn>
         <Btn onClick={upload} disabled={uploading||!file||!name.trim()}>{uploading?(uploadPhase||"Uploading…"):"Upload"}</Btn>
