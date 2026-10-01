@@ -7621,12 +7621,45 @@ function VaultSearchResults({hits,searching,query,onDownload,onClear}){
   </div>;
 }
 
+// Reads the first part of a document and suggests which folder it belongs in.
+//
+// SUGGESTS. The caller pre-selects it and the person can change it before saving.
+// Filing automatically would be worse than filing nothing: a document in the wrong
+// folder is invisible in the same way a lost one is, except nobody knows to look.
+//
+// Only the opening is sent — a filing decision is made on the first page of a
+// document, and sending forty pages of a trust costs more and decides no better.
+async function suggestFolder(text,fileName,folders){
+  const{data,error}=await sb.functions.invoke("suggest-document-folder",{
+    body:{text:String(text).slice(0,4000),fileName:fileName||"",folders},
+  });
+  if(error||!data)return null;
+  // An existing folder, checked against the list rather than trusted.
+  if(data.folder)
+    return folders.includes(data.folder)
+      ?{folder:data.folder,newFolder:null,why:data.why||"",confidence:data.confidence||"low"}
+      :null;
+  // A proposed NEW folder. Validated against the same rules the Add-folder form
+  // uses, so a suggestion can never create something the form itself would reject.
+  if(data.newFolder){
+    const v=validateFolderName(data.newFolder,folders);
+    if(!v.ok)return null;
+    return{folder:null,newFolder:v.name,why:data.why||"",confidence:data.confidence||"low"};
+  }
+  return null;
+}
+
 function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canEditMetadata,toast,reload,attachIntent,onAttachHandled}){
   // Backward compat: if readOnly passed, default canUpload=false canDelete=false
   // If canUpload/canDelete passed explicitly, use those
   const allowUpload=canUpload!==undefined?canUpload:!readOnly;
   const allowDelete=canDelete!==undefined?canDelete:!readOnly;
-  const allowScan=canScan!==undefined?canScan:allowUpload; // scanning is advisor-side only
+  const allowScan=canScan!==undefined?canScan:allowUpload; // the manual scan buttons stay advisor-side
+  // Extraction at upload is NOT the same permission. A client uploading into their
+  // own vault must get their document read, or Vault search cannot find it later —
+  // and search is most valuable to exactly the self-serve households that have no
+  // advisor to press a scan button for them.
+  const scanOnUpload=true;
   const allowEditMeta=canEditMetadata!==undefined?canEditMetadata:allowUpload; // renaming/re-categorizing docs; partner gets upload but not this
   const[docs,setDocs]=useState([]);
   const[downloads,setDownloads]=useState([]); // document_downloads log rows, newest first
@@ -7706,6 +7739,10 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
   const[category,setCategory]=useState("General");
   const[file,setFile]=useState(null);
   const[uploadPhase,setUploadPhase]=useState("");
+  // What the read suggested, and why. Held separately from `category` so the
+  // person's own choice always wins and is never silently overwritten.
+  const[suggestion,setSuggestion]=useState(null); // {folder, newFolder, why, confidence}
+  const[creatingSuggested,setCreatingSuggested]=useState(false);
   // Optional link to a property section / valuables schedule.
   const[linkPropertyId,setLinkPropertyId]=useState("");
   const[linkSection,setLinkSection]=useState("");
@@ -7781,7 +7818,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
       // Non-fatal: if extraction fails, the document still uploads.
       let extractedText=null;
       const mt=file.type==="image/jpg"?"image/jpeg":file.type;
-      if(allowScan&&mt==="application/pdf"){
+      if(scanOnUpload&&mt==="application/pdf"){
         // Fast, unlimited browser text extraction first; batched vision scan
         // only for scanned PDFs that have no embedded text.
         try{
@@ -7797,7 +7834,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
             if(r&&r.text)extractedText=r.text;
           }catch(_e){}
         }
-      } else if(allowScan&&["image/png","image/jpeg","image/webp"].includes(mt)){
+      } else if(scanOnUpload&&["image/png","image/jpeg","image/webp"].includes(mt)){
         try{
           setUploadPhase("Scanning for AI assistant…");
           const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(",")[1]);r.onerror=()=>rej(new Error("read failed"));r.readAsDataURL(file);});
@@ -7805,6 +7842,16 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
           if(!exErr&&exResp&&exResp.text)extractedText=exResp.text;
         }catch(_e){}
       }
+      // What did we just read? Ask once, cheaply, and only to SUGGEST.
+      if(extractedText&&extractedText.length>80){
+        try{
+          setUploadPhase("Working out where this belongs…");
+          const sug=await suggestFolder(extractedText,name,
+            [...DOC_CATEGORIES,...customFolders.map(f=>f.name)]);
+          if(sug&&sug.folder)setSuggestion(sug);
+        }catch(_e){/* a failed suggestion must never block an upload */}
+      }
+
       // Save record
       setUploadPhase("Saving…");
       // Displacing an existing section document: unlink it rather than delete it.
@@ -8161,7 +8208,36 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
 
     {modal==="upload"&&<Modal title="Upload Document" onClose={()=>{setModal(null);resetForm();}}>
       <Field label="Document Name"><Inp placeholder="Q4 2024 Statement" value={name} onChange={e=>setName(e.target.value)}/></Field>
-      <Field label="Category"><Sel value={category} onChange={e=>setCategory(e.target.value)}>{[...DOC_CATEGORIES,...customFolders.map(f=>f.name)].map(c=><option key={c}>{c}</option>)}</Sel></Field>
+      <Field label="Category"><Sel value={category} onChange={e=>{setCategory(e.target.value);setSuggestion(null);}}>{[...DOC_CATEGORIES,...customFolders.map(f=>f.name)].map(c=><option key={c}>{c}</option>)}</Sel></Field>
+      {suggestion&&(suggestion.newFolder||suggestion.folder!==category)&&
+        <div style={{margin:"-6px 0 12px",padding:"10px 12px",background:"rgba(206,182,132,0.12)",
+          borderLeft:`2px solid ${B.gold}`,borderRadius:6,fontSize:12.5,color:B.textMid,lineHeight:1.5}}>
+          {suggestion.newFolder?<>
+            <strong style={{color:B.navy}}>Nothing here fits this. A “{suggestion.newFolder}” folder would.</strong>
+            {suggestion.why?` ${suggestion.why}`:""}
+            <button disabled={creatingSuggested} onClick={async()=>{
+                setCreatingSuggested(true);
+                const{error}=await sb.from("document_folders").insert({family_id:familyId,name:suggestion.newFolder});
+                setCreatingSuggested(false);
+                if(error&&!/duplicate key/i.test(error.message)){toast(error.message,"error");return;}
+                await loadFolders();
+                setCategory(suggestion.newFolder);
+                setSuggestion(null);
+                toast(`Created “${suggestion.newFolder}”`);
+              }}
+              style={{marginLeft:8,background:"none",border:"none",color:B.navyMid,
+                cursor:creatingSuggested?"default":"pointer",fontSize:12.5,fontFamily:"inherit",
+                fontWeight:700,padding:0,textDecoration:"underline"}}>
+              {creatingSuggested?"Creating…":"Create it and file this here"}</button>
+          </>:<>
+            <strong style={{color:B.navy}}>Reading it, this looks like {suggestion.folder}.</strong>
+            {suggestion.why?` ${suggestion.why}`:""}
+            <button onClick={()=>{setCategory(suggestion.folder);setSuggestion(null);}}
+              style={{marginLeft:8,background:"none",border:"none",color:B.navyMid,cursor:"pointer",
+                fontSize:12.5,fontFamily:"inherit",fontWeight:700,padding:0,textDecoration:"underline"}}>
+              File it there</button>
+          </>}
+        </div>}
       <Field label="Description"><Inp placeholder="Optional description" value={description} onChange={e=>setDescription(e.target.value)}/></Field>
       {linkFields()}
       <Field label="File">
@@ -8181,7 +8257,36 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
 
     {modal&&modal.edit&&<Modal title="Edit Document" onClose={()=>{setModal(null);resetForm();}}>
       <Field label="Document Name"><Inp placeholder="Q4 2024 Statement" value={name} onChange={e=>setName(e.target.value)}/></Field>
-      <Field label="Category"><Sel value={category} onChange={e=>setCategory(e.target.value)}>{[...DOC_CATEGORIES,...customFolders.map(f=>f.name)].map(c=><option key={c}>{c}</option>)}</Sel></Field>
+      <Field label="Category"><Sel value={category} onChange={e=>{setCategory(e.target.value);setSuggestion(null);}}>{[...DOC_CATEGORIES,...customFolders.map(f=>f.name)].map(c=><option key={c}>{c}</option>)}</Sel></Field>
+      {suggestion&&(suggestion.newFolder||suggestion.folder!==category)&&
+        <div style={{margin:"-6px 0 12px",padding:"10px 12px",background:"rgba(206,182,132,0.12)",
+          borderLeft:`2px solid ${B.gold}`,borderRadius:6,fontSize:12.5,color:B.textMid,lineHeight:1.5}}>
+          {suggestion.newFolder?<>
+            <strong style={{color:B.navy}}>Nothing here fits this. A “{suggestion.newFolder}” folder would.</strong>
+            {suggestion.why?` ${suggestion.why}`:""}
+            <button disabled={creatingSuggested} onClick={async()=>{
+                setCreatingSuggested(true);
+                const{error}=await sb.from("document_folders").insert({family_id:familyId,name:suggestion.newFolder});
+                setCreatingSuggested(false);
+                if(error&&!/duplicate key/i.test(error.message)){toast(error.message,"error");return;}
+                await loadFolders();
+                setCategory(suggestion.newFolder);
+                setSuggestion(null);
+                toast(`Created “${suggestion.newFolder}”`);
+              }}
+              style={{marginLeft:8,background:"none",border:"none",color:B.navyMid,
+                cursor:creatingSuggested?"default":"pointer",fontSize:12.5,fontFamily:"inherit",
+                fontWeight:700,padding:0,textDecoration:"underline"}}>
+              {creatingSuggested?"Creating…":"Create it and file this here"}</button>
+          </>:<>
+            <strong style={{color:B.navy}}>Reading it, this looks like {suggestion.folder}.</strong>
+            {suggestion.why?` ${suggestion.why}`:""}
+            <button onClick={()=>{setCategory(suggestion.folder);setSuggestion(null);}}
+              style={{marginLeft:8,background:"none",border:"none",color:B.navyMid,cursor:"pointer",
+                fontSize:12.5,fontFamily:"inherit",fontWeight:700,padding:0,textDecoration:"underline"}}>
+              File it there</button>
+          </>}
+        </div>}
       <Field label="Description"><Inp placeholder="Optional description" value={description} onChange={e=>setDescription(e.target.value)}/></Field>
       {linkFields(modal.edit.id)}
       <div style={{fontSize:11,color:B.textMute,marginBottom:14}}>Renaming changes the display title only; the stored file itself is unchanged.</div>
