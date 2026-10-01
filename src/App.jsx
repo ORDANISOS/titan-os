@@ -7758,6 +7758,15 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
   // person's own choice always wins and is never silently overwritten.
   const[suggestion,setSuggestion]=useState(null); // {folder, newFolder, why, confidence}
   const[creatingSuggested,setCreatingSuggested]=useState(false);
+  // Text pulled from the file as soon as it's picked, and whether that read is
+  // still in flight. This used to run only inside upload() -- after the file
+  // was already in storage -- so the suggestion was computed and the document
+  // saved under whatever category was already selected in the same breath,
+  // with the modal closing before anyone could see or act on it. Reading the
+  // file at selection time instead gives the suggestion a chance to actually
+  // show up and be reviewed before Upload is ever clickable.
+  const[extractedText,setExtractedText]=useState(null);
+  const[extracting,setExtracting]=useState(false);
   // Optional link to a property section / valuables schedule.
   const[linkPropertyId,setLinkPropertyId]=useState("");
   const[linkSection,setLinkSection]=useState("");
@@ -7814,12 +7823,66 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
   const resetForm=()=>{
     setName("");setDescription("");setCategory("General");setFile(null);
     setLinkPropertyId("");setLinkSection("");setConflictDoc(null);
+    setSuggestion(null);setExtractedText(null);setExtracting(false);setCreatingSuggested(false);
   };
   // Most recent download of a given document, if any (downloads is pre-sorted newest first).
   const lastDownloadFor=docId=>downloads.find(d=>d.documentId===docId)||null;
 
+  // Reads a newly-picked file and asks where it belongs, before a single byte
+  // has been uploaded. Non-fatal at every step: a failed read or a failed
+  // suggestion must never block picking the file or uploading it plain.
+  const pickFile=async f=>{
+    setFile(f||null);
+    setSuggestion(null);setExtractedText(null);
+    if(!f||!scanOnUpload)return;
+    const mt=f.type==="image/jpg"?"image/jpeg":f.type;
+    const supported=mt==="application/pdf"||["image/png","image/jpeg","image/webp"].includes(mt);
+    if(!supported)return; // Word/Excel/etc. still upload fine, just without a suggestion
+    setExtracting(true);
+    let text=null;
+    try{
+      if(mt==="application/pdf"){
+        // Fast, unlimited browser text extraction first; batched vision scan
+        // only for scanned PDFs that have no embedded text.
+        try{
+          setUploadPhase("Reading document…");
+          const buf=await f.arrayBuffer();
+          const t=await extractPdfText(buf);
+          if(t&&t.length>=20)text=t;
+        }catch(_e){/* fall through to vision */}
+        if(!text){
+          try{
+            const buf2=await f.arrayBuffer();
+            const r=await extractScannedPdfText(buf2,(p,tot)=>setUploadPhase(`Scanning page ${p} of ${tot}…`));
+            if(r&&r.text)text=r.text;
+          }catch(_e){}
+        }
+      } else {
+        try{
+          setUploadPhase("Scanning for AI assistant…");
+          const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(",")[1]);r.onerror=()=>rej(new Error("read failed"));r.readAsDataURL(f);});
+          const{data:exResp,error:exErr}=await sb.functions.invoke("extract-document-text",{body:{fileBase64:b64,mediaType:mt}});
+          if(!exErr&&exResp&&exResp.text)text=exResp.text;
+        }catch(_e){}
+      }
+      setExtractedText(text);
+      // What did we just read? Ask once, cheaply, and only to SUGGEST.
+      if(text&&text.length>80){
+        try{
+          setUploadPhase("Working out where this belongs…");
+          const sug=await suggestFolder(text,name||f.name,
+            [...DOC_CATEGORIES,...customFolders.map(x=>x.name)]);
+          if(sug&&(sug.folder||sug.newFolder))setSuggestion(sug);
+        }catch(_e){/* a failed suggestion must never block an upload */}
+      }
+    } finally {
+      setUploadPhase("");
+      setExtracting(false);
+    }
+  };
+
   const upload=async()=>{
-    if(!file||!name.trim())return;
+    if(!file||!name.trim()||extracting)return;
     setUploading(true);
     try{
       // Upload file to Supabase storage
@@ -7828,44 +7891,9 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
       setUploadPhase("Uploading…");
       const{error:uploadError}=await sb.storage.from("documents").upload(path,file,{upsert:false});
       if(uploadError)throw new Error(uploadError.message);
-      // Extract text so the family's AI assistant can answer from this document's
-      // contents. PDFs and images only; other types are stored without text.
-      // Non-fatal: if extraction fails, the document still uploads.
-      let extractedText=null;
-      const mt=file.type==="image/jpg"?"image/jpeg":file.type;
-      if(scanOnUpload&&mt==="application/pdf"){
-        // Fast, unlimited browser text extraction first; batched vision scan
-        // only for scanned PDFs that have no embedded text.
-        try{
-          setUploadPhase("Reading document…");
-          const buf=await file.arrayBuffer();
-          const t=await extractPdfText(buf);
-          if(t&&t.length>=20)extractedText=t;
-        }catch(_e){/* fall through to vision */}
-        if(!extractedText){
-          try{
-            const buf2=await file.arrayBuffer();
-            const r=await extractScannedPdfText(buf2,(p,tot)=>setUploadPhase(`Scanning page ${p} of ${tot}…`));
-            if(r&&r.text)extractedText=r.text;
-          }catch(_e){}
-        }
-      } else if(scanOnUpload&&["image/png","image/jpeg","image/webp"].includes(mt)){
-        try{
-          setUploadPhase("Scanning for AI assistant…");
-          const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(",")[1]);r.onerror=()=>rej(new Error("read failed"));r.readAsDataURL(file);});
-          const{data:exResp,error:exErr}=await sb.functions.invoke("extract-document-text",{body:{fileBase64:b64,mediaType:mt}});
-          if(!exErr&&exResp&&exResp.text)extractedText=exResp.text;
-        }catch(_e){}
-      }
-      // What did we just read? Ask once, cheaply, and only to SUGGEST.
-      if(extractedText&&extractedText.length>80){
-        try{
-          setUploadPhase("Working out where this belongs…");
-          const sug=await suggestFolder(extractedText,name,
-            [...DOC_CATEGORIES,...customFolders.map(f=>f.name)]);
-          if(sug&&sug.folder)setSuggestion(sug);
-        }catch(_e){/* a failed suggestion must never block an upload */}
-      }
+      // Text was already pulled when the file was picked, above in pickFile --
+      // that's also what gave the suggestion banner a chance to show before
+      // this ever ran.
 
       // Save record
       setUploadPhase("Saving…");
@@ -7923,7 +7951,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     if(reload)reload("documents");
   };
 
-  const openEdit=doc=>{setName(doc.name||"");setDescription(doc.description||"");setCategory(doc.category||"General");setLinkSection(doc.propertySection||"");setLinkPropertyId(doc.propertyId||"");setConflictDoc(null);setModal({edit:doc});};
+  const openEdit=doc=>{setName(doc.name||"");setDescription(doc.description||"");setCategory(doc.category||"General");setLinkSection(doc.propertySection||"");setLinkPropertyId(doc.propertyId||"");setConflictDoc(null);setSuggestion(null);setExtractedText(null);setModal({edit:doc});};
   const saveEdit=async()=>{
     const doc=modal?.edit;if(!doc||!name.trim())return;
     setUploading(true);
@@ -8257,13 +8285,13 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
       {linkFields()}
       <Field label="File">
         <div style={{border:`2px dashed ${file?B.gold:B.border}`,borderRadius:10,padding:"20px",textAlign:"center",cursor:"pointer",background:file?"#fef9f0":B.bg,transition:"all .2s"}} onClick={()=>document.getElementById("file-upload").click()}>
-          <input id="file-upload" type="file" style={{display:"none"}} onChange={e=>setFile(e.target.files[0])}/>
-          {file?<><div style={{fontSize:24,marginBottom:6}}>✅</div><div style={{fontSize:13,color:B.navy,fontWeight:600}}>{file.name}</div><div style={{fontSize:11,color:B.textSoft}}>{(file.size/1024/1024).toFixed(2)} MB</div></>:<><div style={{fontSize:32,marginBottom:6}}>📁</div><div style={{fontSize:13,color:B.textSoft}}>Click to select a file</div><div style={{fontSize:11,color:B.textMute,marginTop:4}}>PDF, Word, Excel, images supported</div></>}
+          <input id="file-upload" type="file" style={{display:"none"}} onChange={e=>pickFile(e.target.files[0])}/>
+          {file?<><div style={{fontSize:24,marginBottom:6}}>✅</div><div style={{fontSize:13,color:B.navy,fontWeight:600}}>{file.name}</div><div style={{fontSize:11,color:B.textSoft}}>{(file.size/1024/1024).toFixed(2)} MB</div>{extracting&&<div style={{fontSize:11,color:B.gold,fontWeight:600,marginTop:6}}>{uploadPhase||"Reading document…"}</div>}</>:<><div style={{fontSize:32,marginBottom:6}}>📁</div><div style={{fontSize:13,color:B.textSoft}}>Click to select a file</div><div style={{fontSize:11,color:B.textMute,marginTop:4}}>PDF, Word, Excel, images supported</div></>}
         </div>
       </Field>
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
         <Btn variant="ghost" onClick={()=>setModal(null)}>Cancel</Btn>
-        <Btn onClick={upload} disabled={uploading||!file||!name.trim()}>{uploading?(uploadPhase||"Uploading…"):"Upload"}</Btn>
+        <Btn onClick={upload} disabled={uploading||extracting||!file||!name.trim()}>{uploading?(uploadPhase||"Uploading…"):extracting?"Reading…":"Upload"}</Btn>
       </div>
     </Modal>}
 
