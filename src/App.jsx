@@ -7559,6 +7559,68 @@ async function extractScannedPdfText(arrayBuffer,onProgress){
   return { text:combined.trim(), pagesScanned:total, totalPages:pdf.numPages, truncated };
 }
 
+// ── VAULT SEARCH RESULTS ─────────────────────────────────────────────────────
+// Each row has to answer three questions the folder tree cannot: what is this,
+// where does it live, and is it the current one.
+//
+// That last question is the dangerous one. A superseded policy keeps a nearly
+// identical name to the one that replaced it, and downloading last year's cover
+// and acting on it is a worse outcome than not finding anything at all. So a
+// replaced document is marked plainly rather than left to look current.
+function VaultSearchResults({hits,searching,query,onDownload,onClear}){
+  const fmtSize=b=>!b?"":b>1048576?`${(b/1048576).toFixed(1)} MB`:`${Math.max(1,Math.round(b/1024))} KB`;
+  // The snippet arrives with « » around the match so it can be emphasised without
+  // putting raw HTML from a document into the DOM.
+  const renderSnippet=(t)=>{
+    if(!t)return null;
+    return t.split(/(«[^»]*»)/g).map((part,i)=>
+      part.startsWith("«")&&part.endsWith("»")
+        ? <mark key={i} style={{background:"rgba(206,182,132,0.45)",color:B.navy,padding:"0 2px",borderRadius:2}}>{part.slice(1,-1)}</mark>
+        : <span key={i}>{part}</span>);
+  };
+  if(searching&&!hits.length)return <div style={{padding:"28px 0"}}><Spinner/></div>;
+  if(!hits.length)return <div style={{background:B.bgCard,border:`1px solid ${B.borderLight}`,borderRadius:10,
+      padding:"28px 20px",textAlign:"center",boxShadow:B.shadow}}>
+      <div style={{fontSize:15,fontWeight:700,color:B.navy}}>Nothing matched “{query}”</div>
+      <div style={{fontSize:12.5,color:B.textMute,marginTop:6,maxWidth:460,marginLeft:"auto",marginRight:"auto",lineHeight:1.6}}>
+        Searching looks at file names, your notes, and the text inside documents that have been
+        scanned. A document that has never been scanned can only be found by its name.
+      </div>
+      <div style={{marginTop:14}}><Btn variant="ghost" small onClick={onClear}>Back to folders</Btn></div>
+    </div>;
+  return <div>
+    <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:12,marginBottom:12,flexWrap:"wrap"}}>
+      <div style={{fontSize:13,color:B.textSoft}}>
+        {hits.length} match{hits.length===1?"":"es"} for “{query}”{searching?" · updating…":""}
+      </div>
+      <button onClick={onClear} style={{background:"none",border:"none",color:B.navyMid,cursor:"pointer",
+        fontSize:12.5,fontFamily:"inherit",fontWeight:600,padding:0}}>Back to folders</button>
+    </div>
+    {hits.map(h=>
+      <div key={h.id} style={{background:B.bgCard,border:`1px solid ${B.borderLight}`,borderRadius:10,
+        padding:"14px 16px",marginBottom:10,boxShadow:B.shadow,opacity:h.superseded?0.72:1}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{fontSize:14.5,fontWeight:700,color:B.navy,wordBreak:"break-word"}}>
+              {h.name}
+              {h.superseded&&<span style={{marginLeft:8,fontSize:10.5,fontWeight:700,letterSpacing:"0.08em",
+                textTransform:"uppercase",color:"#8a5c00",background:"#fef3e2",padding:"2px 7px",borderRadius:4}}>
+                Replaced — kept for reference</span>}
+            </div>
+            <div style={{fontSize:12,color:B.textMute,marginTop:3}}>
+              {h.located_in}{h.file_size?` · ${fmtSize(h.file_size)}`:""}
+              {h.expiry_date?` · expires ${new Date(h.expiry_date).toLocaleDateString("en-US",{day:"numeric",month:"short",year:"numeric"})}`:""}
+            </div>
+          </div>
+          <Btn small onClick={()=>onDownload({filePath:h.file_path,name:h.name})}>Download</Btn>
+        </div>
+        <div style={{fontSize:11.5,color:B.gold,fontWeight:600,marginTop:8}}>Found in {h.matched_on}</div>
+        {h.snippet&&<div style={{fontSize:12.5,color:B.textMid,marginTop:5,lineHeight:1.55,
+          borderLeft:`2px solid ${B.borderLight}`,paddingLeft:10}}>…{renderSnippet(h.snippet)}…</div>}
+      </div>)}
+  </div>;
+}
+
 function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canEditMetadata,toast,reload,attachIntent,onAttachHandled}){
   // Backward compat: if readOnly passed, default canUpload=false canDelete=false
   // If canUpload/canDelete passed explicitly, use those
@@ -7572,6 +7634,27 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
   const[uploading,setUploading]=useState(false);
   const[modal,setModal]=useState(null);
   const[openFolder,setOpenFolder]=useState(null); // null = folder list; else a folder name
+  // Search. A household that cannot remember which folder something went in cannot
+  // navigate to it, so this looks inside the documents too — and every hit explains
+  // where it lives and why it matched, because a list that does not say leaves the
+  // person exactly as lost as before.
+  const[vaultQuery,setVaultQuery]=useState("");
+  const[vaultHits,setVaultHits]=useState(null); // null = not searching
+  const[searching,setSearching]=useState(false);
+  useEffect(()=>{
+    const q=vaultQuery.trim();
+    if(q.length<2){setVaultHits(null);setSearching(false);return;}
+    let cancelled=false;
+    setSearching(true);
+    const t=setTimeout(async()=>{
+      const{data,error}=await sb.rpc("vault_search",{p_family_id:familyId,p_query:q,p_limit:60});
+      if(cancelled)return;
+      setSearching(false);
+      if(error){toast(error.message,"error");setVaultHits([]);return;}
+      setVaultHits(data||[]);
+    },280);
+    return()=>{cancelled=true;clearTimeout(t);};
+  },[vaultQuery,familyId,toast]);
   // Folders this household has added, beyond the built-in eight. Per household by design,
   // so one client's taxonomy never shows up on another's Vault.
   const[customFolders,setCustomFolders]=useState([]);
@@ -7942,7 +8025,18 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
       {allowScan&&unscannedCount>0&&<Btn variant="ghost" onClick={scanAllUnscanned} disabled={!!bulkScan} title="Extract text from existing documents so the AI assistant can read them">{bulkScan?`Scanning ${bulkScan.done}/${bulkScan.total}${scanMsg?" · "+scanMsg:""}…`:`✦ Scan ${unscannedCount} for AI`}</Btn>}
     </div>
     <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
-      {loading?<Spinner/>:openFolder===null?
+      <div style={{position:"relative",marginBottom:16}}>
+        <input type="text" value={vaultQuery} onChange={e=>setVaultQuery(e.target.value)}
+          placeholder="Search the vault — a word from the document, a name, anything you remember"
+          style={{width:"100%",boxSizing:"border-box",padding:"11px 36px 11px 14px",fontSize:13.5,
+            fontFamily:"inherit",color:B.text,border:`1px solid ${B.border}`,borderRadius:8,background:B.white}}/>
+        {vaultQuery&&<button onClick={()=>setVaultQuery("")} aria-label="Clear search"
+          style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",
+            border:"none",color:B.textMute,cursor:"pointer",fontSize:16,lineHeight:1}}>×</button>}
+      </div>
+      {vaultHits!==null?<VaultSearchResults hits={vaultHits} searching={searching} query={vaultQuery}
+        onDownload={download} onClear={()=>setVaultQuery("")}/>:
+      loading?<Spinner/>:openFolder===null?
       /* Folder rows, not a card grid.
          The grid gave an empty folder the same visual weight as one holding twelve
          documents, stranded the eighth card alone on a second row, and used stock 3D
