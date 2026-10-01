@@ -749,7 +749,12 @@ const roleLabel=r=>ROLE_LABELS[(r||"").toLowerCase()]||r;
 function Badge({children,scheme,onClick}){
   const s=scheme||{bg:B.borderLight,text:B.navyMid,dot:B.navyMid};
   const Tag=onClick?"button":"span";
-  return <Tag onClick={onClick} style={{display:"inline-flex",alignItems:"center",gap:5,background:s.bg,color:s.text,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,letterSpacing:"0.04em",whiteSpace:"nowrap",fontFamily:"inherit",border:"none",...(onClick?{cursor:"pointer"}:{})}}><span style={{width:6,height:6,borderRadius:"50%",background:s.dot,flexShrink:0}}/>{children}</Tag>;
+  // Being a <button> makes these keyboard/screen-reader operable, but a pill
+  // that only changes its cursor on hover doesn't read as "tappable" at a
+  // glance -- especially on touch, where hover never happens. An underline
+  // on the label plus a trailing chevron gives it a visible link-like
+  // affordance so it doesn't look identical to the plain, inert badges.
+  return <Tag onClick={onClick} style={{display:"inline-flex",alignItems:"center",gap:5,background:s.bg,color:s.text,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,letterSpacing:"0.04em",whiteSpace:"nowrap",fontFamily:"inherit",border:"none",...(onClick?{cursor:"pointer"}:{})}}><span style={{width:6,height:6,borderRadius:"50%",background:s.dot,flexShrink:0}}/><span style={onClick?{textDecoration:"underline",textUnderlineOffset:"2px"}:undefined}>{children}</span>{onClick&&<span aria-hidden="true" style={{fontSize:9,marginLeft:-2}}>{"\u203A"}</span>}</Tag>;
 }
 function GoldLine(){return <div style={{height:1,background:`linear-gradient(90deg,transparent,${B.gold},transparent)`,margin:"0 0 16px"}}/>;}
 function Spinner({size=34}){return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",flexDirection:"column",gap:14}}><div style={{width:size,height:size,border:`3px solid ${B.borderLight}`,borderTop:`3px solid ${B.gold}`,borderRadius:"50%",animation:"pcmspin 0.8s linear infinite"}}/><style>{`@keyframes pcmspin{to{transform:rotate(360deg)}}`}</style></div>;}
