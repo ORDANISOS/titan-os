@@ -145,7 +145,7 @@ const STACKED_LOCKUP_MIN_WIDTH = 210;
 function StackedLogo({ width = 220 }) {
   const showTagline = width >= STACKED_LOCKUP_MIN_WIDTH;
   return (
-    <svg viewBox="0 0 760 172" width={width} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND_NAME}>
+    <svg viewBox="0 0 760 172" width={width} style={{ display: "block", margin: "0 auto" }} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND_NAME}>
       <text x="380" y="105" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="bold" fontSize="70" letterSpacing="9" fill={C.navy}>{BRAND_NAME.toUpperCase()}</text>
       {showTagline && (
         <>
@@ -163,7 +163,7 @@ function StackedLogo({ width = 220 }) {
 function Header({ onBack, backLabel }) {
   const isMobile = useIsMobile();
   return (
-    <div style={{ padding: isMobile ? "12px 18px" : "6px 32px", borderBottom: `1px solid ${C.rule}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+    <div style={{ padding: isMobile ? "12px 18px" : "4px 32px", borderBottom: `1px solid ${C.rule}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
       <div style={{ textAlign: "center" }}>
         <StackedLogo width={isMobile ? 150 : 480} />
       </div>
