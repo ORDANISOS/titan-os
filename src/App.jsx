@@ -1210,7 +1210,10 @@ function PCMLogo({dark=false,compact=false}){
   const content=(w)=>usingDefaultLogo?<BrandLockupSVG width={w}/>:<BrandImg src={BRAND.logo} alt={BRAND.name} style={rasterStyle}/>;
   if(dark)return <div style={{background:"rgba(255,255,255,0.97)",borderRadius:8,padding:"8px 14px",display:"inline-block"}}>{content(190)}</div>;
   if(compact)return content(190);
-  return content(320);
+  // 480 matches the signup page's desktop header lockup exactly (same viewBox,
+  // same proportions) -- the login screen's card is widened below to fit it
+  // without CSS capping it back down.
+  return content(480);
 }
 
 // ── LOGIN INTRO (tumbling cubes) ────────────────────────────────────────────
@@ -1415,7 +1418,7 @@ function LoginScreen(){
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
       <div style={{position:"fixed",inset:0,backgroundImage:`radial-gradient(circle at 20% 80%,rgba(206,182,132,0.16) 0%,transparent 50%)`,pointerEvents:"none"}}/>
       {introPhase==="playing"&&<canvas ref={canvasRef} style={{position:"fixed",inset:0,zIndex:5,pointerEvents:"none"}}/>}
-      <div style={{background:B.white,borderRadius:20,padding:"32px 24px",width:"100%",maxWidth:420,boxShadow:B.shadowMd,border:`1px solid ${B.borderLight}`,borderTop:`3px solid ${B.gold}`,position:"relative",zIndex:1,margin:"0 16px"}}>
+      <div style={{background:B.white,borderRadius:20,padding:"32px 24px",width:"100%",maxWidth:528,boxShadow:B.shadowMd,border:`1px solid ${B.borderLight}`,borderTop:`3px solid ${B.gold}`,position:"relative",zIndex:1,margin:"0 16px"}}>
         <div style={{textAlign:"center",marginBottom:introDone?32:0}}>
           <div ref={logoSlotRef} style={{position:"relative",height:110,display:"flex",justifyContent:"center",alignItems:"center",marginBottom:introDone?20:0}}>
             <div style={{opacity:logoVisible?1:0,transition:"opacity .7s ease"}}><PCMLogo/></div>
