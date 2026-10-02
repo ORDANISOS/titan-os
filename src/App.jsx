@@ -1185,10 +1185,20 @@ function BrandImg({src,alt,style}){
 // dropped entirely rather than shrunk further, so it's hidden below that width
 // here instead of dissolving into an unreadable smudge.
 const STACKED_LOCKUP_MIN_WIDTH=210;
-function BrandLockupSVG({width=220}){
+function BrandLockupSVG({width=220,compact=false}){
   const showTagline=width>=STACKED_LOCKUP_MIN_WIDTH;
+  // Compact contexts (the sidebar, the partner header bar) render this lockup
+  // capped to a narrow width, which shrinks a proportionally-sized tagline
+  // past legibility. Give compact its own larger, non-proportional tagline
+  // size instead, generically wrapped across two lines by word count so this
+  // isn't hardcoded to one tenant's exact tagline string.
+  const taglineWords=BRAND.tagline.trim().split(/\s+/);
+  const taglineLines=compact&&taglineWords.length>2
+    ?[taglineWords.slice(0,Math.ceil(taglineWords.length/2)).join(" "),taglineWords.slice(Math.ceil(taglineWords.length/2)).join(" ")]
+    :[BRAND.tagline];
+  const viewBoxH=compact?(taglineLines.length>1?210:185):172;
   return (
-    <svg viewBox="0 0 760 172" width={width} style={{maxWidth:"100%",height:"auto",display:"block",margin:"0 auto"}} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND.name}>
+    <svg viewBox={`0 0 760 ${viewBoxH}`} width={width} style={{maxWidth:"100%",height:"auto",display:"block",margin:"0 auto"}} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND.name}>
       <text x="380" y="105" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="bold" fontSize="70" letterSpacing="9" fill={B.navy}>{BRAND.name.toUpperCase()}</text>
       {showTagline && (
         <>
@@ -1196,7 +1206,11 @@ function BrandLockupSVG({width=220}){
               at this exact font-family/size/letter-spacing) so it runs from the P to the n,
               not an arbitrary fixed span. */}
           <line x1="195.8" y1="133" x2="564.2" y2="133" stroke={B.gold} strokeWidth="2" />
-          <text x="380" y="160" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="15.5" letterSpacing="3.35" fill="#3F5470" fontWeight="bold">{BRAND.tagline.toUpperCase()}</text>
+          {compact
+            ?taglineLines.map((line,i)=>(
+              <text key={i} x="380" y={172+i*28} textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="34" letterSpacing="2" fill="#3F5470" fontWeight="bold">{line.toUpperCase()}</text>
+            ))
+            :<text x="380" y="160" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="15.5" letterSpacing="3.35" fill="#3F5470" fontWeight="bold">{BRAND.tagline.toUpperCase()}</text>}
         </>
       )}
     </svg>
@@ -1230,9 +1244,9 @@ function PCMLogo({dark=false,compact=false}){
   // wordmarks scale down to fit their container instead of overflowing it.
   const usingDefaultLogo=!import.meta.env.VITE_BRAND_LOGO_URL;
   const rasterStyle={maxHeight:compact||dark?64:110,maxWidth:"100%",width:"auto",height:"auto",display:"block",margin:dark||compact?0:"0 auto"};
-  const content=(w)=>usingDefaultLogo?<BrandLockupSVG width={w}/>:<BrandImg src={BRAND.logo} alt={BRAND.name} style={rasterStyle}/>;
+  const content=(w,c=false)=>usingDefaultLogo?<BrandLockupSVG width={w} compact={c}/>:<BrandImg src={BRAND.logo} alt={BRAND.name} style={rasterStyle}/>;
   if(dark)return <div style={{background:"rgba(255,255,255,0.97)",borderRadius:8,padding:"8px 14px",display:"inline-block"}}>{content(190)}</div>;
-  if(compact)return content(220);
+  if(compact)return content(220,true);
   // 480 matches the signup page's desktop header lockup exactly (same viewBox,
   // same proportions) -- the login screen's card is widened below to fit it
   // without CSS capping it back down.
