@@ -1,6 +1,6 @@
 // PCM Family Office Platform — App.jsx
 // BUILD 2026-05-05 · Cash Flow (income+expenses+reorder) · MoneyInput commas · smart chart axis · client read-only · mobile
-import { useState, useEffect, useMemo, useCallback, useRef, Component } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, useId, Component } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { PDFDocument } from "pdf-lib";
 import { buildActivityReportPdf, AR_PERIODS, fig as arFig } from "./activityReport.js";
@@ -1199,6 +1199,29 @@ function BrandLockupSVG({width=220}){
           <text x="380" y="160" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="15.5" letterSpacing="3.35" fill="#3F5470" fontWeight="bold">{BRAND.tagline.toUpperCase()}</text>
         </>
       )}
+    </svg>
+  );
+}
+// The standalone mark (a serif O, counter open, split navy/gold) -- a
+// companion asset to the wordmark lockups above, never combined with them
+// (see the Logo Kit's "Never build your own mark-plus-wordmark lockup").
+// Used where the full name won't fit or is already established: the
+// assistant button, small in-context brand touches. `reversed` swaps the
+// navy half for white, for use on navy/dark grounds -- putting navy on
+// navy just makes that half vanish, which is exactly the bug this fixes.
+function BrandMark({reversed=false,size=40}){
+  const usingDefaultMark=!import.meta.env.VITE_BRAND_MARK_URL;
+  const id=useId();
+  if(!usingDefaultMark)return <img src={BRAND.mark} alt={BRAND.short||BRAND.name} style={{width:size,height:size,objectFit:"contain",display:"block"}}/>;
+  const ringPath="M50,14 a33,36 0 1,0 0,72 a33,36 0 1,0 0,-72 Z M50,23 a21,27 0 1,1 0,54 a21,27 0 1,1 0,-54 Z";
+  return (
+    <svg viewBox="0 0 100 100" width={size} height={size} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND.short||BRAND.name}>
+      <defs>
+        <clipPath id={`${id}-l`}><rect x="0" y="0" width="50" height="100"/></clipPath>
+        <clipPath id={`${id}-r`}><rect x="50" y="0" width="50" height="100"/></clipPath>
+      </defs>
+      <g clipPath={`url(#${id}-l)`}><path fillRule="evenodd" fill={reversed?"#ffffff":B.navy} d={ringPath}/></g>
+      <g clipPath={`url(#${id}-r)`}><path fillRule="evenodd" fill={B.gold} d={ringPath}/></g>
     </svg>
   );
 }
@@ -2440,13 +2463,11 @@ function FloatingAssistant({family,families,data,reload,toast,userProfile}){
   return <>
     <button onClick={()=>setOpen(true)} title={`Ask ${assistantName}`} aria-label={`Ask ${assistantName}`}
       style={{position:"fixed",bottom:isMobile?18:26,right:isMobile?18:26,zIndex:900,width:isMobile?54:60,height:isMobile?54:60,
-        borderRadius:"50%",border:`2px solid ${B.gold}`,background:B.navy,cursor:"pointer",padding:0,overflow:"hidden",
+        borderRadius:"22%",border:"none",background:B.navy,cursor:"pointer",padding:0,overflow:"hidden",
         boxShadow:"0 6px 22px rgba(0,0,0,0.28)",display:"flex",alignItems:"center",justifyContent:"center",transition:"transform .15s ease"}}
       onMouseEnter={e=>e.currentTarget.style.transform="scale(1.07)"}
       onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
-      {BRAND.mark
-        ? <img src={BRAND.mark} alt="" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-        : <span style={{color:B.gold,fontSize:22}}>✦</span>}
+      <BrandMark reversed size={isMobile?30:34}/>
     </button>
 
     {open&&<Modal wide title={active?`Ask ${assistantName} — ${(active.name||"").replace(" [DEMO]","")}`:`Ask ${assistantName}`} onClose={close}>
