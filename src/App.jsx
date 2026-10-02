@@ -1232,7 +1232,7 @@ function PCMLogo({dark=false,compact=false}){
   const rasterStyle={maxHeight:compact||dark?64:110,maxWidth:"100%",width:"auto",height:"auto",display:"block",margin:dark||compact?0:"0 auto"};
   const content=(w)=>usingDefaultLogo?<BrandLockupSVG width={w}/>:<BrandImg src={BRAND.logo} alt={BRAND.name} style={rasterStyle}/>;
   if(dark)return <div style={{background:"rgba(255,255,255,0.97)",borderRadius:8,padding:"8px 14px",display:"inline-block"}}>{content(190)}</div>;
-  if(compact)return content(190);
+  if(compact)return content(220);
   // 480 matches the signup page's desktop header lockup exactly (same viewBox,
   // same proportions) -- the login screen's card is widened below to fit it
   // without CSS capping it back down.
