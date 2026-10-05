@@ -2279,6 +2279,7 @@ function FamilyAssistant({family,data,reload,compact,toast}){
   // (the `family` prop passed by parents can be a stale snapshot).
   const fam=(data.families||[]).find(x=>x.id===family.id)||family;
   const assistantName=(fam.assistantName||"").trim()||"ORDANIS";
+  const expertRef=planAllows(fam.plan,"assignedExpert")?"your ORDANIS Expert":"the ORDANIS team";
   const[messages,setMessages]=useState([]); // {role:"user"|"assistant", content}
   const[input,setInput]=useState("");
   const[busy,setBusy]=useState(false);
@@ -2351,11 +2352,11 @@ div.body{font-size:14px;white-space:pre-wrap;}
     setBusy(true);
     try{
       const{data:resp,error:fnErr}=await sb.functions.invoke("family-ai-assistant",{body:{question,snapshot,history,assistantName}});
-      if(fnErr)throw new Error("Please contact your ORDANIS Expert for that information.");
-      if(resp&&resp.error)throw new Error("Please contact your ORDANIS Expert for that information.");
+      if(fnErr)throw new Error(`Please contact ${expertRef} for that information.`);
+      if(resp&&resp.error)throw new Error(`Please contact ${expertRef} for that information.`);
       setMessages(m=>[...m,{role:"assistant",content:(resp&&resp.answer)||"No response."}]);
     }catch(e){
-      setError("Please contact your ORDANIS Expert for that information.");
+      setError(`Please contact ${expertRef} for that information.`);
     }finally{
       setBusy(false);
     }
@@ -2446,7 +2447,7 @@ async function saveAssistantName(familyId,name){
   if(!rpcErr)return nm;
   const{data:rows,error}=await sb.from("families").update({assistant_name:nm}).eq("id",familyId).select("id");
   if(error)throw error;
-  if(!rows||!rows.length)throw new Error("Couldn't save the name \u2014 your account isn't allowed to change it. Please contact your ORDANIS Expert.");
+  if(!rows||!rows.length)throw new Error("Couldn't save the name \u2014 your account isn't allowed to change it. Please contact the ORDANIS team.");
   return nm;
 }
 
@@ -2480,9 +2481,12 @@ function countAssistantPromptLogin(uid){
 }
 
 function AssistantWelcome({family,data,reload,onClose,userProfile,toast}){
-  const assistantName=(((data.families||[]).find(x=>x.id===family.id)||family).assistantName||"").trim()||"ORDANIS";
+  const famRow=(data.families||[]).find(x=>x.id===family.id)||family;
+  const assistantName=(famRow.assistantName||"").trim()||"ORDANIS";
   const[emailOpen,setEmailOpen]=useState(false);
-  const isClient=userProfile&&userProfile.role==="client";
+  // Only a plan with an assigned Expert (Premier) gets the "Email my ORDANIS Expert" button --
+  // Basic and Core have no Expert, so offering one would point them at someone who isn't theirs.
+  const isClient=userProfile&&userProfile.role==="client"&&planAllows(famRow.plan,"assignedExpert");
   return <Modal title={`Hi — I'm ${assistantName}`} onClose={onClose} wide>
     <div style={{fontSize:14,color:B.text,lineHeight:1.55,marginBottom:16}}>
       Anything I can help you find before you dive in? Ask me about your net worth, properties, loans, insurance, tasks, or documents — or head straight to the dashboard.
