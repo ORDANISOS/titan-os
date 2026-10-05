@@ -1,0 +1,21 @@
+<!-- Paste into Supabase Dashboard > Authentication > Emails > "Reset password" (subject: "Reset your ORDANIS password").
+     Uses only Supabase's own template variable; no remote images, so nothing to block or track. -->
+<div style="background:#f7f5f0;padding:32px 16px;font-family:Arial,Helvetica,sans-serif;">
+  <div style="max-width:480px;margin:0 auto;background:#ffffff;border:1px solid #e6dfcf;border-radius:12px;padding:36px 32px;">
+    <div style="font-family:Georgia,'Times New Roman',serif;font-weight:bold;font-size:26px;letter-spacing:6px;color:#092b49;text-align:center;">ORDANIS</div>
+    <div style="height:2px;background:#ceb684;margin:14px auto 28px;width:120px;"></div>
+    <h1 style="font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#092b49;margin:0 0 14px;">Reset your password</h1>
+    <p style="font-size:15px;line-height:1.6;color:#3F5470;margin:0 0 24px;">
+      We received a request to reset the password for your ORDANIS account. Use the button below to choose a new one.
+    </p>
+    <p style="text-align:center;margin:0 0 24px;">
+      <a href="{{ .ConfirmationURL }}" style="background:#092b49;color:#ffffff;text-decoration:none;font-weight:bold;font-size:14px;letter-spacing:1px;padding:13px 28px;border-radius:8px;display:inline-block;">Choose a new password</a>
+    </p>
+    <p style="font-size:13px;line-height:1.6;color:#6b7a90;margin:0 0 8px;">
+      This link works once and expires soon. The button opens portal.ordanisos.com. If your browser opens a different address, don't enter anything and tell us.
+    </p>
+    <p style="font-size:13px;line-height:1.6;color:#6b7a90;margin:0;">
+      Didn't ask for this? You can ignore this email. Your password will not change.
+    </p>
+  </div>
+</div>
