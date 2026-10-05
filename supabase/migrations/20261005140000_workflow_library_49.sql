@@ -2441,7 +2441,7 @@ set steps = jsonb_insert(steps, '{1}', $J${
       "actor": "expert",
       "kind": "draft_email",
       "recipient": "internal",
-      "note": "Mandatory. The platform reads the annuity schedule from the trust instrument; a misread amount can cause the structure to fail, so a professional confirms it before anything is paid."
+      "note": "Mandatory. The platform reads the annuity schedule from the trust instrument, so a professional confirms the amount before anything is paid. A misread schedule can cause the structure to fail."
     }$J$::jsonb),
     updated_at = now()
 where key = 'grat_annuity'
