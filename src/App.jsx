@@ -9027,11 +9027,14 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const wizardSeenKey=`ordanis_onboarding_wizard_seen_${family.id}`;
   useEffect(()=>{
     if(!clientSelfServe)return;
+    // The "name your assistant" prompt goes first on a first/second login; the wizard opens once
+    // that has been answered or dismissed, so the two never stack on top of each other.
+    if(promptPending||showNamePrompt)return;
     if(properties.length||accounts.length||valuables.length||members.length||professionals.length)return;
     let seen=false;
     try{seen=localStorage.getItem(wizardSeenKey)==="1";}catch{}
     if(!seen)setWizardOpen(true);
-  },[family.id,clientSelfServe]);
+  },[family.id,clientSelfServe,promptPending,showNamePrompt]);
   const closeWizard=()=>{
     try{localStorage.setItem(wizardSeenKey,"1");}catch{}
     setWizardOpen(false);
