@@ -2279,7 +2279,6 @@ function FamilyAssistant({family,data,reload,compact,toast}){
   // (the `family` prop passed by parents can be a stale snapshot).
   const fam=(data.families||[]).find(x=>x.id===family.id)||family;
   const assistantName=(fam.assistantName||"").trim()||"ORDANIS";
-  const expertRef=planAllows(fam.plan,"assignedExpert")?"your ORDANIS Expert":"the ORDANIS team";
   const[messages,setMessages]=useState([]); // {role:"user"|"assistant", content}
   const[input,setInput]=useState("");
   const[busy,setBusy]=useState(false);
@@ -2352,11 +2351,11 @@ div.body{font-size:14px;white-space:pre-wrap;}
     setBusy(true);
     try{
       const{data:resp,error:fnErr}=await sb.functions.invoke("family-ai-assistant",{body:{question,snapshot,history,assistantName}});
-      if(fnErr)throw new Error(`Please contact ${expertRef} for that information.`);
-      if(resp&&resp.error)throw new Error(`Please contact ${expertRef} for that information.`);
+      if(fnErr)throw new Error(ASSISTANT_UNAVAILABLE);
+      if(resp&&resp.error)throw new Error(ASSISTANT_UNAVAILABLE);
       setMessages(m=>[...m,{role:"assistant",content:(resp&&resp.answer)||"No response."}]);
     }catch(e){
-      setError(`Please contact ${expertRef} for that information.`);
+      setError(ASSISTANT_UNAVAILABLE);
     }finally{
       setBusy(false);
     }
@@ -2433,6 +2432,12 @@ div.body{font-size:14px;white-space:pre-wrap;}
 // Tracks which families have already been greeted this browser session, so the
 // welcome popup appears once per login (per family) rather than on every view.
 const _greetedFamilies=new Set();
+
+// Shown when the assistant service itself fails (provider outage, billing, network). It used to say
+// "please contact your Expert", which reads as "I don't have that information" and sends the family
+// off to chase a problem only the firm can fix. Real "not in your data" answers still come from the
+// assistant in its own words.
+const ASSISTANT_UNAVAILABLE="The assistant is temporarily unavailable. Please try again in a few minutes.";
 
 // Saves the assistant's name. A family login has no UPDATE access to its own `families` row, so the
 // write goes through set_my_assistant_name() -- a database function that can change only this one
