@@ -2296,8 +2296,7 @@ function FamilyAssistant({family,data,reload,compact,toast}){
     if(nm===assistantName){setEditingName(false);return;}
     setSavingName(true);setNameErr(null);
     try{
-      const{error}=await sb.from("families").update({assistant_name:nm}).eq("id",family.id);
-      if(error)throw error;
+      await saveAssistantName(family.id,nm);
       if(reload)await reload("families");
       setEditingName(false);
     }catch(e){setNameErr(e&&e.message?e.message:"Couldn't save the name.");}
@@ -2433,6 +2432,52 @@ div.body{font-size:14px;white-space:pre-wrap;}
 // Tracks which families have already been greeted this browser session, so the
 // welcome popup appears once per login (per family) rather than on every view.
 const _greetedFamilies=new Set();
+
+// Saves the assistant's name. A family login has no UPDATE access to its own `families` row, so the
+// write goes through set_my_assistant_name() -- a database function that can change only this one
+// field, only on the caller's own family. Admins/advisors are refused by that function and write the
+// row directly, which their row-level policy allows. Either way we confirm a row really changed: a
+// blocked update returns success with zero rows, which is why the name used to look saved and then
+// revert on the next load.
+async function saveAssistantName(familyId,name){
+  const nm=(name||"").trim().slice(0,40);
+  if(!nm)throw new Error("Please enter a name.");
+  const{error:rpcErr}=await sb.rpc("set_my_assistant_name",{p_name:nm});
+  if(!rpcErr)return nm;
+  const{data:rows,error}=await sb.from("families").update({assistant_name:nm}).eq("id",familyId).select("id");
+  if(error)throw error;
+  if(!rows||!rows.length)throw new Error("Couldn't save the name \u2014 your account isn't allowed to change it. Please contact your ORDANIS Expert.");
+  return nm;
+}
+
+// "Name your assistant" prompt: shown on a client's 1st and 2nd login (if they still haven't picked
+// a name), never from the 3rd on. The login count lives on the user's profile
+// (record_assistant_prompt_login); the per-tab session cache below keeps a page reload within the
+// same login from counting as another login.
+const _assistantPromptCalls={};
+const assistantPromptKey=uid=>"ordanis_assistant_prompt:"+uid;
+function readAssistantPromptSession(uid){
+  try{const v=JSON.parse(sessionStorage.getItem(assistantPromptKey(uid))||"null");return v&&typeof v.count==="number"?v:null;}catch(e){return null;}
+}
+function writeAssistantPromptSession(uid,v){try{sessionStorage.setItem(assistantPromptKey(uid),JSON.stringify(v));}catch(e){}}
+function resetAssistantPromptSession(){
+  try{Object.keys(sessionStorage).filter(k=>k.indexOf("ordanis_assistant_prompt:")===0).forEach(k=>sessionStorage.removeItem(k));}catch(e){}
+  Object.keys(_assistantPromptCalls).forEach(k=>delete _assistantPromptCalls[k]);
+}
+function countAssistantPromptLogin(uid){
+  const cached=readAssistantPromptSession(uid);
+  if(cached)return Promise.resolve(cached);
+  if(!_assistantPromptCalls[uid]){
+    _assistantPromptCalls[uid]=(async()=>{
+      let n=3; // if the counter can't be read or written, err on the side of not nagging
+      try{const{data,error}=await sb.rpc("record_assistant_prompt_login");if(!error&&typeof data==="number")n=data;}catch(e){}
+      const v={count:n,dismissed:false};
+      writeAssistantPromptSession(uid,v);
+      return v;
+    })();
+  }
+  return _assistantPromptCalls[uid];
+}
 
 function AssistantWelcome({family,data,reload,onClose,userProfile,toast}){
   const assistantName=(((data.families||[]).find(x=>x.id===family.id)||family).assistantName||"").trim()||"ORDANIS";
@@ -8866,22 +8911,47 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const[namePromptDismissed,setNamePromptDismissed]=useState(false);
   const[welcomeName,setWelcomeName]=useState("");
   const[savingWelcome,setSavingWelcome]=useState(false);
-  const showNamePrompt=!rawAssistantName && !namePromptDismissed;
+  const[welcomeErr,setWelcomeErr]=useState("");
+  // 1 = first login, 2 = second, 3 = third or later; null = still being counted.
+  const[promptLogin,setPromptLogin]=useState(null);
+  const promptUid=userProfile&&userProfile.id;
+  useEffect(()=>{
+    if(!promptUid||rawAssistantName)return;   // already named: nothing to count or ask
+    let cancelled=false;
+    countAssistantPromptLogin(promptUid).then(v=>{
+      if(cancelled)return;
+      setPromptLogin(v.count);
+      if(v.dismissed)setNamePromptDismissed(true);
+    });
+    return()=>{cancelled=true;};
+  },[promptUid,rawAssistantName]);
+  const promptPending=!!promptUid&&!rawAssistantName&&promptLogin===null;
+  const showNamePrompt=!rawAssistantName&&!namePromptDismissed&&(promptLogin===1||promptLogin===2);
+  const dismissNamePrompt=()=>{
+    setNamePromptDismissed(true);
+    if(promptUid&&promptLogin!=null)writeAssistantPromptSession(promptUid,{count:promptLogin,dismissed:true});
+  };
   const saveWelcomeName=async(useDefault)=>{
     const nm=useDefault?"ORDANIS":((welcomeName||"").trim().slice(0,40)||"ORDANIS");
-    setSavingWelcome(true);
-    try{ await sb.from("families").update({assistant_name:nm}).eq("id",family.id); if(reload)await reload("families"); }
-    catch(e){}
-    finally{ setSavingWelcome(false); setNamePromptDismissed(true); }
+    setSavingWelcome(true);setWelcomeErr("");
+    try{
+      await saveAssistantName(family.id,nm);
+      if(reload)await reload("families");
+      dismissNamePrompt();
+    }catch(e){
+      // Stay open and say so -- silently closing is what hid the failed save before.
+      setWelcomeErr(e&&e.message?e.message:"Couldn't save the name. Please try again.");
+    }finally{ setSavingWelcome(false); }
   };
   const[showAssistantGreeting,setShowAssistantGreeting]=useState(false);
   useEffect(()=>{
     if(!family?.id)return;
-    if(showNamePrompt){ _greetedFamilies.add(family.id); return; } // first-login naming serves as the greeting
+    if(promptPending)return;                    // wait until we know whether to ask first
+    if(showNamePrompt){ _greetedFamilies.add(family.id); return; }
     if(_greetedFamilies.has(family.id))return;
     _greetedFamilies.add(family.id);
     setShowAssistantGreeting(true);
-  },[family?.id,showNamePrompt]);
+  },[family?.id,showNamePrompt,promptPending]);
   const properties=(data.properties||[]).filter(p=>p.familyId===family.id);
   const accounts=(data.portfolio_accounts||[]).filter(a=>a.familyId===family.id);
   const valuables=(data.valuables||[]).filter(v=>v.familyId===family.id);
@@ -8996,19 +9066,26 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
 
   return <div style={{minHeight:"100vh",background:B.bg,fontFamily:"'DM Sans','Helvetica Neue',sans-serif"}}>
 
-    {showNamePrompt&&<Modal title="Meet your assistant" onClose={()=>setNamePromptDismissed(true)}>
+    {showNamePrompt&&<Modal title={promptLogin===2?"Your assistant's name":"Meet your assistant"} onClose={dismissNamePrompt}>
       <div style={{fontSize:14,color:B.text,lineHeight:1.55,marginBottom:18}}>
-        You have a personal AI assistant that can answer questions about your dashboard — your net worth, properties, loans, insurance, tasks, and documents. It only ever sees your own information.
-        <br/><br/>
-        What would you like to call it? You can always change this later.
+        {promptLogin===2
+          ? <>We noticed that you didn't choose to change the name of your assistant. Would you like to do that now?
+              <br/><br/>
+              If not, you can always change it from the "Ask {assistantName}" tab — use the pencil next to the name.</>
+          : <>You have a personal AI assistant that can answer questions about your dashboard — your net worth, properties, loans, insurance, tasks, and documents. It only ever sees your own information.
+              <br/><br/>
+              What would you like to call it? You can always change this later.</>}
       </div>
       <Field label="Assistant name">
         <Inp autoFocus placeholder="e.g. ORDANIS, Ace, Atlas…" value={welcomeName} maxLength={40}
           onChange={e=>setWelcomeName(e.target.value)}
           onKeyDown={e=>{if(e.key==="Enter"&&!savingWelcome)saveWelcomeName(false);}}/>
       </Field>
+      {welcomeErr&&<div style={{marginTop:10,fontSize:13,color:B.red||"#b3261e"}}>{welcomeErr}</div>}
       <div style={{display:"flex",gap:10,justifyContent:"flex-end",alignItems:"center",marginTop:18}}>
-        <button onClick={()=>saveWelcomeName(true)} disabled={savingWelcome} style={{background:"none",border:"none",color:B.textSoft,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Skip — use "ORDANIS"</button>
+        {promptLogin===2
+          ? <button onClick={dismissNamePrompt} disabled={savingWelcome} style={{background:"none",border:"none",color:B.textSoft,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Not now</button>
+          : <button onClick={()=>saveWelcomeName(true)} disabled={savingWelcome} style={{background:"none",border:"none",color:B.textSoft,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Skip — use "ORDANIS"</button>}
         <Btn onClick={()=>saveWelcomeName(false)} disabled={savingWelcome}>{savingWelcome?"Saving…":"Save name"}</Btn>
       </div>
     </Modal>}
@@ -11967,7 +12044,7 @@ export default function App(){
   const isMobile=useIsMobile();
   // Reset the view on the way out so nothing from this session is left on screen
   // for whoever signs in next.
-  const logout=async()=>{await sb.auth.signOut();setAuthed(false);setUserProfile(null);setTab("dashboard");};
+  const logout=async()=>{resetAssistantPromptSession();await sb.auth.signOut();setAuthed(false);setUserProfile(null);setTab("dashboard");};
   const showToast=useCallback((msg,type="success")=>{setToastState({msg,type});setTimeout(()=>setToastState(null),3500);},[]);
 
   const profileRef=useRef(null);
