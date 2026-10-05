@@ -8677,6 +8677,37 @@ function ProfessionalQuickForm({onSave,onCancel,saving,allowPortalGrant,partnerS
   </div>;
 }
 
+// Standalone "Add Business Partner" form: just a name and email. It makes the same portal seat as
+// the "Also give this Business Partner their own portal login" option on the contact form (one
+// manage-business-partner call), with the same cost wording, but creates no Professional Network
+// row -- the two records are independent. On paid plans the cost must be acknowledged first.
+function BusinessPartnerQuickForm({onSave,onCancel,saving,seatFree}){
+  const[f,setF]=useState({name:"",email:"",agree:false});
+  const set=(k,v)=>setF(m=>({...m,[k]:v}));
+  const emailOk=EMAIL_RE.test(f.email.trim());
+  const valid=f.name.trim().length>0&&emailOk&&(seatFree||f.agree);
+  return <div>
+    <Grid2>
+      <Field label="Name"><Inp value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Jane Reyes"/></Field>
+      <Field label="Email (they will get the login link here)">
+        <Inp type="email" value={f.email} onChange={e=>set("email",e.target.value)}/>
+        {f.email&&!emailOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid email address.</div>}
+      </Field>
+    </Grid2>
+    <div style={{background:B.bg,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"12px 14px",marginBottom:12,fontSize:12.5,color:B.text,lineHeight:1.5}}>
+      <strong style={{color:B.navy}}>Business Partner portal login</strong> — a read-only account so they can see this household's dashboard on their own (properties, cash flow, documents, and more). We'll email them a secure link to set it up. {seatFree?<><strong style={{color:B.navy}}>Free</strong>, included with Premier.</>:<><strong style={{color:B.navy}}>$5.00/month</strong>, billed to this household until removed.</>}
+    </div>
+    {!seatFree&&<label style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:16,cursor:"pointer"}}>
+      <input type="checkbox" checked={f.agree} onChange={e=>set("agree",e.target.checked)} style={{marginTop:2}}/>
+      <span style={{fontSize:12.5,color:B.text,lineHeight:1.5}}>I understand <strong style={{color:B.navy}}>$5.00/month</strong> will be added to this household's bill for this seat until I revoke their access.</span>
+    </label>}
+    <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+      {onCancel&&<Btn variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Btn>}
+      <Btn onClick={()=>onSave(f)} disabled={saving||!valid}>{saving?"Sending…":"Send invite"}</Btn>
+    </div>
+  </div>;
+}
+
 // ── ONBOARDING WIZARD ─────────────────────────────────────────────────────────
 // Self-serve (Basic/Core, no assigned Expert) "getting started" flow. Opens automatically the
 // first time a household with nothing on file yet lands on its dashboard, and stays reachable
@@ -9023,10 +9054,11 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   // billed) rather than the same record.
   const addBusinessPartner=async(email,fullName)=>{
     const{data:resp,error}=await sb.functions.invoke("manage-business-partner",{body:{family_id:family.id,action:"invite",email,full_name:fullName,redirect_to:window.location.origin}});
-    if(error){toast(error.message||"Could not send the invite.","error");return;}
-    if(resp&&resp.error){toast(resp.error,"error");return;}
+    if(error){toast(error.message||"Could not send the invite.","error");return false;}
+    if(resp&&resp.error){toast(resp.error,"error");return false;}
     toast(resp&&resp.already_linked?"Already has portal access":"Invite sent");
     await reload("family_partners");await reload("families");
+    return true;
   };
   const removeBusinessPartner=async partnerUserId=>{
     const{data:resp,error}=await sb.functions.invoke("manage-business-partner",{body:{family_id:family.id,action:"remove",partner_user_id:partnerUserId}});
@@ -9040,6 +9072,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const[addValuableOpen,setAddValuableOpen]=useState(false);
   const[addMemberOpen,setAddMemberOpen]=useState(false);
   const[addProfessionalOpen,setAddProfessionalOpen]=useState(false);
+  const[addPartnerOpen,setAddPartnerOpen]=useState(false);
   const[savingQuickAdd,setSavingQuickAdd]=useState(false);
   const runQuickAdd=(fn,close)=>async f=>{setSavingQuickAdd(true);try{await fn(f);close();}finally{setSavingQuickAdd(false);}};
 
@@ -9388,9 +9421,13 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12,flexWrap:"wrap",gap:10}}>
           <div>
             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600}}>Business Partner Portal Access</div>
-            <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>Read-only logins to this household's portal{clientPlan==="premier"?" — included free with Premier.":" — $5.00/month each."} Add one from the Professional Network form above.</div>
+            <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>Read-only logins to this household's portal{clientPlan==="premier"?" — included free with Premier.":" — $5.00/month each."} Add one with the button at right, or from the Professional Network form above.</div>
           </div>
+          <Btn small onClick={()=>setAddPartnerOpen(true)}>+ Add Business Partner</Btn>
         </div>
+        {addPartnerOpen&&<Modal title="Add a Business Partner" onClose={()=>setAddPartnerOpen(false)}>
+          <BusinessPartnerQuickForm saving={savingQuickAdd} seatFree={clientPlan==="premier"} onCancel={()=>setAddPartnerOpen(false)} onSave={async f=>{setSavingQuickAdd(true);try{const ok=await addBusinessPartner(f.email.trim(),f.name.trim());if(ok)setAddPartnerOpen(false);}finally{setSavingQuickAdd(false);}}}/>
+        </Modal>}
         {businessPartners.length===0?<Empty text="No portal seats granted yet."/>:<div>
           {businessPartners.map(p=><div key={p.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid ${B.gold}`,borderRadius:10,padding:"14px 18px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:B.shadow,gap:12,flexWrap:"wrap"}}>
             <div>
