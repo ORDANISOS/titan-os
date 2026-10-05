@@ -239,14 +239,31 @@ function PlansStep({ prices, onChoose }) {
   );
 }
 
-function Field({ label, ...props }) {
+function Field({ label, type, ...props }) {
+  // Password fields get a Show/Hide toggle so people can check what they typed before submitting.
+  const [show, setShow] = useState(false);
+  const isPw = type === "password";
   return (
     <div style={{ marginBottom: 18 }}>
       <label style={{ display: "block", fontSize: ".78rem", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: C.navy, marginBottom: 7 }}>{label}</label>
-      <input
-        {...props}
-        style={{ width: "100%", boxSizing: "border-box", padding: "14px 16px", fontSize: ".98rem", fontWeight: 300, fontFamily: "inherit", color: C.navy, border: `1px solid ${C.rule}`, borderRadius: 2, background: "#fff" }}
-      />
+      <div style={{ position: "relative" }}>
+        <input
+          {...props}
+          type={isPw && show ? "text" : type}
+          style={{ width: "100%", boxSizing: "border-box", padding: isPw ? "14px 70px 14px 16px" : "14px 16px", fontSize: ".98rem", fontWeight: 300, fontFamily: "inherit", color: C.navy, border: `1px solid ${C.rule}`, borderRadius: 2, background: "#fff" }}
+        />
+        {isPw && (
+          <button
+            type="button"
+            onClick={() => setShow((v) => !v)}
+            aria-label={show ? "Hide password" : "Show password"}
+            aria-pressed={show}
+            style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: C.slate, fontSize: ".78rem", fontWeight: 600, letterSpacing: ".04em", textTransform: "uppercase", cursor: "pointer", fontFamily: "inherit", padding: "6px 8px" }}
+          >
+            {show ? "Hide" : "Show"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

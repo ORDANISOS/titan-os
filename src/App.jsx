@@ -777,6 +777,19 @@ const inp={width:"100%",background:B.bg,border:`1px solid ${B.border}`,borderRad
 // Merge (not replace) any caller-supplied style, so passing e.g. style={{flex:1}}
 // for layout doesn't strip the standard background/border/padding everywhere else.
 const Inp=p=><input {...p} style={{...inp,...(p.style||{})}}/>;
+// Password box with a Show/Hide toggle, so a person can check what they typed before submitting
+// (no more setting a password blind). Uncontrolled by default; pass show/onToggle to drive several
+// boxes from one toggle (the set-password screen does).
+function PasswordField({show,onToggle,style,...props}){
+  const[own,setOwn]=useState(false);
+  const visible=show!==undefined?show:own;
+  const toggle=onToggle||(()=>setOwn(v=>!v));
+  return <div style={{position:"relative"}}>
+    <input {...props} type={visible?"text":"password"} style={{...inp,...(style||{}),paddingRight:68}}/>
+    <button type="button" onClick={toggle} aria-label={visible?"Hide password":"Show password"} aria-pressed={visible}
+      style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:B.textSoft,fontSize:12,fontWeight:700,letterSpacing:"0.04em",cursor:"pointer",fontFamily:"inherit",padding:"6px 8px"}}>{visible?"Hide":"Show"}</button>
+  </div>;
+}
 // Formats numbers as US dollars with commas while user types. Stores the raw numeric value (no commas) on change.
 function MoneyInput({value,onChange,placeholder,style,disabled}){
   // Format number for display: 1234567.89 → "1,234,567.89"
@@ -1279,6 +1292,7 @@ function SetPasswordGate({onDone}){
   const[pw2,setPw2]=useState("");
   const[error,setError]=useState("");
   const[saving,setSaving]=useState(false);
+  const[showPw,setShowPw]=useState(false);
   const submit=async e=>{
     e.preventDefault();
     setError("");
@@ -1293,10 +1307,10 @@ function SetPasswordGate({onDone}){
   return <div style={{minHeight:"100vh",background:B.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"\'DM Sans\',sans-serif",padding:20}}>
     <form onSubmit={submit} style={{background:B.white,borderRadius:16,padding:"32px 34px",maxWidth:400,width:"100%",boxShadow:B.shadowMd,border:`1px solid ${B.borderLight}`}}>
       <div style={{fontFamily:"\'Cormorant Garamond\',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:6}}>Set your password</div>
-      <div style={{fontSize:13,color:B.textSoft,marginBottom:20,lineHeight:1.5}}>Choose a password for your new account. You\'ll use it to sign in from now on.</div>
+      <div style={{fontSize:13,color:B.textSoft,marginBottom:20,lineHeight:1.5}}>Choose a password for your new account. You&apos;ll use it to sign in from now on.</div>
       {error&&<div style={{background:"#fde8e8",border:"1px solid #f5c6c6",color:"#8b1a1a",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12.5}}>{error}</div>}
-      <Field label="New password"><Inp type="password" autoFocus value={pw} onChange={e=>setPw(e.target.value)} placeholder="At least 8 characters"/></Field>
-      <Field label="Confirm password"><Inp type="password" value={pw2} onChange={e=>setPw2(e.target.value)}/></Field>
+      <Field label="New password"><PasswordField show={showPw} onToggle={()=>setShowPw(v=>!v)} autoFocus autoComplete="new-password" value={pw} onChange={e=>setPw(e.target.value)} placeholder="At least 8 characters"/></Field>
+      <Field label="Confirm password"><PasswordField show={showPw} onToggle={()=>setShowPw(v=>!v)} autoComplete="new-password" value={pw2} onChange={e=>setPw2(e.target.value)}/></Field>
       <Btn onClick={submit} disabled={saving}>{saving?"Saving…":"Set password & continue"}</Btn>
     </form>
   </div>;
@@ -1472,7 +1486,7 @@ function LoginScreen(){
         ):(
           <>
             <Field label="Email"><input type="email" value={email} onChange={e=>{setEmail(e.target.value);setError("");}} onKeyDown={e=>e.key==="Enter"&&(mode==="login"?handleLogin():handleReset())} placeholder={"you@"+BRAND.emailDomain} autoFocus style={{...inp,fontSize:15,padding:"13px 16px"}}/></Field>
-            {mode==="login"&&<Field label="Password"><input type="password" value={password} onChange={e=>{setPassword(e.target.value);setError("");}} onKeyDown={e=>e.key==="Enter"&&handleLogin()} placeholder="••••••••" style={{...inp,fontSize:15,padding:"13px 16px"}}/></Field>}
+            {mode==="login"&&<Field label="Password"><PasswordField autoComplete="current-password" value={password} onChange={e=>{setPassword(e.target.value);setError("");}} onKeyDown={e=>e.key==="Enter"&&handleLogin()} placeholder="••••••••" style={{fontSize:15,padding:"13px 16px"}}/></Field>}
             {error&&<div style={{fontSize:12,color:"#d43030",marginBottom:12,fontWeight:600,padding:"8px 12px",background:"#fde8e8",borderRadius:8}}>{error}</div>}
             <button onClick={mode==="login"?handleLogin:handleReset} disabled={loading} style={{width:"100%",background:`linear-gradient(135deg,${B.navy},${B.navyMid})`,color:B.white,border:"none",borderRadius:10,padding:"13px",fontSize:14,fontWeight:700,cursor:loading?"not-allowed":"pointer",fontFamily:"inherit",letterSpacing:"0.06em",marginBottom:16,opacity:loading?.7:1}}>
               {loading?"Please wait…":mode==="login"?"SIGN IN":"SEND RESET LINK"}
