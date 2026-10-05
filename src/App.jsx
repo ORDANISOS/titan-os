@@ -8657,7 +8657,7 @@ function ProfessionalQuickForm({onSave,onCancel,saving,allowPortalGrant,partnerS
 // ── ONBOARDING WIZARD ─────────────────────────────────────────────────────────
 // Self-serve (Basic/Core, no assigned Expert) "getting started" flow. Opens automatically the
 // first time a household with nothing on file yet lands on its dashboard, and stays reachable
-// afterward from the "Getting Started" button in the header -- see ClientDashboard, which is the
+// afterward (the header "Getting Started" button was removed) -- see ClientDashboard, which is the
 // only caller. Each step reuses the exact same QuickForm + save handler as that entity's
 // standalone "+ Add" button, so nothing about how the data is saved differs by how someone got to
 // the form; only the chrome around it (a wizard step vs. a popup modal) differs.
@@ -8711,7 +8711,7 @@ function OnboardingWizard({onClose,addMember,addProfessional,addBusinessPartner,
 
   if(step==="welcome")return shell(
     "Let's set up your household",
-    "A few quick, optional steps to get your properties, accounts and valuables on record. Add as much or as little as you'd like now — you can always add more later, and this wizard is here anytime from \"Getting Started\" in the header.",
+    "A few quick, optional steps to get your properties, accounts and valuables on record. Add as much or as little as you'd like now — you can always add more later.",
     null,
     <>
       <button onClick={onClose} style={{background:"none",border:"none",color:B.textSoft,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Skip for now</button>
@@ -8771,7 +8771,7 @@ function OnboardingWizard({onClose,addMember,addProfessional,addBusinessPartner,
 
   return shell(
     "You're all set",
-    "You can add more properties, accounts or valuables anytime from their own tabs, upload documents to your Vault, or reopen this wizard anytime from \"Getting Started\" in the header.",
+    "You can add more properties, accounts or valuables anytime from their own tabs, upload documents to your Vault.",
     <div style={{fontSize:13,color:B.textSoft,lineHeight:1.6}}>
       Added this session: {properties.length} propert{properties.length===1?"y":"ies"}, {accounts.length} account{accounts.length===1?"":"s"}, {valuables.length} valuable{valuables.length===1?"":"s"}.
     </div>,
@@ -9021,8 +9021,8 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const runQuickAdd=(fn,close)=>async f=>{setSavingQuickAdd(true);try{await fn(f);close();}finally{setSavingQuickAdd(false);}};
 
   // Onboarding wizard: opens once on its own for a brand-new, empty, self-serve household: after
-  // that, "seen" is remembered per-family in localStorage so it doesn't nag on every login, but
-  // the "Getting Started" header button (see below) reaches it on demand forever after.
+  // that, "seen" is remembered per-family in localStorage so it doesn't nag on every login. (The
+  // "Getting Started" header button that reopened it on demand was removed from every profile.)
   const[wizardOpen,setWizardOpen]=useState(false);
   const wizardSeenKey=`ordanis_onboarding_wizard_seen_${family.id}`;
   useEffect(()=>{
@@ -9122,7 +9122,6 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
               <span>{isMobile?"Client Portal":`Client Portal · ${new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"})}`}</span>
             </div>
           </div>
-          {clientSelfServe&&<button onClick={()=>setWizardOpen(true)} style={{background:"rgba(206,182,132,0.15)",border:`1px solid ${B.gold}`,color:B.navy,borderRadius:8,padding:isMobile?"6px 10px":"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"inherit",flexShrink:0,fontWeight:600}}>{isMobile?"⚙ Getting Started":"⚙ Getting Started"}</button>}
           {clientHasExpert&&<button onClick={()=>setEmailAdvisorOpen(true)} style={{background:"rgba(206,182,132,0.15)",border:`1px solid ${B.gold}`,color:B.navy,borderRadius:8,padding:isMobile?"6px 10px":"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"inherit",flexShrink:0,fontWeight:600}}>{isMobile?"✉ ORDANIS Expert":"✉ Email my ORDANIS Expert"}</button>}
           <button onClick={logout} style={{background:"transparent",border:`1px solid ${B.border}`,color:B.textSoft,borderRadius:8,padding:isMobile?"6px 10px":"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>Sign Out</button>
         </div>
