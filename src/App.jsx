@@ -1186,19 +1186,18 @@ function BrandImg({src,alt,style}){
 // here instead of dissolving into an unreadable smudge.
 const STACKED_LOCKUP_MIN_WIDTH=210;
 function BrandLockupSVG({width=220,compact=false}){
-  const showTagline=width>=STACKED_LOCKUP_MIN_WIDTH;
-  // Compact contexts (the sidebar, the partner header bar) render this lockup
-  // capped to a narrow width, which shrinks a proportionally-sized tagline
-  // past legibility. Give compact its own larger, non-proportional tagline
-  // size instead, generically wrapped across two lines by word count so this
-  // isn't hardcoded to one tenant's exact tagline string.
-  const taglineWords=BRAND.tagline.trim().split(/\s+/);
-  const taglineLines=compact&&taglineWords.length>2
-    ?[taglineWords.slice(0,Math.ceil(taglineWords.length/2)).join(" "),taglineWords.slice(Math.ceil(taglineWords.length/2)).join(" ")]
-    :[BRAND.tagline];
-  const viewBoxH=compact?(taglineLines.length>1?210:185):172;
+  // The 210px floor is about on-screen scale. A cropped (compact) lockup at 200px renders at roughly
+  // twice the scale of an uncropped one, so it clears the legibility bar and always keeps its tagline.
+  const showTagline=compact||width>=STACKED_LOCKUP_MIN_WIDTH;
+  // `compact` is the SAME lockup artwork as the login/signup one -- same wordmark, same rule, same
+  // single-line tagline, same proportions -- just cropped to its own content. The full 760-wide
+  // viewBox carries ~190 units of empty margin on each side, which is harmless at the 480px login
+  // size but, in a ~200px sidebar, wastes half the width and shrinks the tagline to ~4px. Cropping
+  // the viewBox to the artwork roughly doubles the on-screen scale of every element (tagline ~8px)
+  // without redrawing or re-proportioning anything, so it stays an exact match for the portal logo.
+  const viewBox=compact?"186 45 388 123":"0 0 760 172";
   return (
-    <svg viewBox={`0 0 760 ${viewBoxH}`} width={width} style={{maxWidth:"100%",height:"auto",display:"block",margin:"0 auto"}} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND.name}>
+    <svg viewBox={viewBox} width={width} style={{maxWidth:"100%",height:"auto",display:"block",margin:compact?0:"0 auto"}} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND.name}>
       <text x="380" y="105" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="bold" fontSize="70" letterSpacing="9" fill={B.navy}>{BRAND.name.toUpperCase()}</text>
       {showTagline && (
         <>
@@ -1206,11 +1205,7 @@ function BrandLockupSVG({width=220,compact=false}){
               at this exact font-family/size/letter-spacing) so it runs from the P to the n,
               not an arbitrary fixed span. */}
           <line x1="195.8" y1="133" x2="564.2" y2="133" stroke={B.gold} strokeWidth="2" />
-          {compact
-            ?taglineLines.map((line,i)=>(
-              <text key={i} x="380" y={172+i*28} textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="34" letterSpacing="2" fill="#3F5470" fontWeight="bold">{line.toUpperCase()}</text>
-            ))
-            :<text x="380" y="160" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="15.5" letterSpacing="3.35" fill="#3F5470" fontWeight="bold">{BRAND.tagline.toUpperCase()}</text>}
+          <text x="380" y="160" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="15.5" letterSpacing="3.35" fill="#3F5470" fontWeight="bold">{BRAND.tagline.toUpperCase()}</text>
         </>
       )}
     </svg>
@@ -1246,7 +1241,7 @@ function PCMLogo({dark=false,compact=false}){
   const rasterStyle={maxHeight:compact||dark?64:110,maxWidth:"100%",width:"auto",height:"auto",display:"block",margin:dark||compact?0:"0 auto"};
   const content=(w,c=false)=>usingDefaultLogo?<BrandLockupSVG width={w} compact={c}/>:<BrandImg src={BRAND.logo} alt={BRAND.name} style={rasterStyle}/>;
   if(dark)return <div style={{background:"rgba(255,255,255,0.97)",borderRadius:8,padding:"8px 14px",display:"inline-block"}}>{content(190)}</div>;
-  if(compact)return content(220,true);
+  if(compact)return content(200,true);
   // 480 matches the signup page's desktop header lockup exactly (same viewBox,
   // same proportions) -- the login screen's card is widened below to fit it
   // without CSS capping it back down.
