@@ -1193,9 +1193,10 @@ function BrandLockupSVG({width=220,compact=false}){
   // single-line tagline, same proportions -- just cropped to its own content. The full 760-wide
   // viewBox carries ~190 units of empty margin on each side, which is harmless at the 480px login
   // size but, in a ~200px sidebar, wastes half the width and shrinks the tagline to ~4px. Cropping
-  // the viewBox to the artwork roughly doubles the on-screen scale of every element (tagline ~8px)
+  // the viewBox to the artwork (measured with Georgia-metric glyphs: the wordmark spans x 168-592, so the
+  // crop keeps ~6 units of margin either side -- a tighter crop clipped the O on a real Mac) lifts the on-screen scale of every element (tagline ~7px)
   // without redrawing or re-proportioning anything, so it stays an exact match for the portal logo.
-  const viewBox=compact?"186 45 388 123":"0 0 760 172";
+  const viewBox=compact?"162 45 436 123":"0 0 760 172";
   return (
     <svg viewBox={viewBox} width={width} style={{maxWidth:"100%",height:"auto",display:"block",margin:compact?0:"0 auto"}} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={BRAND.name}>
       <text x="380" y="105" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="bold" fontSize="70" letterSpacing="9" fill={B.navy}>{BRAND.name.toUpperCase()}</text>
