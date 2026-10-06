@@ -7877,6 +7877,10 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
   const[description,setDescription]=useState("");
   const[category,setCategory]=useState("General");
   const[file,setFile]=useState(null);
+  // The Document Name field starts as the file's own name (minus the extension) so
+  // nobody has to retype it. It only ever fills a blank field, or one still holding
+  // the previous auto-filled name -- whatever the person typed themselves is theirs.
+  const autoNameRef=useRef("");
   const[uploadPhase,setUploadPhase]=useState("");
   // What the read suggested, and why. Held separately from `category` so the
   // person's own choice always wins and is never silently overwritten.
@@ -7945,7 +7949,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     if(s&&s.scope==="family")setLinkPropertyId("");
   };
   const resetForm=()=>{
-    setName("");setDescription("");setCategory("General");setFile(null);
+    setName("");setDescription("");setCategory("General");setFile(null);autoNameRef.current="";
     setLinkPropertyId("");setLinkSection("");setConflictDoc(null);
     setSuggestion(null);setExtractedText(null);setExtracting(false);setCreatingSuggested(false);
   };
@@ -8023,6 +8027,14 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
   const pickFile=async f=>{
     setFile(f||null);
     setSuggestion(null);setExtractedText(null);
+    if(f&&f.name){
+      const base=f.name.replace(/\.[^./\\]+$/,"").trim();
+      const prevAuto=autoNameRef.current;
+      if(base){
+        setName(prev=>(!prev.trim()||prev===prevAuto)?base:prev);
+        autoNameRef.current=base;
+      }
+    }
     if(!f||!scanOnUpload)return;
     const mt=f.type==="image/jpg"?"image/jpeg":f.type;
     const supported=mt==="application/pdf"||["image/png","image/jpeg","image/webp"].includes(mt);
