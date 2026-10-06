@@ -174,6 +174,17 @@ const BRAND_ADMIN = String(import.meta.env.VITE_BRAND_ADMIN||"")==="1";
 // Set VITE_HIDE_SIGNUP=1 on the demo only: the login screen drops its "Create an Account" link, and
 // main.jsx sends /signup to the login screen. Unset (the default, and production) changes nothing.
 const HIDE_SIGNUP = String(import.meta.env.VITE_HIDE_SIGNUP||"")==="1";
+// One minimum for every way of setting a password, matching self-serve signup (SignupFlow.jsx and
+// the public-signup function). The real enforcement is the Supabase Auth setting and the
+// admin-set-password function; these client checks only give a faster message.
+const MIN_PASSWORD_LENGTH = 12;
+// Temporary passwords come from the browser's secure random source, not Math.random().
+const genTempPassword = () => {
+  const a = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  const b = new Uint32Array(16);
+  crypto.getRandomValues(b);
+  return Array.from(b, n => a[n % a.length]).join("");
+};
 // BRAND and B are plain objects referenced by identity throughout the app, so
 // applying a profile is an in-place merge — no re-plumbing of the hundreds of
 // existing B.navy / BRAND.name references, and one re-render picks it all up.
@@ -1299,7 +1310,7 @@ function SetPasswordGate({onDone}){
   const submit=async e=>{
     e.preventDefault();
     setError("");
-    if(pw.length<8){setError("Password must be at least 8 characters");return;}
+    if(pw.length<MIN_PASSWORD_LENGTH){setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);return;}
     if(pw!==pw2){setError("Passwords don\'t match");return;}
     setSaving(true);
     const{error:err}=await sb.auth.updateUser({password:pw});
@@ -1312,7 +1323,7 @@ function SetPasswordGate({onDone}){
       <div style={{fontFamily:"\'Cormorant Garamond\',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:6}}>Set your password</div>
       <div style={{fontSize:13,color:B.textSoft,marginBottom:20,lineHeight:1.5}}>Choose a password for your new account. You&apos;ll use it to sign in from now on.</div>
       {error&&<div style={{background:"#fde8e8",border:"1px solid #f5c6c6",color:"#8b1a1a",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12.5}}>{error}</div>}
-      <Field label="New password"><PasswordField show={showPw} onToggle={()=>setShowPw(v=>!v)} autoFocus autoComplete="new-password" value={pw} onChange={e=>setPw(e.target.value)} placeholder="At least 8 characters"/></Field>
+      <Field label="New password"><PasswordField show={showPw} onToggle={()=>setShowPw(v=>!v)} autoFocus autoComplete="new-password" value={pw} onChange={e=>setPw(e.target.value)} placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}/></Field>
       <Field label="Confirm password"><PasswordField show={showPw} onToggle={()=>setShowPw(v=>!v)} autoComplete="new-password" value={pw2} onChange={e=>setPw2(e.target.value)}/></Field>
       <Btn onClick={submit} disabled={saving}>{saving?"Saving…":"Set password & continue"}</Btn>
     </form>
@@ -6606,7 +6617,7 @@ function UserManagementView({userProfile,data={},toast}){
 
   const createUser=async()=>{
     if(!newEmail.trim()||!newPassword.trim())return toast("Email and password are required","error");
-    if(newPassword.length<8)return toast("Password must be at least 8 characters","error");
+    if(newPassword.length<MIN_PASSWORD_LENGTH)return toast(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`,"error");
     setCreating(true);
     // Sign up the new user
     const{data:authData,error:authError}=await sb.auth.signUp({
@@ -6649,9 +6660,9 @@ function UserManagementView({userProfile,data={},toast}){
   const[settingPw,setSettingPw]=useState(false);
   const[pwErr,setPwErr]=useState(null);
   const[pwDone,setPwDone]=useState(false);
-  const openSetPassword=u=>{ setPwUser(u); setTempPassword(Math.random().toString(36).slice(2,10)+"Aa1!"); setPwErr(null); setPwDone(false); };
+  const openSetPassword=u=>{ setPwUser(u); setTempPassword(genTempPassword()); setPwErr(null); setPwDone(false); };
   const setTempPasswordNow=async()=>{
-    if(!pwUser||tempPassword.length<8)return setPwErr("Password must be at least 8 characters.");
+    if(!pwUser||tempPassword.length<MIN_PASSWORD_LENGTH)return setPwErr(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
     setSettingPw(true);setPwErr(null);
     try{
       const{data:resp,error}=await sb.functions.invoke("admin-set-password",{body:{targetUserId:pwUser.id,newPassword:tempPassword}});
@@ -6858,8 +6869,8 @@ function UserManagementView({userProfile,data={},toast}){
             </Grid2>
             <Field label="Temporary Password">
               <div style={{display:"flex",gap:8}}>
-                <Inp placeholder="Min 8 characters" value={newPassword} onChange={e=>setNewPassword(e.target.value)} style={{flex:1}}/>
-                <Btn variant="ghost" onClick={()=>setNewPassword(Math.random().toString(36).slice(2,10)+"Aa1!")}>Generate</Btn>
+                <Inp placeholder={`Min ${MIN_PASSWORD_LENGTH} characters`} value={newPassword} onChange={e=>setNewPassword(e.target.value)} style={{flex:1}}/>
+                <Btn variant="ghost" onClick={()=>setNewPassword(genTempPassword())}>Generate</Btn>
               </div>
             </Field>
             <Grid2>
@@ -6960,14 +6971,14 @@ function UserManagementView({userProfile,data={},toast}){
             <div style={{fontSize:13,color:B.textSoft,marginBottom:14,lineHeight:1.5}}>Set a new password for <strong>{pwUser.full_name||pwUser.email}</strong> directly — no reset email will be sent. You'll need to share it with them yourself.</div>
             <Field label="New Password">
               <div style={{display:"flex",gap:8}}>
-                <Inp placeholder="Min 8 characters" value={tempPassword} onChange={e=>setTempPassword(e.target.value)} style={{flex:1}}/>
-                <Btn variant="ghost" onClick={()=>setTempPassword(Math.random().toString(36).slice(2,10)+"Aa1!")}>Generate</Btn>
+                <Inp placeholder={`Min ${MIN_PASSWORD_LENGTH} characters`} value={tempPassword} onChange={e=>setTempPassword(e.target.value)} style={{flex:1}}/>
+                <Btn variant="ghost" onClick={()=>setTempPassword(genTempPassword())}>Generate</Btn>
               </div>
             </Field>
             {pwErr&&<div style={{background:"#fde8e8",border:"1px solid #f5c6c6",color:"#8b1a1a",borderRadius:8,padding:"9px 12px",fontSize:12,marginBottom:12}}>⚠ {pwErr}</div>}
             <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}>
               <Btn variant="ghost" onClick={()=>setPwUser(null)}>Cancel</Btn>
-              <Btn onClick={setTempPasswordNow} disabled={settingPw||tempPassword.length<8}>{settingPw?"Setting…":"Set Password"}</Btn>
+              <Btn onClick={setTempPasswordNow} disabled={settingPw||tempPassword.length<MIN_PASSWORD_LENGTH}>{settingPw?"Setting…":"Set Password"}</Btn>
             </div>
           </div>
         )}

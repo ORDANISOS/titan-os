@@ -55,7 +55,9 @@ Deno.serve(async (req) => {
     const targetUserId = String(body?.targetUserId || "").trim();
     const newPassword = String(body?.newPassword || "");
     if (!targetUserId) return json({ error: "Missing target user." }, 400);
-    if (newPassword.length < 8) return json({ error: "Password must be at least 8 characters." }, 400);
+    // Same minimum as self-serve signup (public-signup) and the app.
+    const MIN_PASSWORD_LENGTH = 12;
+    if (newPassword.length < MIN_PASSWORD_LENGTH) return json({ error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` }, 400);
     if (targetUserId === user.id) return json({ error: "Use your own account settings to change your own password." }, 400);
 
     const { error: updErr } = await admin.auth.admin.updateUserById(targetUserId, { password: newPassword });
