@@ -171,6 +171,9 @@ const RUNTIME_BRAND = String(import.meta.env.VITE_BRAND_RUNTIME||"")==="1";
 //
 // Set VITE_BRAND_ADMIN=1 on the demo only.
 const BRAND_ADMIN = String(import.meta.env.VITE_BRAND_ADMIN||"")==="1";
+// Set VITE_HIDE_SIGNUP=1 on the demo only: the login screen drops its "Create an Account" link, and
+// main.jsx sends /signup to the login screen. Unset (the default, and production) changes nothing.
+const HIDE_SIGNUP = String(import.meta.env.VITE_HIDE_SIGNUP||"")==="1";
 // BRAND and B are plain objects referenced by identity throughout the app, so
 // applying a profile is an in-place merge — no re-plumbing of the hundreds of
 // existing B.navy / BRAND.name references, and one re-render picks it all up.
@@ -1494,7 +1497,7 @@ function LoginScreen(){
             <div style={{textAlign:"center"}}>
               {mode==="login"?<button onClick={()=>{setMode("reset");setError("");}} style={{background:"none",border:"none",color:B.textSoft,fontSize:12,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>Forgot your password?</button>:<button onClick={()=>{setMode("login");setError("");}} style={{background:"none",border:"none",color:B.textSoft,fontSize:12,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>Back to sign in</button>}
             </div>
-            {mode==="login"&&<div style={{textAlign:"center",marginTop:16,paddingTop:16,borderTop:`1px solid ${B.borderLight}`}}>
+            {mode==="login"&&!HIDE_SIGNUP&&<div style={{textAlign:"center",marginTop:16,paddingTop:16,borderTop:`1px solid ${B.borderLight}`}}>
               <span style={{fontSize:12,color:B.textMute}}>New to {BRAND.name}? </span>
               <a href="/signup" style={{fontSize:12,color:B.navy,fontWeight:700,textDecoration:"underline"}}>Create an Account</a>
             </div>}
