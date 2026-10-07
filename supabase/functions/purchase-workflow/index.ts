@@ -86,15 +86,32 @@ function isMissing(e: unknown): boolean {
   return err?.code === "resource_missing" || err?.statusCode === 404;
 }
 
+// Stripe does not accept an inline product definition on a subscription item, so the function keeps
+// one standing product for these slots: found by metadata, created the first time it is needed.
+let cachedProductId: string | null = null;
+async function getSlotProductId(): Promise<string> {
+  if (cachedProductId) return cachedProductId;
+  try {
+    const found = await stripe.products.search({ query: `active:'true' AND metadata['kind']:'workflow_slots'`, limit: 1 });
+    if (found.data[0]) return (cachedProductId = found.data[0].id);
+  } catch (_e) {
+    const list = await stripe.products.list({ active: true, limit: 100 });
+    const hit = list.data.find((p) => p.metadata?.kind === "workflow_slots");
+    if (hit) return (cachedProductId = hit.id);
+  }
+  const created = await stripe.products.create({ name: PRODUCT_NAME, metadata: { kind: "workflow_slots" } });
+  return (cachedProductId = created.id);
+}
+
 // Raises the slot quantity (charging the prorated amount now) or creates the item.
 async function raiseQuantity(opts: {
   familyId: string; subscriptionId: string; itemId: string | null; qty: number; unitPrice: number; purchaseId: string;
 }): Promise<string> {
   const idem = { idempotencyKey: `wfslot-${opts.purchaseId}` };
-  const create = () => stripe.subscriptionItems.create({
+  const create = async () => stripe.subscriptionItems.create({
     subscription: opts.subscriptionId,
     price_data: {
-      currency: "usd", product_data: { name: PRODUCT_NAME },
+      currency: "usd", product: await getSlotProductId(),
       unit_amount: Math.round(opts.unitPrice * 100), recurring: { interval: "month" },
     },
     quantity: opts.qty,
