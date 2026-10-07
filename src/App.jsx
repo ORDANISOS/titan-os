@@ -3196,6 +3196,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
 
         {/* OVERVIEW TAB */}
         {activeTab==="overview"&&<div style={{padding:isMobile?"16px 14px":"24px 28px"}}>
+          {familyRow.enterprise_id&&(userProfile?.role==="admin"||userProfile?.role==="advisor")&&<PayerCard familyRow={familyRow} userProfile={userProfile} toast={toast} reload={reload}/>}
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(140px,100%),1fr))",gap:14,marginBottom:24}}>
             <StatBox label="Net Worth Est." value={fmtMoney(netWorth)} accent={B.navy}/>
             <StatBox label="Real Estate" value={fmtMoney(totalRE)} accent={B.gold}/>
@@ -8947,6 +8948,16 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     if(!p.error&&p.data)setWorkflowPurchases(p.data);
   };
   useEffect(()=>{if(!clientHasWorkflows)return;loadBillingWorkflows();},[family.id,clientHasWorkflows]);
+  // Who pays: a household whose firm pays has no card here, so the plan-change buttons and the
+  // "charged to your card" wording must not appear for it.
+  const[payerInfo,setPayerInfo]=useState(null);
+  useEffect(()=>{
+    let stopped=false;
+    sb.rpc("family_payer_info",{p_family_id:family.id}).then(({data:r,error})=>{if(!stopped&&!error&&r&&r[0])setPayerInfo(r[0]);});
+    return()=>{stopped=true;};
+  },[family.id,fam.paidBy]);
+  const firmPaid=(payerInfo?payerInfo.paid_by:fam.paidBy)==="enterprise";
+  const firmLabel=(payerInfo&&payerInfo.firm_name)||"your firm";
   const cancelUnusedSlot=async id=>{
     setSlotBusy(true);
     try{await callPurchaseWorkflow({action:"cancel_unused",family_id:family.id,purchase_id:id});await loadBillingWorkflows();}
@@ -9546,6 +9557,10 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
 
         {billingMsg&&<div style={{background:billingMsg.type==="error"?"#fde8e8":"#e0f5e9",border:`1px solid ${billingMsg.type==="error"?"#f5c6c6":"#bfe8cf"}`,color:billingMsg.type==="error"?"#8b1a1a":"#0d5c2b",borderRadius:10,padding:"12px 16px",marginBottom:16,fontSize:13,lineHeight:1.5}}>{billingMsg.text}</div>}
 
+        {firmPaid&&<div style={{background:"rgba(206,182,129,0.14)",border:`1px solid ${B.gold}`,borderRadius:12,padding:"14px 18px",marginBottom:16,fontSize:13,color:B.text,lineHeight:1.6}}>
+          <strong>Your plan is paid by {firmLabel}.</strong> The plan fee and any extra workflows are billed to {firmLabel}, not to you, and there is no card to manage here. To change your plan, contact {firmLabel}.
+        </div>}
+
         {/* Current plan */}
         <div style={{background:B.white,border:`1px solid ${B.borderLight}`,borderTop:`4px solid ${B.gold}`,borderRadius:14,padding:"22px 24px",marginBottom:16,boxShadow:B.shadow}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
@@ -9555,6 +9570,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
             </div>
             <div style={{textAlign:"right"}}>
               <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:B.navy,fontWeight:600}}>{fmtMoney(billingPriceOf(clientPlan))}<span style={{fontSize:12,color:B.textSoft,fontWeight:400}}>/mo</span></div>
+              {firmPaid&&<div style={{fontSize:11,color:B.textSoft,marginTop:2}}>billed to {firmLabel}</div>}
             </div>
           </div>
         </div>
@@ -9580,7 +9596,9 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600}}>${Number(billingWorkflowUsage.slots_monthly_cost||0).toFixed(2)}<span style={{fontSize:11,color:B.textSoft,fontWeight:400}}>/mo extra</span></div>
           </div>
           <div style={{fontSize:12,color:B.textSoft,marginBottom:workflowPurchases.length?14:0}}>
-            {`Extra workflows are $${Number(billingWorkflowUsage.unit_price||0).toFixed(2)}/month each for as long as they stay active. You approve each one when you start it. Completing or cancelling a workflow stops its charge from your next renewal.`}
+            {firmPaid
+              ? `Extra workflows are $${Number(billingWorkflowUsage.unit_price||0).toFixed(2)}/month each for as long as they stay active, billed to ${firmLabel}. You approve each one when you start it.`
+              : `Extra workflows are $${Number(billingWorkflowUsage.unit_price||0).toFixed(2)}/month each for as long as they stay active. You approve each one when you start it. Completing or cancelling a workflow stops its charge from your next renewal.`}
           </div>
           {workflowPurchases.length>0&&<div style={{borderTop:`1px solid ${B.borderLight}`,paddingTop:12}}>
             <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:8}}>Extra workflows you've added</div>
@@ -9621,7 +9639,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         </div>}
 
         {/* Self-serve upgrade / downgrade -- Basic <-> Core only; Premier is always Expert-led. */}
-        {planSelfServe&&!fam.pending_plan&&<>
+        {planSelfServe&&!fam.pending_plan&&!firmPaid&&<>
           {upgradeTargets.length>0&&<div style={{marginBottom:16}}>
             <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>Upgrade</div>
             {upgradeTargets.map(p=><div key={p} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:12,padding:"16px 18px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
@@ -9650,7 +9668,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         </>}
 
         {/* Premier — advisor-led, no self-serve plan change */}
-        {!planSelfServe&&<div style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:12,padding:"18px 20px",fontSize:13,color:B.textSoft,lineHeight:1.6}}>
+        {!planSelfServe&&!firmPaid&&<div style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:12,padding:"18px 20px",fontSize:13,color:B.textSoft,lineHeight:1.6}}>
           Premier is managed by your ORDANIS Expert. {clientHasExpert&&<>To change your plan, <button onClick={()=>setEmailAdvisorOpen(true)} style={{background:"none",border:"none",color:B.navy,fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,fontSize:13,textDecoration:"underline"}}>email your ORDANIS Expert</button>.</>}
         </div>}
 
@@ -10950,6 +10968,15 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
   const[buyPrompt,setBuyPrompt]=useState(null);
   const[buying,setBuying]=useState(false);
   useEffect(()=>{loadUsage();},[family.id]);
+  // When the household's firm pays, buying an extra workflow charges no card: it is billed to the firm.
+  const[payer,setPayer]=useState(null);
+  useEffect(()=>{
+    let stopped=false;
+    sb.rpc("family_payer_info",{p_family_id:family.id}).then(({data:r,error})=>{if(!stopped&&!error&&r&&r[0])setPayer(r[0]);});
+    return()=>{stopped=true;};
+  },[family.id]);
+  const firmPays=payer?.paid_by==="enterprise";
+  const firmName=payer?.firm_name||"your firm";
 
   const load=async()=>{
     const[o,t,i]=await Promise.all([
@@ -11007,7 +11034,7 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
     try{
       const inst=await generateWorkflowCycle({template:t,obligation:ob,dueDate:ob.due_date,familyId:family.id});
       const base=inst.status==="at_risk"?"Cycle started — flagged at risk.":"Cycle started.";
-      toast(base+(paid?" This is a paid workflow: it is billed monthly for as long as it stays active.":""));
+      toast(base+(paid?(firmPays?` This is a paid workflow: it is billed to ${firmName} for as long as it stays active.`:" This is a paid workflow: it is billed monthly for as long as it stays active."):""));
       setOpenInst(inst.id);load();loadUsage();
       return true;
     }catch(e){
@@ -11093,7 +11120,7 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
         ? `${usage.free_remaining} more can be started at no extra cost.`
         : usage.slots_available>0
           ? `${usage.slots_available} paid workflow${usage.slots_available===1?"":"s"} ready to start.`
-          : `You are at your included limit. Another workflow is $${Number(usage.unit_price||0).toFixed(2)}/month for as long as it stays active — you'll be asked to approve it when you start one.`}
+          : `You are at your included limit. Another workflow is $${Number(usage.unit_price||0).toFixed(2)}/month for as long as it stays active${firmPays?`, billed to ${firmName}`:""} — you'll be asked to approve it when you start one.`}
       {usage.slots_in_use>0&&` ${usage.slots_in_use} paid workflow${usage.slots_in_use===1?"":"s"} running ($${Number(usage.slots_monthly_cost||0).toFixed(2)}/month).`}
     </div>;})()}
 
@@ -11102,10 +11129,15 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
         You have used {buyPrompt.u.active_count} of {buyPrompt.u.included} included workflows.
         Add another for <strong>${Number(buyPrompt.u.unit_price).toFixed(2)} a month</strong> while it stays active?
       </div>
-      <div style={{fontSize:12.5,color:B.textSoft,lineHeight:1.6,marginTop:10}}>
-        You'll be charged a prorated amount now on your card on file, then ${Number(buyPrompt.u.unit_price).toFixed(2)} with each monthly renewal.
-        Completing or cancelling the workflow stops the charge from your next renewal. This approval is recorded with your name and the date.
-      </div>
+      {firmPays
+        ? <div style={{fontSize:12.5,color:B.textSoft,lineHeight:1.6,marginTop:10}}>
+            <strong>No card is charged.</strong> This is billed to {firmName} on its next monthly invoice (a prorated amount for this month, then ${Number(buyPrompt.u.unit_price).toFixed(2)} each month while it stays active).
+            Completing or cancelling the workflow stops the charge from the next invoice. This approval is recorded with your name and the date.
+          </div>
+        : <div style={{fontSize:12.5,color:B.textSoft,lineHeight:1.6,marginTop:10}}>
+            You'll be charged a prorated amount now on your card on file, then ${Number(buyPrompt.u.unit_price).toFixed(2)} with each monthly renewal.
+            Completing or cancelling the workflow stops the charge from your next renewal. This approval is recorded with your name and the date.
+          </div>}
       <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:20,flexWrap:"wrap"}}>
         <Btn variant="ghost" disabled={buying} onClick={()=>setBuyPrompt(null)}>Cancel</Btn>
         <Btn variant="gold" disabled={buying} onClick={confirmBuy}>{buying?"Adding…":`Add for $${Number(buyPrompt.u.unit_price).toFixed(2)}/month`}</Btn>
@@ -12142,6 +12174,253 @@ function StateRulesView({userProfile,toast}){
   </div>;
 }
 
+// ── FIRM BILLING (Phase 8b) ────────────────────────────────────────────────
+// Who pays for a household, and the firm's monthly invoice. The amounts are computed in the database
+// (enterprise_invoice_preview) and the invoice is built by the enterprise-invoice function; nothing
+// here can alter a figure, it can only ask for a preview, a draft, a finalize or a void.
+async function callEnterpriseInvoice(body){
+  const{data,error}=await sb.functions.invoke("enterprise-invoice",{body});
+  if(error){
+    let msg=error.message;
+    try{const b=await error.context.json();if(b&&b.error)msg=b.error;}catch(_e){}
+    throw new Error(msg);
+  }
+  if(data&&data.error)throw new Error(data.error);
+  return data;
+}
+const money2=n=>{const v=Number(n)||0;return (v<0?"-":"")+"$"+Math.abs(v).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});};
+const monthStartISO=offset=>{const d=new Date();return new Date(Date.UTC(d.getFullYear(),d.getMonth()+offset,1)).toISOString().slice(0,10);};
+const monthLabelOf=iso=>new Date(iso+"T00:00:00Z").toLocaleString("en-US",{month:"long",year:"numeric",timeZone:"UTC"});
+const INVOICE_STATUS_TINT={draft:{bg:"#eef0f4",text:"#5b6573",label:"Draft"},open:{bg:"rgba(206,182,129,0.22)",text:"#7a5a19",label:"Sent, unpaid"},paid:{bg:"#e0f5e9",text:"#0d5c2b",label:"Paid"},void:{bg:"#fde8e8",text:"#8b1a1a",label:"Voided"}};
+
+function PayerCard({familyRow,userProfile,toast,reload}){
+  const isAdmin=userProfile?.role==="admin";
+  const[firmName,setFirmName]=useState("");
+  const[payer,setPayer]=useState(familyRow.paidBy||"family");
+  const[note,setNote]=useState(familyRow.paid_by_note||"");
+  const[code,setCode]=useState(familyRow.discount_code||"");
+  const[pct,setPct]=useState(String(Number(familyRow.discount_percent)||0));
+  const[cap,setCap]=useState(familyRow.monthly_spend_cap==null?"":String(familyRow.monthly_spend_cap));
+  const[saving,setSaving]=useState(false);
+  useEffect(()=>{
+    setPayer(familyRow.paidBy||"family");setNote(familyRow.paid_by_note||"");setCode(familyRow.discount_code||"");
+    setPct(String(Number(familyRow.discount_percent)||0));setCap(familyRow.monthly_spend_cap==null?"":String(familyRow.monthly_spend_cap));
+  },[familyRow.paidBy,familyRow.paid_by_note,familyRow.discount_code,familyRow.discount_percent,familyRow.monthly_spend_cap]);
+  useEffect(()=>{
+    let stopped=false;
+    const q=isAdmin
+      ? sb.from("enterprises").select("name").eq("id",familyRow.enterprise_id).maybeSingle().then(({data})=>data&&data.name)
+      : sb.rpc("family_payer_info",{p_family_id:familyRow.id}).then(({data})=>data&&data[0]&&data[0].firm_name);
+    q.then(n=>{if(!stopped&&n)setFirmName(n);});
+    return()=>{stopped=true;};
+  },[familyRow.enterprise_id,familyRow.id,isAdmin]);
+  const firmPaid=familyRow.paidBy==="enterprise";
+  const label=firmName||"the firm";
+  const save=async()=>{
+    const p=Number(pct)||0;
+    if(payer==="enterprise"&&!(p>=0&&p<=100)){toast("The discount must be between 0 and 100 percent","error");return;}
+    if(cap!==""&&!(Number(cap)>=0)){toast("The monthly limit must be a number","error");return;}
+    setSaving(true);
+    const firm=payer==="enterprise";
+    const{error}=await sb.from("families").update({
+      paid_by:payer,
+      paid_by_note:firm?(note.trim()||null):null,
+      discount_code:firm&&p>0?(code.trim().toUpperCase()||null):null,
+      discount_percent:firm?p:0,
+      monthly_spend_cap:cap===""?null:Number(cap),
+    }).eq("id",familyRow.id);
+    setSaving(false);
+    if(error){
+      toast(/cancel_subscription_first/.test(error.message)
+        ?"This household still has its own live Stripe subscription. Cancel it in Stripe first, then switch who pays, or they would be billed twice."
+        :error.message,"error");
+      return;
+    }
+    toast("Saved");
+    if(reload)await reload("families");
+  };
+  const dirty=payer!==(familyRow.paidBy||"family")||note!==(familyRow.paid_by_note||"")||code!==(familyRow.discount_code||"")
+    ||(Number(pct)||0)!==(Number(familyRow.discount_percent)||0)||(cap===""?null:Number(cap))!==(familyRow.monthly_spend_cap==null?null:Number(familyRow.monthly_spend_cap));
+  return <div style={{background:B.white,borderRadius:12,padding:20,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,marginBottom:20}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:6}}>
+      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Who pays</div>
+      <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",borderRadius:20,padding:"3px 10px",
+        background:firmPaid?"rgba(206,182,129,0.22)":"#eceff3",color:firmPaid?"#7a5a19":"#5b6573"}}>
+        {firmPaid?`Paid by ${label}`:"Paid by the household"}
+      </span>
+    </div>
+    <div style={{fontSize:12,color:B.textSoft,lineHeight:1.55,marginBottom:isAdmin?14:0}}>
+      {firmPaid
+        ? `${label} is invoiced monthly for this household's plan and any extra workflows. No card is charged here.`
+        : `This household belongs to ${label}, but pays its own plan on its own card.`}
+      {!isAdmin&&" Only an ORDANIS admin can change this."}
+    </div>
+    {isAdmin&&<>
+      <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+        {[["family","The household pays (own card)"],["enterprise",`${firmName||"The firm"} pays (monthly invoice)`]].map(([v,l])=>{
+          const on=payer===v;
+          return <button key={v} type="button" onClick={()=>setPayer(v)} style={{flex:"1 1 200px",textAlign:"left",padding:"10px 12px",borderRadius:8,cursor:"pointer",border:`1px solid ${on?B.gold:B.border}`,background:on?B.bg:B.white,borderLeft:`3px solid ${on?B.gold:"transparent"}`,fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:700,color:B.navy}}>{l}</button>;
+        })}
+      </div>
+      {payer==="enterprise"&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(180px,100%),1fr))",gap:12}}>
+        <Field label="Discount code"><Inp placeholder="e.g. ACC10" value={code} onChange={e=>setCode(e.target.value)}/></Field>
+        <Field label="Percent off plan fee"><Inp type="number" min="0" max="100" step="0.5" value={pct} onChange={e=>setPct(e.target.value)}/></Field>
+      </div>}
+      <Field label="Monthly limit for extra workflows ($)">
+        <Inp type="number" min="0" step="1" placeholder="Plan default" value={cap} onChange={e=>setCap(e.target.value)}/>
+        {payer==="enterprise"&&<div style={{fontSize:11,color:cap===""?"#8b1a1a":B.textMute,marginTop:4,lineHeight:1.45}}>
+          {cap===""?"Required for this household to add extra workflows while a firm pays. Until it is set, they cannot.":"The most extra-workflow charges this household can add to the firm's invoice each month."}
+        </div>}
+      </Field>
+      {payer==="enterprise"&&<Field label="Note (kept with the change history)"><Inp placeholder="e.g. Covered under the Accurate Advisory agreement" value={note} onChange={e=>setNote(e.target.value)}/></Field>}
+      {payer==="enterprise"&&Number(pct)>0&&<div style={{fontSize:11.5,color:B.textSoft,marginBottom:12,lineHeight:1.5}}>The discount applies to the plan fee only. Extra workflows stay at list price.</div>}
+      <div style={{display:"flex",justifyContent:"flex-end"}}><Btn small disabled={saving||!dirty} onClick={save}>{saving?"Saving…":"Save"}</Btn></div>
+    </>}
+  </div>;
+}
+
+function FirmBillingView({toast}){
+  const[firms,setFirms]=useState(null);
+  const[firmId,setFirmId]=useState("");
+  const[period,setPeriod]=useState(monthStartISO(1));
+  const[pv,setPv]=useState(null);
+  const[pvErr,setPvErr]=useState("");
+  const[invoices,setInvoices]=useState([]);
+  const[billing,setBilling]=useState(null);
+  const[email,setEmail]=useState("");
+  const[terms,setTerms]=useState("30");
+  const[busy,setBusy]=useState("");
+  const[confirm,setConfirm]=useState(null);
+  useEffect(()=>{
+    sb.from("enterprises").select("id,name").order("name").then(({data,error})=>{
+      if(error){toast(error.message,"error");setFirms([]);return;}
+      setFirms(data||[]);
+      if(data&&data.length===1)setFirmId(data[0].id);
+    });
+  },[]);
+  const loadFirm=useCallback(async()=>{
+    if(!firmId){setPv(null);setInvoices([]);setBilling(null);return;}
+    setPvErr("");
+    const[b,i]=await Promise.all([
+      sb.from("enterprise_billing").select("stripe_customer_id,billing_email,payment_terms_days").eq("enterprise_id",firmId).maybeSingle(),
+      sb.from("enterprise_invoices").select("id,period_month,status,total,subtotal,discount_total,line_count,created_at,stripe_invoice_id").eq("enterprise_id",firmId).order("period_month",{ascending:false}).order("created_at",{ascending:false}),
+    ]);
+    setBilling(b.data||null);
+    if(b.data){setEmail(b.data.billing_email||"");setTerms(String(b.data.payment_terms_days||30));}
+    setInvoices(i.data||[]);
+    try{setPv(await callEnterpriseInvoice({action:"preview",enterprise_id:firmId,period}));}
+    catch(e){setPv(null);setPvErr(e.message);}
+  },[firmId,period]);
+  useEffect(()=>{loadFirm();},[loadFirm]);
+  const run=async(key,body,okMsg)=>{
+    setBusy(key);
+    try{const r=await callEnterpriseInvoice(body);toast(typeof okMsg==="function"?okMsg(r):okMsg);await loadFirm();return r;}
+    catch(e){toast(e.message,"error");}
+    finally{setBusy("");}
+  };
+  const setupBilling=()=>run("setup",{action:"ensure_customer",enterprise_id:firmId,billing_email:email.trim(),payment_terms_days:Number(terms)||30},r=>r.created?"Invoicing set up for this firm":"Saved");
+  const createDraft=()=>run("draft",{action:"create_draft",enterprise_id:firmId,period},r=>`Draft created for ${money2(r.total)}. Review it, then finalize to send it.`);
+  const doConfirm=async()=>{
+    const c=confirm;setConfirm(null);
+    if(c.kind==="finalize")await run("fin"+c.inv.id,{action:"finalize",invoice_id:c.inv.id},r=>r.emailed===false?"Finalized, but the email could not be sent. Send it from Stripe.":"Finalized and sent to the firm");
+    else await run("void"+c.inv.id,{action:"void",invoice_id:c.inv.id},"Invoice voided");
+  };
+  const lines=(pv&&pv.lines)||[];
+  const byFamily=[];
+  lines.forEach(l=>{let g=byFamily.find(x=>x.id===l.family_id);if(!g){g={id:l.family_id,name:l.family_name,rows:[]};byFamily.push(g);}g.rows.push(l);});
+  const blocked=!!(pv&&pv.blocking&&pv.blocking.length);
+  const canDraft=pv&&pv.billing_ready&&!blocked&&lines.length>0&&pv.total>0&&!pv.existing_invoice;
+  const card={background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:14,padding:"20px 24px",marginBottom:16,boxShadow:B.shadow};
+  const lab={fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10};
+  if(firms===null)return <Spinner/>;
+  return <div style={{height:"100%",overflowY:"auto"}}><div style={{maxWidth:860,padding:"24px 28px"}}>
+    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,color:B.navy,fontWeight:600,marginBottom:4}}>Firm billing</div>
+    <p style={{fontSize:13,color:B.textSoft,margin:"0 0 16px",maxWidth:680,lineHeight:1.6}}>
+      Each firm that pays for its households gets one invoice a month, billed in advance, with a line per household.
+      An invoice is built here as a draft. Nothing reaches the firm until you finalize it.
+    </p>
+    <GoldLine/>
+    {!firms.length&&<Empty text="No firms yet."/>}
+    {firms.length>0&&<div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:16}}>
+      <div style={{flex:"1 1 260px"}}><Field label="Firm"><Sel value={firmId} onChange={e=>setFirmId(e.target.value)}><option value="">Choose a firm…</option>{firms.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</Sel></Field></div>
+      <div style={{flex:"1 1 200px"}}><Field label="Invoice month"><Sel value={period} onChange={e=>setPeriod(e.target.value)}>
+        <option value={monthStartISO(0)}>{monthLabelOf(monthStartISO(0))} (this month)</option>
+        <option value={monthStartISO(1)}>{monthLabelOf(monthStartISO(1))} (next month)</option>
+      </Sel></Field></div>
+    </div>}
+
+    {firmId&&<>
+      <div style={card}>
+        <div style={lab}>Billing details</div>
+        {billing&&billing.stripe_customer_id&&<div style={{fontSize:12,color:B.textSoft,marginBottom:10}}>Set up in Stripe. Customer <span style={{fontFamily:"monospace"}}>{billing.stripe_customer_id}</span></div>}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(220px,100%),1fr))",gap:12}}>
+          <Field label="Billing email (invoices are sent here)"><Inp type="email" placeholder="accounts@firm.com" value={email} onChange={e=>setEmail(e.target.value)}/></Field>
+          <Field label="Payment terms (days)"><Inp type="number" min="1" max="90" value={terms} onChange={e=>setTerms(e.target.value)}/></Field>
+        </div>
+        <div style={{display:"flex",justifyContent:"flex-end"}}>
+          <Btn small disabled={busy==="setup"||!email.trim()} onClick={setupBilling}>{busy==="setup"?"Saving…":billing&&billing.stripe_customer_id?"Save changes":"Set up invoicing"}</Btn>
+        </div>
+      </div>
+
+      <div style={card}>
+        <div style={lab}>Preview, {monthLabelOf(period)}</div>
+        {pvErr&&<div style={{background:"#fde8e8",border:"1px solid #f5c6c6",color:"#8b1a1a",borderRadius:10,padding:"10px 14px",fontSize:13}}>{pvErr}</div>}
+        {pv&&<>
+          {pv.blocking.map((b,i)=><div key={i} style={{background:"#fde8e8",border:"1px solid #f5c6c6",color:"#8b1a1a",borderRadius:10,padding:"10px 14px",marginBottom:10,fontSize:13,lineHeight:1.5}}>{b.description}</div>)}
+          {pv.warnings.map((w,i)=><div key={i} style={{background:"#fef3e2",border:"1px solid #fcd97d",color:"#8a5c00",borderRadius:10,padding:"10px 14px",marginBottom:10,fontSize:13,lineHeight:1.5}}>{w.description}</div>)}
+          {pv.existing_invoice&&<div style={{background:"#e8f0f8",border:"1px solid #c7dcef",color:"#1d3a5c",borderRadius:10,padding:"10px 14px",marginBottom:10,fontSize:13,lineHeight:1.5}}>There is already a {INVOICE_STATUS_TINT[pv.existing_invoice.status]?.label.toLowerCase()} invoice for this month ({money2(pv.existing_invoice.total)}). Void it below to rebuild it.</div>}
+          {!lines.length&&<Empty text="Nothing to invoice for this month. Households appear here once a firm pays for them."/>}
+          {byFamily.map(g=><div key={g.id||g.name} style={{marginBottom:12}}>
+            <div style={{fontWeight:700,color:B.navy,fontSize:13.5,marginBottom:4}}>{g.name}</div>
+            {g.rows.map((r,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",gap:12,fontSize:12.5,color:B.text,padding:"4px 0",borderBottom:`1px solid ${B.borderLight}`}}>
+              <span style={{minWidth:0}}>{r.description}{Number(r.quantity)>1?`  (× ${Number(r.quantity)})`:""}</span>
+              <span style={{fontWeight:600,color:Number(r.amount)<0?"#0d5c2b":B.navy,whiteSpace:"nowrap"}}>{money2(r.amount)}</span>
+            </div>)}
+          </div>)}
+          {lines.length>0&&<div style={{marginTop:6,paddingTop:10,borderTop:`2px solid ${B.border}`,fontSize:13}}>
+            <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:B.textSoft}}>Subtotal</span><span>{money2(pv.subtotal)}</span></div>
+            {pv.discount_total!==0&&<div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:B.textSoft}}>Discounts</span><span style={{color:"#0d5c2b"}}>{money2(pv.discount_total)}</span></div>}
+            <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,color:B.navy,fontSize:15,marginTop:4}}><span>Total</span><span>{money2(pv.total)}</span></div>
+          </div>}
+          <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",gap:12,marginTop:14,flexWrap:"wrap"}}>
+            {!pv.billing_ready&&<span style={{fontSize:12,color:"#8b1a1a"}}>Set up billing details first.</span>}
+            <Btn variant="gold" disabled={!canDraft||busy==="draft"} onClick={createDraft}>{busy==="draft"?"Creating…":"Create draft invoice"}</Btn>
+          </div>
+        </>}
+      </div>
+
+      <div style={card}>
+        <div style={lab}>Invoices</div>
+        {!invoices.length&&<Empty text="No invoices yet."/>}
+        {invoices.map(inv=>{const t=INVOICE_STATUS_TINT[inv.status]||INVOICE_STATUS_TINT.draft;return <div key={inv.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",padding:"10px 0",borderBottom:`1px solid ${B.borderLight}`}}>
+          <div>
+            <div style={{fontWeight:700,color:B.navy,fontSize:13.5}}>{monthLabelOf(String(inv.period_month).slice(0,10))}</div>
+            <div style={{fontSize:11.5,color:B.textSoft}}>{inv.line_count} line{inv.line_count===1?"":"s"} · created {fmt(String(inv.created_at).slice(0,10))}</div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>{money2(inv.total)}</span>
+            <span style={{fontSize:9.5,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",borderRadius:20,padding:"2px 9px",background:t.bg,color:t.text}}>{t.label}</span>
+            {inv.status==="draft"&&<Btn small variant="gold" disabled={!!busy} onClick={()=>setConfirm({kind:"finalize",inv})}>Finalize and send</Btn>}
+            {(inv.status==="draft"||inv.status==="open")&&<Btn small variant="ghost" disabled={!!busy} onClick={()=>setConfirm({kind:"void",inv})}>Void</Btn>}
+          </div>
+        </div>;})}
+      </div>
+    </>}
+
+    {confirm&&<Modal title={confirm.kind==="finalize"?"Finalize and send?":"Void this invoice?"} onClose={()=>setConfirm(null)}>
+      <div style={{fontSize:14,color:B.text,lineHeight:1.6,marginTop:6}}>
+        {confirm.kind==="finalize"
+          ? <>This locks the {monthLabelOf(String(confirm.inv.period_month).slice(0,10))} invoice for <strong>{money2(confirm.inv.total)}</strong> and emails it to the firm's billing address. It can be voided afterwards, but they will already have received it.</>
+          : <>This cancels the {monthLabelOf(String(confirm.inv.period_month).slice(0,10))} invoice for <strong>{money2(confirm.inv.total)}</strong>. Any extra-workflow charges on it become billable again on the next invoice.</>}
+      </div>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:20,flexWrap:"wrap"}}>
+        <Btn variant="ghost" onClick={()=>setConfirm(null)}>Cancel</Btn>
+        <Btn variant={confirm.kind==="finalize"?"gold":"danger"} onClick={doConfirm}>{confirm.kind==="finalize"?"Finalize and send":"Void invoice"}</Btn>
+      </div>
+    </Modal>}
+  </div></div>;
+}
+
 const NAV_SECTIONS=[
   {section:"CLIENT MANAGEMENT",items:[
     {id:"dashboard",label:"Dashboard",icon:"⬡"},
@@ -12162,6 +12441,7 @@ const NAV_SECTIONS=[
   {section:"ADMIN",items:[
     {id:"users",label:"Users",icon:"⊕"},
     {id:"signups",label:"Signups",icon:"◈"},
+    {id:"firmbilling",label:"Firm billing",icon:"▤"},
     {id:"staterules",label:"State Rules",icon:"⚖"},
     // Only surfaced on instances running database-driven branding (the demo /
     // pitch instance); a normal tenant deploy has no use for it.
@@ -12470,6 +12750,7 @@ export default function App(){
               open. */}
           {tab==="users"       &&isAdminRole&&<UserManagementView key={navNonce} userProfile={userProfile} data={data} toast={showToast}/>}
           {tab==="signups"     &&isAdminRole&&<SignupsRevenueView key={navNonce} data={data} toast={showToast} userProfile={userProfile} reload={reload}/>}
+          {tab==="firmbilling" &&isAdminRole&&<FirmBillingView key={navNonce} toast={showToast}/>}
           {tab==="staterules"  &&isAdminRole&&<StateRulesView key={navNonce} userProfile={userProfile} toast={showToast}/>}
           {tab==="branding"    &&isAdminRole&&BRAND_ADMIN&&<BrandingView key={navNonce} toast={showToast}/>}
           {tab==="resources"   &&<ResourcesView key={navNonce} data={data} userProfile={userProfile} toast={showToast}/>}

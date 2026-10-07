@@ -9,7 +9,9 @@
 // Stripe, (3) marks the slot available. A browser cannot create a slot itself.
 //
 // Actions (POST, caller must be signed in):
-//   { action: "buy",           family_id }                  client or admin only
+//   { action: "buy",           family_id }                  client or admin only. If the household's firm pays
+//                                                           (paid_by = enterprise) no card is charged: the slot is
+//                                                           recorded and billed on the firm's next invoice.
 //   { action: "sync",          family_id }                  client, advisor or admin; lowers the
 //                                                           Stripe quantity after slots are
 //                                                           released (workflow completed etc.).
@@ -60,6 +62,8 @@ const DB_ERRORS: Record<string, { status: number; message: string }> = {
   purchase_in_progress: { status: 409, message: "A purchase is already in progress. Give it a moment and try again." },
   purchase_not_needed: { status: 409, message: "This household still has included workflows available, so nothing needs to be bought." },
   workflow_spend_cap_reached: { status: 409, message: "This household has reached its monthly limit for extra workflows. Contact your advisor to raise it." },
+  firm_paid_cap_not_set: { status: 409, message: "Extra workflows for this household are paid by its firm, and no monthly limit has been set yet. Ask your advisor to set one." },
+  enterprise_billing_not_set_up: { status: 409, message: "This household's firm is not set up for invoicing yet, so extra workflows cannot be added. Contact your advisor." },
 };
 
 async function heldCount(familyId: string, statuses: string[]): Promise<number> {
@@ -188,7 +192,7 @@ Deno.serve(async (req) => {
 
     // Runs as the caller, so row-level security decides whether they can see this household.
     const { data: family, error: fErr } = await sb.from("families")
-      .select("id, name, plan, stripe_subscription_id").eq("id", familyId).maybeSingle();
+      .select("id, name, plan, stripe_subscription_id, paid_by").eq("id", familyId).maybeSingle();
     if (fErr) return json({ error: fErr.message }, 500);
     if (!family) return json({ error: "Household not found, or you do not have access to it." }, 404);
 
@@ -204,11 +208,26 @@ Deno.serve(async (req) => {
         .eq("id", body.purchase_id).eq("family_id", familyId).eq("status", "available").select("id");
       if (rErr) return json({ error: rErr.message }, 500);
       if (!rel || rel.length === 0) return json({ error: "That slot is not available to cancel (it may already be in use)." }, 409);
+      // A firm-paid slot that has not been put on an invoice yet is simply never billed.
+      await admin.from("workflow_purchases").update({ prorated_amount: 0 })
+        .eq("id", body.purchase_id).eq("billed_to", "enterprise").is("catchup_invoice_line_id", null);
       const r = await syncDown(familyId);
       return json({ success: true, ...r });
     }
 
     // ── buy ──
+    // Firm-paid household: no card is charged. The database records the slot and it is billed to the
+    // firm on its next invoice (prorated line), so there is nothing to do with Stripe here.
+    if (family.paid_by === "enterprise") {
+      const { data: fp, error: fpErr } = await admin.rpc("begin_workflow_purchase", { p_family_id: familyId, p_user_id: user.id });
+      if (fpErr) {
+        const code = Object.keys(DB_ERRORS).find((k) => (fpErr.message || "").includes(k));
+        if (code) return json({ error: DB_ERRORS[code].message, code }, DB_ERRORS[code].status);
+        return json({ error: fpErr.message }, 500);
+      }
+      return json({ success: true, purchase_id: String(fp.purchase_id), reused: !!fp.reused, unit_price: Number(fp.unit_price), payer: "enterprise" });
+    }
+
     if (!family.stripe_subscription_id) {
       return json({ error: "This household has no active subscription to bill. Contact your advisor to add workflows." }, 409);
     }

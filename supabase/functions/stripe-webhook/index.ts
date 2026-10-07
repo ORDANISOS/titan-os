@@ -28,6 +28,8 @@
 //     so a human actually finds out a household needs an Expert assigned. IMPORTANT: this is a
 //     notification, not an assignment -- nothing here sets families.advisor_name/advisor_email.
 //     Someone still has to read that email and do it within the promised 24-48 hours.
+//   - On invoice.payment_succeeded for a firm invoice (metadata.kind = enterprise_invoice) it marks that
+//     invoice paid (enterprise_invoice_set_status) and does nothing else.
 //   - On invoice.upcoming it lowers a household's extra-workflow Stripe quantity to the slots it still
 //     holds (see lowerWorkflowSlotsBeforeRenewal). It never charges and never raises the quantity.
 //   - It does NOT run the day-by-day dunning cadence (which notice to send on which day of being
@@ -40,7 +42,7 @@
 // After deploying, register the endpoint URL in the Stripe dashboard (or via the Stripe CLI for
 // test mode) and set STRIPE_WEBHOOK_SECRET to the signing secret Stripe gives you for it.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.49.4";
 // npm: specifier, not esm.sh -- esm.sh's Stripe bundle pulls in a Node.js "process.nextTick"
 // polyfill that calls Deno.core.runMicrotasks(), which the current Supabase Edge Runtime does
 // not support. That crashes the isolate (visible in function logs as "event loop error:
@@ -480,6 +482,23 @@ Deno.serve(async (req) => {
 
       case "invoice.payment_succeeded": {
         const invoice = event.data.object as Stripe.Invoice;
+        // A firm's monthly invoice (built by enterprise-invoice) has no subscription behind it: mark it
+        // paid in our records and stop. The ledger rows for it are written separately.
+        if (invoice.metadata?.kind === "enterprise_invoice") {
+          const { error: paidErr } = await admin.rpc("enterprise_invoice_set_status", {
+            p_invoice_id: null, p_stripe_invoice_id: invoice.id, p_status: "paid", p_actor: null,
+          });
+          if (paidErr) {
+            const m = paidErr.message || "";
+            if (m.includes("invoice_not_found") || m.includes("invoice_is_void")) {
+              // Stripe says it was paid but our record is missing or voided: needs a human, a retry will not fix it.
+              console.error(`ENTERPRISE INVOICE PAID BUT NOT MATCHED: ${invoice.id}: ${m}`);
+            } else {
+              throw new Error(m);
+            }
+          }
+          break;
+        }
         const sub = invoice.subscription
           ? await stripe.subscriptions.retrieve(String(invoice.subscription))
           : null;
