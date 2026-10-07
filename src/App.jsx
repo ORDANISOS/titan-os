@@ -1247,7 +1247,10 @@ function BrandLockupSVG({width=220,compact=false}){
 // navy half for white, for use on navy/dark grounds -- putting navy on
 // navy just makes that half vanish, which is exactly the bug this fixes.
 function BrandMark({reversed=false,size=40}){
-  const usingDefaultMark=!import.meta.env.VITE_BRAND_MARK_URL;
+  // The live skin (applied at runtime from brand_profiles) can supply its own mark, so check BRAND.mark
+  // and not only the build-time env var; otherwise a skinned instance keeps showing the drawn ORDANIS O.
+  const _skinHasMark=!!BRAND.mark&&BRAND.mark!=="/ordanis-mark.png";
+  const usingDefaultMark=!import.meta.env.VITE_BRAND_MARK_URL&&!_skinHasMark;
   const id=useId();
   if(!usingDefaultMark)return <img src={BRAND.mark} alt={BRAND.short||BRAND.name} style={{width:size,height:size,objectFit:"contain",display:"block"}}/>;
   const ringPath="M50,14 a33,36 0 1,0 0,72 a33,36 0 1,0 0,-72 Z M50,23 a21,27 0 1,1 0,54 a21,27 0 1,1 0,-54 Z";
