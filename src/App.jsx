@@ -2442,7 +2442,7 @@ div.body{font-size:14px;white-space:pre-wrap;}
       const{data:resp,error:fnErr}=await sb.functions.invoke("family-ai-assistant",{body:{question,snapshot,history,assistantName}});
       if(fnErr)throw new Error(ASSISTANT_UNAVAILABLE);
       if(resp&&resp.error)throw new Error(ASSISTANT_UNAVAILABLE);
-      setMessages(m=>[...m,{role:"assistant",content:(resp&&resp.answer)||"No response."}]);
+      setMessages(m=>[...m,{role:"assistant",content:(resp&&resp.answer)||"I couldn't put an answer together that time. Could you try asking it a different way?"}]);
     }catch(e){
       setError(ASSISTANT_UNAVAILABLE);
     }finally{
@@ -2526,7 +2526,7 @@ const _greetedFamilies=new Set();
 // "please contact your Expert", which reads as "I don't have that information" and sends the family
 // off to chase a problem only the firm can fix. Real "not in your data" answers still come from the
 // assistant in its own words.
-const ASSISTANT_UNAVAILABLE="The assistant is temporarily unavailable. Please try again in a few minutes.";
+const ASSISTANT_UNAVAILABLE="I couldn't get an answer through just now. Please try again in a moment.";
 
 // Saves the assistant's name. A family login has no UPDATE access to its own `families` row, so the
 // write goes through set_my_assistant_name() -- a database function that can change only this one
@@ -2920,12 +2920,12 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   const cancelEditNote=()=>{setEditingNote(null);setEditNoteBody("");};
   const saveEditNote=async(n)=>{
     const body=editNoteBody.trim();
-    if(!body){toast("A note cannot be empty. Delete it instead.","error");return;}
+    if(!body){toast("A note needs a few words in it. If you no longer need it, you can delete it instead.","error");return;}
     if(body===(n.body||"")){cancelEditNote();return;}   // nothing changed, do not stamp an edit
     const{error}=await sb.from("notes")
       .update({body,updated_at:new Date().toISOString()}).eq("id",n.id);
     if(error){toast(error.message,"error");return;}
-    toast("Note updated");
+    toast("Note updated. All saved.");
     cancelEditNote();
     reload("notes");
   };
@@ -2940,7 +2940,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
         toast(`Note added with ${pendingNoteFiles.length} attachment${pendingNoteFiles.length>1?"s":""}`);
       }catch(e){toast("Note saved but attachment failed: "+e.message,"error");}
     }else{
-      toast("Note added");
+      toast("Note saved. Thanks for keeping this up to date.");
     }
     setNoteBody("");setPendingNoteFiles([]);
     reload("notes");reload("note_attachments");
@@ -2970,7 +2970,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   // Quick add task
   const addTask=async(f)=>{
     const{error}=await sb.from("tasks").insert({family_id:family.id,contact_id:f.contactId||null,title:f.title,due_date:f.dueDate||null,priority:f.priority,reminder_days:f.reminderDays||7,done:false,recurrence:f.recurrence||null,recurrence_interval:f.recurrence==="Custom"?(Number(f.recurrenceInterval)||1):null,recurrence_unit:f.recurrence==="Custom"?(f.recurrenceUnit||"week"):null});
-    if(error)toast(error.message,"error");else{toast("Task added");reload("tasks");}
+    if(error)toast(error.message,"error");else{toast("Task added. You're all set.");reload("tasks");}
   };
   const toggleTask=async(t)=>{
     const marking=!t.done;
@@ -2994,7 +2994,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   // Add/remove members
   const addMember=async(f)=>{
     const{error}=await sb.from("contacts").insert({family_id:family.id,name:f.name,email:f.email||null,phone:f.phone||null,company:f.company||null,type:f.type||"Individual",dob:f.dob||null,anniversary:f.anniversary||null,address:f.address||null,is_advisor:!!f.isAdvisor,tags:null});
-    if(error)toast(error.message,"error");else{toast("Member added");reload("contacts");}
+    if(error)toast(error.message,"error");else{toast("Member added. Welcome to the household record.");reload("contacts");}
   };
   const delMember=async(id)=>{
     const{error}=await sb.from("contacts").delete().eq("id",id);
@@ -3002,7 +3002,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   };
   const editMember=async(f)=>{
     const{error}=await sb.from("contacts").update({name:f.name,email:f.email||null,phone:f.phone||null,company:f.company||null,type:f.type||"Individual",dob:f.dob||null,anniversary:f.anniversary||null,address:f.address||null,is_advisor:!!f.isAdvisor}).eq("id",editM.id);
-    if(error)toast(error.message,"error");else{toast("Member updated");reload("contacts");}
+    if(error)toast(error.message,"error");else{toast("Member updated. All saved.");reload("contacts");}
   };
   const toggleMemberAdvisor=async(c)=>{
     if(!c.email){toast("Add an email to this contact first — the client emails them here.","error");return;}
@@ -3075,8 +3075,8 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
     }
     return _byName(a,b);
   });
-  const addFamilyContact=async(f)=>{const{error}=await sb.from("family_contacts").insert({family_id:family.id,name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,is_advisor:!!f.isAdvisor,notes:f.notes||null});if(error)toast(error.message,"error");else{toast("Contact added");reload("family_contacts");}};
-  const editFamilyContact=async(f)=>{const{error}=await sb.from("family_contacts").update({name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,is_advisor:!!f.isAdvisor,notes:f.notes||null}).eq("id",editFC.id);if(error)toast(error.message,"error");else{toast("Contact updated");reload("family_contacts");}};
+  const addFamilyContact=async(f)=>{const{error}=await sb.from("family_contacts").insert({family_id:family.id,name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,is_advisor:!!f.isAdvisor,notes:f.notes||null});if(error)toast(error.message,"error");else{toast("Contact added. Your team is easy to find now.");reload("family_contacts");}};
+  const editFamilyContact=async(f)=>{const{error}=await sb.from("family_contacts").update({name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,is_advisor:!!f.isAdvisor,notes:f.notes||null}).eq("id",editFC.id);if(error)toast(error.message,"error");else{toast("Contact updated. All saved.");reload("family_contacts");}};
   const delFamilyContact=async(id)=>{const{error}=await sb.from("family_contacts").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Contact removed");reload("family_contacts");}};
   const toggleFCAdvisor=async(c)=>{if(!c.email){toast("Add an email to this contact first — the client emails them here.","error");return;}const{error}=await sb.from("family_contacts").update({is_advisor:!c.isAdvisor}).eq("id",c.id);if(error)toast(error.message,"error");else{toast(!c.isAdvisor?"Marked as an emailable ORDANIS Expert":"Removed as ORDANIS Expert option");reload("family_contacts");}};
 
@@ -3086,20 +3086,20 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   const docForSection=(pid,section)=>(data.documents||[]).find(d=>d.propertyId===pid&&d.propertySection===section);
   // The family's scheduled-personal-property endorsement, linked from Valuables.
   const valuablesPolicyDoc=()=>(data.documents||[]).find(d=>d.familyId===family.id&&d.propertySection==="valuables_schedule");
-  const addPropertyContact=async(pid,f)=>{const{error}=await sb.from("property_contacts").insert({property_id:pid,family_id:family.id,name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,notes:f.notes||null});if(error)toast(error.message,"error");else{toast("Contact added");reload("property_contacts");}};
-  const editPropertyContact=async(id,f)=>{const{error}=await sb.from("property_contacts").update({name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,notes:f.notes||null}).eq("id",id);if(error)toast(error.message,"error");else{toast("Contact updated");reload("property_contacts");}};
+  const addPropertyContact=async(pid,f)=>{const{error}=await sb.from("property_contacts").insert({property_id:pid,family_id:family.id,name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,notes:f.notes||null});if(error)toast(error.message,"error");else{toast("Contact added. Your team is easy to find now.");reload("property_contacts");}};
+  const editPropertyContact=async(id,f)=>{const{error}=await sb.from("property_contacts").update({name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,notes:f.notes||null}).eq("id",id);if(error)toast(error.message,"error");else{toast("Contact updated. All saved.");reload("property_contacts");}};
   const delPropertyContact=async(id)=>{const{error}=await sb.from("property_contacts").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Contact removed");reload("property_contacts");}};
 
   // Add property
   const addProperty=async(f)=>{
     const row={family_id:family.id,owner_name:f.ownerName||null,address:f.address,property_type:f.propertyType,purchase_price:f.purchasePrice||null,purchase_date:f.purchaseDate||null,current_value:f.currentValue||null,lender:f.lender||null,loan_balance:f.loanBalance||null,interest_rate:f.interestRate||null,loan_payment:f.loanPayment||null,loan_maturity_date:f.loanMaturityDate||null,loan_type:f.loanType,rental_income:f.rentalIncome||null,property_taxes:f.propertyTaxes||null,utilities:f.utilities||null,insurance_company:f.insuranceCompany||null,insurance_premium:f.insurancePremium||null,insurance_expiration:f.insuranceExpiration||null,flood_insurance:!!f.floodInsurance,flood_insurance_company:f.floodInsuranceCompany||null,flood_insurance_premium:f.floodInsurancePremium||null,flood_insurance_expiration:f.floodInsuranceExpiration||null,hoa_fee:Number(f.hoaFee)||0,property_management_fee_pct:Number(f.propertyManagementFeePct)||0,include_mortgage_in_cashflow:f.includeMortgageInCashflow!==false,second_mortgage_balance:f.secondMortgageBalance||null,second_mortgage_payment:f.secondMortgagePayment||null,notes:f.notes||null};
     const{error}=await sb.from("properties").insert(row);
-    if(error)toast(error.message,"error");else{toast("Property added");reload("properties");}
+    if(error)toast(error.message,"error");else{toast("Property added. Your record is looking more complete.");reload("properties");}
   };
   const editProperty=async(id,f)=>{
     const row={owner_name:f.ownerName||null,address:f.address,property_type:f.propertyType,purchase_price:f.purchasePrice||null,purchase_date:f.purchaseDate||null,current_value:f.currentValue||null,lender:f.lender||null,loan_balance:f.loanBalance||null,interest_rate:f.interestRate||null,loan_payment:f.loanPayment||null,loan_maturity_date:f.loanMaturityDate||null,loan_type:f.loanType,rental_income:f.rentalIncome||null,property_taxes:f.propertyTaxes||null,utilities:f.utilities||null,insurance_company:f.insuranceCompany||null,insurance_premium:f.insurancePremium||null,insurance_expiration:f.insuranceExpiration||null,flood_insurance:!!f.floodInsurance,flood_insurance_company:f.floodInsuranceCompany||null,flood_insurance_premium:f.floodInsurancePremium||null,flood_insurance_expiration:f.floodInsuranceExpiration||null,hoa_fee:Number(f.hoaFee)||0,property_management_fee_pct:Number(f.propertyManagementFeePct)||0,include_mortgage_in_cashflow:f.includeMortgageInCashflow!==false,second_mortgage_balance:f.secondMortgageBalance||null,second_mortgage_payment:f.secondMortgagePayment||null,notes:f.notes||null};
     const{error}=await sb.from("properties").update(row).eq("id",id);
-    if(error)toast(error.message,"error");else{toast("Property updated");reload("properties");}
+    if(error)toast(error.message,"error");else{toast("Property updated. All saved.");reload("properties");}
   };
   const delProperty=async(id)=>{
     const{error}=await sb.from("properties").delete().eq("id",id);
@@ -3121,11 +3121,11 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   // Add valuable
   const addValuable=async(f)=>{
     const{error}=await sb.from("valuables").insert({family_id:family.id,category:f.category,description:f.description,make_model:f.makeModel||null,year:f.year||null,estimated_value:f.estimatedValue||null,insured:!!f.insured,insurance_company:f.insuranceCompany||null,notes:f.notes||null});
-    if(error)toast(error.message,"error");else{toast("Valuable added");reload("valuables");}
+    if(error)toast(error.message,"error");else{toast("Valuable added. One more thing safely on file.");reload("valuables");}
   };
   const editValuable=async(id,f)=>{
     const{error}=await sb.from("valuables").update({category:f.category,description:f.description,make_model:f.makeModel||null,year:f.year||null,estimated_value:f.estimatedValue||null,insured:!!f.insured,insurance_company:f.insuranceCompany||null,notes:f.notes||null}).eq("id",id);
-    if(error)toast(error.message,"error");else{toast("Valuable updated");reload("valuables");}
+    if(error)toast(error.message,"error");else{toast("Valuable updated. All saved.");reload("valuables");}
   };
   const delValuable=async(id)=>{
     const{error}=await sb.from("valuables").delete().eq("id",id);
@@ -3150,11 +3150,11 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   // Add portfolio account
   const addAccount=async(f)=>{
     const{error}=await sb.from("portfolio_accounts").insert({family_id:family.id,institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,account_advisor_name:f.accountAdvisorName||null,account_advisor_phone:f.accountAdvisorPhone||null,account_advisor_email:f.accountAdvisorEmail||null,notes:f.notes||null});
-    if(error)toast(error.message,"error");else{toast("Account added");reload("portfolio_accounts");}
+    if(error)toast(error.message,"error");else{toast("Account added. Your record is looking more complete.");reload("portfolio_accounts");}
   };
   const editAccount=async(id,f)=>{
     const{error}=await sb.from("portfolio_accounts").update({institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,account_advisor_name:f.accountAdvisorName||null,account_advisor_phone:f.accountAdvisorPhone||null,account_advisor_email:f.accountAdvisorEmail||null,notes:f.notes||null}).eq("id",id);
-    if(error)toast(error.message,"error");else{toast("Account updated");reload("portfolio_accounts");}
+    if(error)toast(error.message,"error");else{toast("Account updated. All saved.");reload("portfolio_accounts");}
   };
   const delAccount=async(id)=>{
     const{error}=await sb.from("portfolio_accounts").delete().eq("id",id);
@@ -3277,7 +3277,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
                 {canEdit&&<Btn small onClick={()=>{setEditM(null);setModal("member");}}>+ Add</Btn>}
               </div>
               <GoldLine/>
-              {contacts.length===0?<Empty text="No members yet — add the first one"/>:contacts.map(c=><div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${B.borderLight}`,gap:10,flexWrap:"wrap"}}>
+              {contacts.length===0?<Empty text="No members yet. Add the first one whenever you're ready."/>:contacts.map(c=><div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${B.borderLight}`,gap:10,flexWrap:"wrap"}}>
                 {/* MEMBER_ROW_RESPONSIVE: minWidth:0 is what actually lets this column
                     shrink — a flex item defaults to min-width:auto and will refuse to go
                     below its content width, which is what pushed the action buttons off
@@ -3332,7 +3332,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
                 {canEdit&&<Btn small onClick={()=>{setEditFC(null);setModal("familyContact");}}>+ Add</Btn>}
               </div>
               <GoldLine/>
-              {famContacts.length===0?<Empty text="No contacts yet — add team members, CPA, attorney…"/>:famContacts.map(c=><div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${B.borderLight}`,gap:8}}>
+              {famContacts.length===0?<Empty text="No contacts yet. Add your team, CPA, attorney and others whenever you're ready."/>:famContacts.map(c=><div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${B.borderLight}`,gap:8}}>
                 <div style={{minWidth:0}}>
                   <div style={{fontWeight:600,color:B.navy,fontSize:13}}>{c.name}{c.role&&<span style={{fontWeight:400,color:B.textSoft,fontSize:11,marginLeft:6}}>· {c.role}</span>}</div>
                   <div style={{fontSize:11,color:B.textSoft,marginTop:2,display:"flex",gap:10,flexWrap:"wrap"}}>
@@ -3356,7 +3356,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
                 {canEdit&&<Btn small onClick={()=>setModal("task")}>+ Add</Btn>}
               </div>
               <GoldLine/>
-              {pendingTasks.length===0?<Empty text="No pending tasks"/>:[...pendingTasks].sort((a,b)=>a.dueDate>b.dueDate?1:-1).slice(0,5).map(t=>{
+              {pendingTasks.length===0?<Empty text="You're all caught up. Nothing pending right now."/>:[...pendingTasks].sort((a,b)=>a.dueDate>b.dueDate?1:-1).slice(0,5).map(t=>{
                 const isOD=t.dueDate&&new Date(t.dueDate)<new Date();
                 const isSoon=!isOD&&t.dueDate&&(new Date(t.dueDate)-new Date())/(86400000)<=30;
                 return <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:`1px solid ${B.borderLight}`}}>
@@ -3382,7 +3382,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
                 style={{...inp,flex:1,minHeight:38,resize:"vertical",fontFamily:"inherit",lineHeight:1.55,paddingTop:9,paddingBottom:9}}/>
               <Btn onClick={addNote} disabled={!noteBody.trim()}>Add</Btn>
             </div>}
-            {famNotes.length===0?<Empty text="No notes yet"/>:[...famNotes].sort((a,b)=>b.createdAt>a.createdAt?1:-1).slice(0,4).map(n=><div key={n.id} style={{padding:"10px 0",borderBottom:`1px solid ${B.borderLight}`,display:"flex",justifyContent:"space-between",gap:10}}>
+            {famNotes.length===0?<Empty text="No notes yet. Jot down anything worth remembering."/>:[...famNotes].sort((a,b)=>b.createdAt>a.createdAt?1:-1).slice(0,4).map(n=><div key={n.id} style={{padding:"10px 0",borderBottom:`1px solid ${B.borderLight}`,display:"flex",justifyContent:"space-between",gap:10}}>
               <div style={{flex:1,minWidth:0}}>
                 {editingNote===n.id
                   ? <div>
@@ -3414,7 +3414,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
             <div style={{fontSize:13,color:B.textSoft}}>{properties.length} properties · {fmtMoney(totalRE)} total · {fmtMoney(totalDebt)} debt</div>
             {canEdit&&<Btn onClick={()=>setModal("property")}>+ Add Property</Btn>}
           </div>
-          {properties.length===0?<Empty text="No properties yet. Add the first one."/>:(()=>{
+          {properties.length===0?<Empty text="No properties yet. Add the first one whenever you're ready."/>:(()=>{
             const groups=[...PROP_TYPES,"Other"].map(type=>({type,list:properties.filter(p=>type==="Other"?!PROP_TYPES.includes(p.propertyType):p.propertyType===type).sort(propBySort)})).filter(g=>g.list.length>0);
             const card=(p,section,i)=><div key={p.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid ${B.gold}`,borderRadius:12,padding:20,marginBottom:14,boxShadow:B.shadow}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
@@ -3504,7 +3504,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
             <div style={{fontSize:13,color:B.textSoft}}>{accounts.length} accounts · {fmtMoney(totalAccounts)} total</div>
             {canEdit&&<Btn onClick={()=>setModal("account")}>+ Add Account</Btn>}
           </div>
-          {accounts.length===0?<Empty text="No portfolio accounts yet."/>:accounts.map(a=>{
+          {accounts.length===0?<Empty text="No portfolio accounts yet. Add one to start building the picture."/>:accounts.map(a=>{
             const pct=pctChange(a.startingBalance,a.currentBalance);
             const gain=(Number(a.currentBalance)||0)-(Number(a.startingBalance)||0);
             return <div key={a.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid ${B.navyMid}`,borderRadius:12,padding:20,marginBottom:12,boxShadow:B.shadow}}>
@@ -3599,7 +3599,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
               </div>)}
             </div>;
           })}
-          {valuables.length===0&&<Empty text="No valuables recorded yet."/>}
+          {valuables.length===0&&<Empty text="No valuables recorded yet. Add the first one whenever you're ready."/>}
         </div>}
 
         {/* DEALS TAB */}
@@ -3664,7 +3664,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
             </div>
           </div>}
           <div style={{flex:1,overflowY:"auto",padding:isMobile?"14px 14px":"20px 28px"}}>
-            {famNotes.length===0?<Empty text="No notes yet."/>:[...famNotes].sort((a,b)=>b.createdAt>a.createdAt?1:-1).map(n=>{
+            {famNotes.length===0?<Empty text="No notes yet. Jot down anything worth remembering."/>:[...famNotes].sort((a,b)=>b.createdAt>a.createdAt?1:-1).map(n=>{
               const atts=noteAttachments.filter(a=>a.noteId===n.id);
               return <div key={n.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:12,marginBottom:12,boxShadow:B.shadow,overflow:"hidden"}}>
                 <div style={{height:3,background:`linear-gradient(90deg,${B.gold},${B.goldLight})`}}/>
@@ -3734,7 +3734,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
             </div>
             {canEdit&&<Btn onClick={()=>setModal("task")}>+ New Task</Btn>}
           </div>
-          {famTasks.length===0?<Empty text="No tasks yet."/>:famTasks.map(t=>{
+          {famTasks.length===0?<Empty text="No tasks yet. Add one to keep something on track."/>:famTasks.map(t=>{
             const isOD=!t.done&&t.dueDate&&new Date(t.dueDate)<new Date();
             const isSoon=!t.done&&!isOD&&t.dueDate&&(new Date(t.dueDate)-new Date())/(86400000)<=30;
             return <div key={t.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",marginBottom:8,background:B.white,border:`1px solid ${isOD?"#f5c6c6":B.borderLight}`,borderLeft:`3px solid ${isOD?"#d43030":isSoon?"#d4900a":PRIORITY_COLORS[t.priority]?.dot||B.gold}`,borderRadius:10,opacity:t.done?.55:1,boxShadow:B.shadow}}>
@@ -4477,7 +4477,7 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
     // Save to localStorage (immediate UX) and DB (so client view sees same)
     try{localStorage.setItem(settingsKey,JSON.stringify(next));}catch{}
     const{error}=await sb.from("families").update({cash_flow_settings:next}).eq("id",family.id);
-    if(error){toast&&toast("Could not save settings: "+error.message,"error");return;}
+    if(error){toast&&toast("We couldn't save your settings. Please try again. ("+error.message+")","error");return;}
     if(reload)reload("families");
   };
   const updateSettings=async(patch)=>{
@@ -4486,7 +4486,7 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
     setSettings(next);
     try{localStorage.setItem(settingsKey,JSON.stringify(next));}catch{}
     const{error}=await sb.from("families").update({cash_flow_settings:next}).eq("id",family.id);
-    if(error){toast&&toast("Could not save settings: "+error.message,"error");return;}
+    if(error){toast&&toast("We couldn't save your settings. Please try again. ("+error.message+")","error");return;}
     if(reload)reload("families");
   };
 
@@ -4662,11 +4662,11 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
     // New events go to the end of the list
     const maxSort=Math.max(0,...events.map(e=>Number(e.sortOrder)||0));
     const{error}=await sb.from("cash_flow_events").insert({family_id:family.id,direction:f.direction||"income",event_type:f.eventType,description:f.description||null,amount:Number(f.amount)||0,frequency:f.frequency,start_date:f.startDate,end_date:f.endDate||null,tax_treatment:f.taxTreatment||"ordinary",notes:f.notes||null,sort_order:maxSort+10,pcm_responsible:f.direction==="expense"?!!f.pcmResponsible:false,category:f.direction==="expense"?(f.category||null):null,property_id:f.propertyId||null,...(f.direction==="expense"?splitVendorKey(f.vendorKey):{vendor_family_contact_id:null,vendor_property_contact_id:null})});
-    if(error)toast(error.message,"error");else{toast("Event added");reload("cash_flow_events");}
+    if(error)toast(error.message,"error");else{toast("Event added. Your cash flow just got clearer.");reload("cash_flow_events");}
   };
   const editEvent=async(id,f)=>{
     const{error}=await sb.from("cash_flow_events").update({direction:f.direction||"income",event_type:f.eventType,description:f.description||null,amount:Number(f.amount)||0,frequency:f.frequency,start_date:f.startDate,end_date:f.endDate||null,tax_treatment:f.taxTreatment||"ordinary",notes:f.notes||null,pcm_responsible:f.direction==="expense"?!!f.pcmResponsible:false,category:f.direction==="expense"?(f.category||null):null,property_id:f.propertyId||null,...(f.direction==="expense"?splitVendorKey(f.vendorKey):{vendor_family_contact_id:null,vendor_property_contact_id:null})}).eq("id",id);
-    if(error)toast(error.message,"error");else{toast("Event updated");reload("cash_flow_events");}
+    if(error)toast(error.message,"error");else{toast("Event updated. All saved.");reload("cash_flow_events");}
   };
   const delEvent=async(id)=>{
     const{error}=await sb.from("cash_flow_events").delete().eq("id",id);
@@ -5367,7 +5367,7 @@ function PortfolioView({data,reload,toast,userProfile}){
   const totalStart=accounts.reduce((s,a)=>s+(Number(a.startingBalance)||0),0);
   const totalPct=totalStart>0?(((totalValue-totalStart)/totalStart)*100).toFixed(2):null;
 
-  const add=async f=>{const{error}=await sb.from("portfolio_accounts").insert({family_id:f.familyId||null,institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,notes:f.notes||null});if(error)toast(error.message,"error");else{toast("Account added");reload("portfolio_accounts");}};
+  const add=async f=>{const{error}=await sb.from("portfolio_accounts").insert({family_id:f.familyId||null,institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,notes:f.notes||null});if(error)toast(error.message,"error");else{toast("Account added. Your record is looking more complete.");reload("portfolio_accounts");}};
   const edit=async f=>{const{error}=await sb.from("portfolio_accounts").update({family_id:f.familyId||null,institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,notes:f.notes||null}).eq("id",modal.id);if(error)toast(error.message,"error");else{toast("Updated");reload("portfolio_accounts");setSelected({...selected,...f});}};
   const del=async id=>{const{error}=await sb.from("portfolio_accounts").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Deleted");reload("portfolio_accounts");if(selected?.id===id)setSelected(null);}};
 
@@ -5381,7 +5381,7 @@ function PortfolioView({data,reload,toast,userProfile}){
         <Btn onClick={()=>setModal("add")}>+ New Account</Btn>
       </div>
       <div style={{overflowY:"auto",flex:1}}>
-        {accounts.length===0&&<Empty text="No portfolio accounts yet."/>}
+        {accounts.length===0&&<Empty text="No portfolio accounts yet. Add one to start building the picture."/>}
         {ACCT_TYPES.map(type=>{
           const list=accounts.filter(a=>a.accountType===type);
           if(!list.length)return null;
@@ -5481,13 +5481,13 @@ function NotesView({data,reload,toast,userProfile,prospectMode=false}){
         toast(`Note added with ${pendingFiles.length} attachment${pendingFiles.length>1?"s":""}`);
       }catch(e){toast("Note saved but attachment failed: "+e.message,"error");}
     }else{
-      toast("Note added");
+      toast("Note saved. Thanks for keeping this up to date.");
     }
     setBody("");setPendingFiles([]);setSaving(false);
     reload("notes");reload("note_attachments");
   };
   const del=async id=>{const{error}=await sb.from("notes").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Deleted");reload("notes");reload("note_attachments");}};
-  const saveEdit=async id=>{if(!editBody.trim())return;const{error}=await sb.from("notes").update({body:editBody}).eq("id",id);if(error)toast(error.message,"error");else{toast("Note updated");setEditId(null);setEditBody("");reload("notes");}};
+  const saveEdit=async id=>{if(!editBody.trim())return;const{error}=await sb.from("notes").update({body:editBody}).eq("id",id);if(error)toast(error.message,"error");else{toast("Note updated. All saved.");setEditId(null);setEditBody("");reload("notes");}};
   const download=async(att)=>{
     if(!await firmDocGate(att.filePath,att.name,"download_document")){toast(FIRM_GATE_MSG,"error");return;}
     const{data,error}=await sb.storage.from("documents").createSignedUrl(att.filePath,300,{download:att.name||true});
@@ -5733,7 +5733,7 @@ function TasksView({data,reload,toast,userProfile,prospectMode=false}){
     return Object.values(groups).sort((a,b)=>(b.open-a.open)||(b.overdue-a.overdue));
   },[tasks,contacts,advisors]);
 
-  const add=async f=>{const{error}=await sb.from("tasks").insert({family_id:f.familyId||null,contact_id:f.contactId||null,title:f.title,due_date:f.dueDate||null,priority:f.priority,reminder_days:Number(f.reminderDays)||7,done:false,recurrence:f.recurrence||null,recurrence_interval:f.recurrence==="Custom"?(Number(f.recurrenceInterval)||1):null,recurrence_unit:f.recurrence==="Custom"?(f.recurrenceUnit||"week"):null});if(error)toast(error.message,"error");else{toast("Task added");reload("tasks");}};
+  const add=async f=>{const{error}=await sb.from("tasks").insert({family_id:f.familyId||null,contact_id:f.contactId||null,title:f.title,due_date:f.dueDate||null,priority:f.priority,reminder_days:Number(f.reminderDays)||7,done:false,recurrence:f.recurrence||null,recurrence_interval:f.recurrence==="Custom"?(Number(f.recurrenceInterval)||1):null,recurrence_unit:f.recurrence==="Custom"?(f.recurrenceUnit||"week"):null});if(error)toast(error.message,"error");else{toast("Task added. You're all set.");reload("tasks");}};
   const tog=async t=>{const marking=!t.done;const{error}=await sb.from("tasks").update(marking?{done:true,completed_at:new Date().toISOString(),completed_by:CURRENT_USER_LABEL||null}:{done:false,completed_at:null,completed_by:null}).eq("id",t.id);if(error){toast(error.message,"error");return;}if(marking&&t.recurrence){const nd=nextRecurrence(t.dueDate,t.recurrence,t.recurrenceInterval,t.recurrenceUnit);if(nd){await sb.from("tasks").insert({family_id:t.familyId||null,contact_id:t.contactId||null,title:t.title,due_date:nd,priority:t.priority,reminder_days:t.reminderDays||7,done:false,recurrence:t.recurrence,recurrence_interval:t.recurrence==="Custom"?(t.recurrenceInterval||1):null,recurrence_unit:t.recurrence==="Custom"?(t.recurrenceUnit||"week"):null});toast("Next occurrence: "+fmt(nd));}}reload("tasks");};
   const del=async id=>{const{error}=await sb.from("tasks").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Deleted");reload("tasks");}};
 
@@ -5900,7 +5900,7 @@ function ProspectContactsView({data,reload,toast,userProfile}){
     advisors.forEach(a=>{if(!groups[a.email])groups[a.email]={email:a.email,name:a.full_name||a.email,unassigned:false,prospects:0,openDeals:0,pipeline:0,won:0};});
     return Object.values(groups).sort((a,b)=>(b.pipeline-a.pipeline)||(b.prospects-a.prospects));
   },[prospects,data.deals,advisors]);
-  const add=async f=>{const{error}=await sb.from("contacts").insert({family_id:null,name:f.name,company:f.company||null,email:f.email||null,phone:f.phone||null,type:f.type,tags:f.tags||null,advisor_email:f.advisorEmail||null,advisor_name:f.advisorName||null});if(error)toast(error.message,"error");else{toast("Contact added");reload("contacts");}};
+  const add=async f=>{const{error}=await sb.from("contacts").insert({family_id:null,name:f.name,company:f.company||null,email:f.email||null,phone:f.phone||null,type:f.type,tags:f.tags||null,advisor_email:f.advisorEmail||null,advisor_name:f.advisorName||null});if(error)toast(error.message,"error");else{toast("Contact added. Your team is easy to find now.");reload("contacts");}};
   const edit=async f=>{const{error}=await sb.from("contacts").update({name:f.name,company:f.company||null,email:f.email||null,phone:f.phone||null,type:f.type,tags:f.tags||null,advisor_email:f.advisorEmail||null,advisor_name:f.advisorName||null}).eq("id",modal.id);if(error)toast(error.message,"error");else{toast("Updated");reload("contacts");setSelected({...selected,...f});}};
   const del=async id=>{const{error}=await sb.from("contacts").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Deleted");reload("contacts");if(selected?.id===id)setSelected(null);}};
 
@@ -6483,7 +6483,7 @@ function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
       <div style={{background:B.bgCard,borderRadius:12,padding:24,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow}}>
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600,marginBottom:4}}>Upcoming Deadlines</div>
         <GoldLine/>
-        {deadlines.length===0&&<Empty text="No upcoming deadlines."/>}
+        {deadlines.length===0&&<Empty text="No upcoming deadlines right now."/>}
         {deadlines.slice(0,10).map((d,i)=>{const soon=d.days<=14;const col=d.done?"#2e9e57":d.overdue?"#d43030":soon?"#d4900a":B.navyMid;const goD=()=>{if(onOpenFamily&&d.familyId)onOpenFamily(d.familyId,DEADLINE_TAB[d.type]||"overview");};
         const openable=!!(onOpenFamily&&d.familyId);
         return <div key={d.key||i}
@@ -6534,7 +6534,7 @@ function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
           <div style={{fontSize:13,color:B.textMid,lineHeight:1.5,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{n.body}</div>
           <div style={{display:"flex",gap:8,marginTop:3}}><span style={{fontSize:11,color:B.textMute}}>{fmt(n.createdAt)}</span>{fam&&<span style={{fontSize:11,color:B.gold,fontWeight:700}}>{fam.name}</span>}</div>
         </div>;})}
-        {notes.length===0&&<Empty text="No notes yet."/>}
+        {notes.length===0&&<Empty text="No notes yet. Jot down anything worth remembering."/>}
       </div>
     </div>
   </div>;
@@ -9132,19 +9132,19 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   // ValuableQuickForm above for why the fields differ from the admin forms.
   const addProperty=async f=>{
     const{error}=await sb.from("properties").insert({family_id:family.id,address:f.address,property_type:f.propertyType,purchase_price:f.purchasePrice||null,purchase_date:f.purchaseDate||null,current_value:f.currentValue||null,notes:f.notes||null});
-    if(error)toast(error.message,"error");else{toast("Property added");await reload("properties");}
+    if(error)toast(error.message,"error");else{toast("Property added. Your record is looking more complete.");await reload("properties");}
   };
   const addAccount=async f=>{
     const{error}=await sb.from("portfolio_accounts").insert({family_id:family.id,institution:f.institution,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,account_advisor_name:f.accountAdvisorName||null,account_advisor_phone:f.accountAdvisorPhone||null,account_advisor_email:f.accountAdvisorEmail||null,notes:f.notes||null});
-    if(error)toast(error.message,"error");else{toast("Account added");await reload("portfolio_accounts");}
+    if(error)toast(error.message,"error");else{toast("Account added. Your record is looking more complete.");await reload("portfolio_accounts");}
   };
   const addValuable=async f=>{
     const{error}=await sb.from("valuables").insert({family_id:family.id,category:f.category,description:f.description,make_model:f.makeModel||null,year:f.year||null,estimated_value:f.estimatedValue||null,notes:f.notes||null});
-    if(error)toast(error.message,"error");else{toast("Valuable added");await reload("valuables");}
+    if(error)toast(error.message,"error");else{toast("Valuable added. One more thing safely on file.");await reload("valuables");}
   };
   const addMember=async f=>{
     const{error}=await sb.from("contacts").insert({family_id:family.id,name:f.name,relationship:f.relationship||null,email:f.email||null,phone:f.phone||null,type:"Individual"});
-    if(error)toast(error.message,"error");else{toast("Member added");await reload("contacts");}
+    if(error)toast(error.message,"error");else{toast("Member added. Welcome to the household record.");await reload("contacts");}
   };
   const delMember=async id=>{
     const{error}=await sb.from("contacts").delete().eq("id",id);
@@ -9152,7 +9152,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   };
   const addProfessional=async f=>{
     const{error}=await sb.from("family_contacts").insert({family_id:family.id,name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,is_advisor:false});
-    if(error)toast(error.message,"error");else{toast("Contact added");await reload("family_contacts");}
+    if(error)toast(error.message,"error");else{toast("Contact added. Your team is easy to find now.");await reload("family_contacts");}
   };
   const delProfessional=async id=>{
     const{error}=await sb.from("family_contacts").delete().eq("id",id);
@@ -9412,7 +9412,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         {addAccountOpen&&<Modal title="Add a portfolio account" onClose={()=>setAddAccountOpen(false)}>
           <AccountQuickForm saving={savingQuickAdd} onCancel={()=>setAddAccountOpen(false)} onSave={runQuickAdd(addAccount,()=>setAddAccountOpen(false))}/>
         </Modal>}
-        {accounts.length===0?<Empty text="No portfolio accounts on file."/>:accounts.map(a=>{
+        {accounts.length===0?<Empty text="No portfolio accounts on file yet."/>:accounts.map(a=>{
           const pct=pctChange(a.startingBalance,a.currentBalance);
           const gain=(Number(a.currentBalance)||0)-(Number(a.startingBalance)||0);
           return <div key={a.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid ${B.gold}`,borderRadius:12,padding:24,marginBottom:16,boxShadow:B.shadow}}>
@@ -9448,7 +9448,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         {addPropertyOpen&&<Modal title="Add a property" onClose={()=>setAddPropertyOpen(false)}>
           <PropertyQuickForm saving={savingQuickAdd} onCancel={()=>setAddPropertyOpen(false)} onSave={runQuickAdd(addProperty,()=>setAddPropertyOpen(false))}/>
         </Modal>}
-        {properties.length===0?<Empty text="No properties on file."/>:(()=>{
+        {properties.length===0?<Empty text="No properties on file yet."/>:(()=>{
           const bySort=(a,b)=>((Number.isFinite(Number(a.sortOrder))?Number(a.sortOrder):1e9)-(Number.isFinite(Number(b.sortOrder))?Number(b.sortOrder):1e9))||(new Date(a.createdAt||0)-new Date(b.createdAt||0));
           const groups=[...PROP_TYPES,"Other"].map(type=>({type,list:properties.filter(p=>type==="Other"?!PROP_TYPES.includes(p.propertyType):p.propertyType===type).sort(bySort)})).filter(g=>g.list.length>0);
           const card=p=><div key={p.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid ${B.gold}`,borderRadius:12,padding:24,marginBottom:16,boxShadow:B.shadow}}>
@@ -9498,7 +9498,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         {addMemberOpen&&<Modal title="Add a household member" onClose={()=>setAddMemberOpen(false)}>
           <MemberQuickForm saving={savingQuickAdd} onCancel={()=>setAddMemberOpen(false)} onSave={runQuickAdd(addMember,()=>setAddMemberOpen(false))}/>
         </Modal>}
-        {members.length===0?<Empty text="No household members on file."/>:<div style={{marginBottom:28}}>
+        {members.length===0?<Empty text="No household members on file yet."/>:<div style={{marginBottom:28}}>
           {members.map(m=><div key={m.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"14px 18px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:B.shadow,gap:12,flexWrap:"wrap"}}>
             <div>
               <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{m.name}{m.relationship&&<span style={{fontWeight:400,color:B.textSoft,marginLeft:8}}>· {m.relationship}</span>}</div>
@@ -9515,7 +9515,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         {addProfessionalOpen&&<Modal title="Add a professional contact" onClose={()=>setAddProfessionalOpen(false)}>
           <ProfessionalQuickForm saving={savingQuickAdd} allowPortalGrant={true} partnerSeatFree={clientPlan==="premier"} onCancel={()=>setAddProfessionalOpen(false)} onSave={async f=>{setSavingQuickAdd(true);try{await addProfessional(f);if(f.grantPortalAccess)await addBusinessPartner(f.email,f.name);setAddProfessionalOpen(false);}finally{setSavingQuickAdd(false);}}}/>
         </Modal>}
-        {professionals.length===0?<Empty text="No professional contacts on file."/>:<div style={{marginBottom:28}}>
+        {professionals.length===0?<Empty text="No professional contacts on file yet."/>:<div style={{marginBottom:28}}>
           {professionals.map(p=><div key={p.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"14px 18px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:B.shadow,gap:12,flexWrap:"wrap"}}>
             <div>
               <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{p.name}{p.role&&<span style={{fontWeight:400,color:B.textSoft,marginLeft:8}}>· {p.role}</span>}</div>
@@ -9579,7 +9579,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           <ValuableQuickForm saving={savingQuickAdd} onCancel={()=>setAddValuableOpen(false)} onSave={runQuickAdd(addValuable,()=>setAddValuableOpen(false))}/>
         </Modal>}
         <div style={{marginBottom:20}}/>
-        {valuables.length===0?<Empty text="No valuables on file."/>:VALUABLE_CATS.map(cat=>{
+        {valuables.length===0?<Empty text="No valuables on file yet."/>:VALUABLE_CATS.map(cat=>{
           // "Other" absorbs unrecognised categories so nothing is hidden.
           const items=valuables.filter(v=>cat==="Other"?!VALUABLE_CATS.includes(v.category)||v.category==="Other":v.category===cat);
           if(!items.length)return null;
@@ -12548,6 +12548,15 @@ function ClientFirmCard({familyId,toast,reload}){
   </CollapseBox>;
 }
 
+// How the client gave their agreement to be moved into a firm. A fixed list, not free text, so the
+// log reads the same every time. The log also records who recorded it and when.
+const AGREEMENT_METHODS=["Verbal - Phone","Verbal - In person","Written"];
+const agreementSelect=(value,onChange)=><select value={value} onChange={e=>onChange(e.target.value)}
+  style={{width:"100%",maxWidth:360,boxSizing:"border-box",marginTop:8,padding:"8px 10px",border:`1px solid ${B.border}`,borderRadius:8,fontSize:13,fontFamily:"inherit",color:B.text,background:B.white}}>
+  <option value="">How did the client agree?</option>
+  {AGREEMENT_METHODS.map(m=><option key={m} value={m}>{m}</option>)}
+</select>;
+
 // What an ORDANIS admin sees on a household: its firm, the log of how it got there, and the only
 // ways to move it in or out. The move records that the client agreed; the server refuses without it.
 function FirmMembershipCard({familyRow,toast,reload}){
@@ -12573,7 +12582,7 @@ function FirmMembershipCard({familyRow,toast,reload}){
   useEffect(()=>{load();},[familyRow.id,firmId]);
   const nameOf=id=>(firms.find(f=>f.id===id)||{}).name||"a firm";
   const options=firms.filter(f=>f.active&&f.id!==firmId);
-  const canMove=!!target&&agreed&&note.trim().length>=5&&!busy&&!firmPaid;
+  const canMove=!!target&&agreed&&AGREEMENT_METHODS.includes(note)&&!busy&&!firmPaid;
   const move=async()=>{
     setBusy(true);
     try{
@@ -12620,8 +12629,7 @@ function FirmMembershipCard({familyRow,toast,reload}){
           <input type="checkbox" checked={agreed} onChange={e=>setAgreed(e.target.checked)} style={{marginTop:2}}/>
           The client has agreed to share this household's summary information with {nameOf(target)}.
         </label>
-        <textarea value={note} onChange={e=>setNote(e.target.value)} rows={2} maxLength={400} placeholder="How did they agree? Who confirmed it, and when? (recorded in the log)"
-          style={{width:"100%",maxWidth:520,boxSizing:"border-box",marginTop:8,padding:"8px 10px",border:`1px solid ${B.border}`,borderRadius:8,fontSize:12.5,fontFamily:"inherit",color:B.text,resize:"vertical"}}/>
+        {agreementSelect(note,setNote)}
         <div style={{marginTop:8}}><Btn small onClick={move} disabled={!canMove}>{busy?"Saving…":(firmId?"Move household":"Add to firm")}</Btn></div>
       </div>}
     </div>}
@@ -13264,15 +13272,15 @@ function EntPeople({row,data,toast,onChanged}){
     </div>
     <div style={entCard}>
       <div style={entLab}>Move a household into {row.name}</div>
-      <div style={{fontSize:12,color:B.textSoft,lineHeight:1.55,marginBottom:10}}>Only with the client's agreement. Firm-paid households can't be moved. The move is written to the log with your note.</div>
+      <div style={{fontSize:12,color:B.textSoft,lineHeight:1.55,marginBottom:10}}>Only with the client's agreement. Firm-paid households can't be moved. The move is written to the log with how the client agreed.</div>
       <div style={{maxWidth:420}}><Sel value={target} onChange={e=>setTarget(e.target.value)}>
         <option value="">Choose a household…</option>
         {others.map(f=><option key={f.id} value={f.id}>{f.name} (now in {firmName(f.enterprise_id)})</option>)}
       </Sel></div>
       {target&&<div style={{marginTop:10}}>
         <label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:12.5,color:B.text,cursor:"pointer"}}><input type="checkbox" checked={agreed} onChange={e=>setAgreed(e.target.checked)} style={{marginTop:2}}/>The client has agreed to share this household's information with {row.name}.</label>
-        <textarea value={note} onChange={e=>setNote(e.target.value)} rows={2} maxLength={400} placeholder="How did they agree? Who confirmed it, and when?" style={{width:"100%",maxWidth:520,boxSizing:"border-box",marginTop:8,padding:"8px 10px",border:`1px solid ${B.border}`,borderRadius:8,fontSize:12.5,fontFamily:"inherit",color:B.text,resize:"vertical"}}/>
-        <div style={{marginTop:8}}><Btn small disabled={busy||!agreed||note.trim().length<5} onClick={move}>{busy?"Saving…":"Move household"}</Btn></div>
+        {agreementSelect(note,setNote)}
+        <div style={{marginTop:8}}><Btn small disabled={busy||!agreed||!AGREEMENT_METHODS.includes(note)} onClick={move}>{busy?"Saving…":"Move household"}</Btn></div>
       </div>}
     </div>
     <div style={entCard}>
@@ -13553,9 +13561,19 @@ export default function App(){
   },[]);
 
   // Runs at load and again whenever the person signs in or out, because the skin follows the person's firm.
+  // After sign-in it also loads the firm's settings (such as whether property costs are derived into cash
+  // flow). The data load below waits for this, so screens never compute with the previous firm's settings.
+  const skinPromiseRef=useRef(Promise.resolve());
   useEffect(()=>{
-    if(!RUNTIME_BRAND)return;
-    loadActiveBrandProfile().then(changed=>{if(changed)setSkinTick(t=>t+1);}).finally(()=>setBrandReady(true));
+    skinPromiseRef.current=(async()=>{
+      let changed=false;
+      if(RUNTIME_BRAND){
+        changed=await loadActiveBrandProfile();
+        if(changed)setSkinTick(t=>t+1);
+        setBrandReady(true);
+      }
+      if(authed){await loadFirmDefaults();}
+    })().catch(()=>{});
   },[authed]);
 
   // Send the user back to the dashboard whenever the current tab isn't one their
@@ -13624,6 +13642,7 @@ export default function App(){
     if(!authed||!userProfile)return;
     (async()=>{
       setLoading(true);
+      await skinPromiseRef.current;
       if(userProfile.role==="enterprise_admin"){
         // Firm administrator: FirmDashboard loads one household at a time, after recording that it was opened.
       } else if(userProfile.role==="client"){

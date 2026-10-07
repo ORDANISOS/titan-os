@@ -1,7 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// TitanOS is the product; every deployment (including PCM's own) is a white-label
+// ORDANIS is the platform; every deployment (including PCM's own) is a white-label
 // tenant that supplies its own branding via VITE_BRAND_* env vars.
 //
 // The <head> has to be branded at BUILD time, not run time: link-preview crawlers
@@ -9,18 +9,18 @@ import react from '@vitejs/plugin-react'
 // ever see the static HTML. That's why these values can't come from the database
 // the way the in-app branding does — a shared link previews as whatever the build
 // baked in.
-const TITANOS_DEFAULTS = {
-  name: 'TitanOS',
-  short: 'TitanOS',
-  description: 'TitanOS — the private wealth operating system. White-label client portals, reporting, and AI concierge for advisory firms.',
-  ogImage: '/titanos-og.png',
+const ORDANIS_DEFAULTS = {
+  name: 'ORDANIS',
+  short: 'ORDANIS',
+  description: 'ORDANIS — private wealth administration. Client portals, reporting, and an AI assistant for advisory firms and family offices.',
+  ogImage: '/ordanis-og.png',
   primary: '#092b49',
-  favicon: '/titanos-favicon.ico',
-  favicon16: '/titanos-favicon-16x16.png',
-  favicon32: '/titanos-favicon-32x32.png',
-  appleIcon: '/titanos-apple-touch-icon.png',
-  favicon192: '/titanos-favicon-192.png',
-  favicon512: '/titanos-favicon-512.png',
+  favicon: '/ordanis-favicon.ico',
+  favicon16: '/ordanis-favicon-16x16.png',
+  favicon32: '/ordanis-favicon-32x32.png',
+  appleIcon: '/ordanis-apple-touch-icon.png',
+  favicon192: '/ordanis-favicon-192.png',
+  favicon512: '/ordanis-favicon-512.png',
 }
 
 const esc = (s) =>
@@ -37,18 +37,18 @@ export default defineConfig(({ mode }) => {
   const buildId = (env.VITE_BUILD_ID || process.env.VERCEL_GIT_COMMIT_SHA || String(Date.now())).slice(0, 12)
 
   const brand = {
-    name: pick('VITE_BRAND_NAME', TITANOS_DEFAULTS.name),
-    short: pick('VITE_BRAND_SHORT', TITANOS_DEFAULTS.short),
-    description: pick('VITE_BRAND_DESCRIPTION', TITANOS_DEFAULTS.description),
-    ogImage: pick('VITE_BRAND_OG_IMAGE', TITANOS_DEFAULTS.ogImage),
-    primary: pick('VITE_BRAND_PRIMARY', TITANOS_DEFAULTS.primary),
+    name: pick('VITE_BRAND_NAME', ORDANIS_DEFAULTS.name),
+    short: pick('VITE_BRAND_SHORT', ORDANIS_DEFAULTS.short),
+    description: pick('VITE_BRAND_DESCRIPTION', ORDANIS_DEFAULTS.description),
+    ogImage: pick('VITE_BRAND_OG_IMAGE', ORDANIS_DEFAULTS.ogImage),
+    primary: pick('VITE_BRAND_PRIMARY', ORDANIS_DEFAULTS.primary),
     siteUrl: pick('VITE_BRAND_SITE_URL', ''),
-    favicon: pick('VITE_BRAND_FAVICON', TITANOS_DEFAULTS.favicon),
-    favicon16: pick('VITE_BRAND_FAVICON_16', TITANOS_DEFAULTS.favicon16),
-    favicon32: pick('VITE_BRAND_FAVICON_32', TITANOS_DEFAULTS.favicon32),
-    appleIcon: pick('VITE_BRAND_APPLE_ICON', TITANOS_DEFAULTS.appleIcon),
-    favicon192: pick('VITE_BRAND_FAVICON_192', TITANOS_DEFAULTS.favicon192),
-    favicon512: pick('VITE_BRAND_FAVICON_512', TITANOS_DEFAULTS.favicon512),
+    favicon: pick('VITE_BRAND_FAVICON', ORDANIS_DEFAULTS.favicon),
+    favicon16: pick('VITE_BRAND_FAVICON_16', ORDANIS_DEFAULTS.favicon16),
+    favicon32: pick('VITE_BRAND_FAVICON_32', ORDANIS_DEFAULTS.favicon32),
+    appleIcon: pick('VITE_BRAND_APPLE_ICON', ORDANIS_DEFAULTS.appleIcon),
+    favicon192: pick('VITE_BRAND_FAVICON_192', ORDANIS_DEFAULTS.favicon192),
+    favicon512: pick('VITE_BRAND_FAVICON_512', ORDANIS_DEFAULTS.favicon512),
   }
 
   // Crawlers need an absolute og:image URL; a leading-slash path won't resolve

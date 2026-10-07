@@ -1,7 +1,7 @@
 {
-  "name": "PCM Family Office",
-  "short_name": "PCM",
-  "description": "PCM Family Office Client Management Platform",
+  "name": "ORDANIS",
+  "short_name": "ORDANIS",
+  "description": "ORDANIS \u2014 private wealth administration",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#092b49",
@@ -27,6 +27,9 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": ["business", "finance"],
+  "categories": [
+    "business",
+    "finance"
+  ],
   "screenshots": []
 }

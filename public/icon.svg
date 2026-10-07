@@ -1,7 +1,9 @@
-<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img">
-<title>Titan icon</title>
-<desc>Simplified T icon, navy crossbar and red stem, for use at small sizes such as a favicon or app icon.</desc>
-<rect x="0" y="0" width="200" height="200" fill="#FFFFFF"/>
-<rect x="20" y="40" width="160" height="44" rx="8" fill="#1E3A5F"/>
-<rect x="78" y="40" width="44" height="120" rx="8" fill="#B3242D"/>
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>ORDANIS icon</title>
+<desc>The ORDANIS mark, a serif O split navy-white and gold, on a navy tile. For favicons and app icons.</desc>
+<defs><clipPath id="l"><rect x="0" y="0" width="50" height="100"/></clipPath>
+<clipPath id="r"><rect x="50" y="0" width="50" height="100"/></clipPath></defs>
+<rect width="100" height="100" fill="#0a2540"/>
+<g clip-path="url(#l)"><path fill-rule="evenodd" fill="#ffffff" d="M50,14 a33,36 0 1,0 0,72 a33,36 0 1,0 0,-72 Z M50,23 a21,27 0 1,1 0,54 a21,27 0 1,1 0,-54 Z"/></g>
+<g clip-path="url(#r)"><path fill-rule="evenodd" fill="#c9a961" d="M50,14 a33,36 0 1,0 0,72 a33,36 0 1,0 0,-72 Z M50,23 a21,27 0 1,1 0,54 a21,27 0 1,1 0,-54 Z"/></g>
 </svg>
