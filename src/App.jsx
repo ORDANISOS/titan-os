@@ -9851,6 +9851,12 @@ function FirmDashboard({userProfile,logout,toast}){
           <EntTile label="Combined net worth" value={worth?entMoney0(worth.net_worth):"—"} sub="Entered by households and their Expert, not synced from banks"/>
           <EntTile label="Open tasks" value={openTasks} sub={overdueTasks?`${overdueTasks} overdue`:"None overdue"}/>
         </div>
+        {worth&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:16}}>
+          <EntTile label="Real estate" value={entMoney0(worth.real_estate)}/>
+          <EntTile label="Debt" value={entMoney0(worth.debt)}/>
+          <EntTile label="Portfolio" value={entMoney0(worth.portfolio)}/>
+          <EntTile label="Valuables" value={entMoney0(worth.valuables)}/>
+        </div>}
         <div style={{display:"flex",gap:8,marginBottom:14}}>{tabBtn("households","Households")}{tabBtn("activity","Access record")}</div>
         {view==="households"&&<div style={{...entCard,padding:"8px 14px",overflowX:"auto"}}>
           {hh.length===0?<Empty text="No households have joined your firm yet."/>:<table style={{width:"100%",borderCollapse:"collapse",minWidth:620}}>
@@ -12396,6 +12402,28 @@ const JOINED_VIA_TEXT={signup_code:"signed up with the firm's code",client_join:
 const dateOnly=v=>v?new Date(v).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}):"";
 
 // What a signed-in client sees: which firm they belong to, or a way to join one with a code.
+// A card that folds down to its header. Closed by default, and each viewer's choice is remembered in their own
+// browser (never required: it works the same without storage).
+function CollapseBox({id,head,badge,summary,box,children,defaultOpen=false}){
+  const key="ordanis.collapse."+id;
+  const[open,setOpen]=useState(()=>{try{const v=window.localStorage.getItem(key);return v===null?defaultOpen:v==="1";}catch(_e){return defaultOpen;}});
+  const toggle=()=>setOpen(o=>{const n=!o;try{window.localStorage.setItem(key,n?"1":"0");}catch(_e){}return n;});
+  return <div style={box}>
+    <button type="button" onClick={toggle} aria-expanded={open}
+      style={{display:"flex",width:"100%",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",background:"none",border:"none",padding:0,margin:0,cursor:"pointer",fontFamily:"inherit",textAlign:"left",color:"inherit"}}>
+      <div style={{minWidth:0}}>
+        {head}
+        {!open&&summary&&<div style={{marginTop:3}}>{summary}</div>}
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        {badge}
+        <span aria-hidden="true" style={{fontSize:12,color:B.textMute,display:"inline-block",transform:open?"rotate(90deg)":"none",transition:"transform .15s"}}>▶</span>
+      </div>
+    </button>
+    {open&&<div style={{marginTop:12}}>{children}</div>}
+  </div>;
+}
+
 function ClientFirmCard({familyId,toast,reload}){
   const[info,setInfo]=useState(null);
   const[loaded,setLoaded]=useState(false);
@@ -12437,17 +12465,19 @@ function ClientFirmCard({familyId,toast,reload}){
   if(!firm&&!info.open)return null;
   const box={background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:14,padding:"20px 24px",marginBottom:16,boxShadow:B.shadow};
   const label={fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8};
-  if(firm)return <div style={box}>
-    <div style={label}>Your firm</div>
+  if(firm)return <CollapseBox id="clientFirm" box={box}
+    head={<div style={{...label,marginBottom:0}}>Your firm</div>}
+    summary={<div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600}}>{firm.firm_name}</div>}>
     <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:B.navy,fontWeight:600}}>{firm.firm_name}</div>
     <div style={{fontSize:12.5,color:B.textSoft,marginTop:4,lineHeight:1.6}}>
       {firm.joined_at?`Joined ${dateOnly(firm.joined_at)}`:"Member"}{firm.joined_via&&JOINED_VIA_TEXT[firm.joined_via]?` (${JOINED_VIA_TEXT[firm.joined_via]})`:""}.
       {" "}The firm's administrators can view everything you can see in your household's portal, including your documents. They see nothing beyond that, have view access only, and cannot change anything.
       {" "}To leave the firm, ask your ORDANIS contact.
     </div>
-  </div>;
-  return <div style={box}>
-    <div style={label}>Join a firm</div>
+  </CollapseBox>;
+  return <CollapseBox id="clientJoinFirm" box={box}
+    head={<div style={{...label,marginBottom:0}}>Join a firm</div>}
+    summary={<div style={{fontSize:12.5,color:B.textSoft}}>Have a firm code? Open this to join.</div>}>
     {!joinOpen&&<>
       <div style={{fontSize:13,color:B.textSoft,lineHeight:1.6,marginBottom:12}}>If an advisory firm gave you a firm code, you can join it here. You will see exactly what the firm can see before you agree.</div>
       <Btn small variant="ghost" onClick={()=>setJoinOpen(true)}>I have a firm code</Btn>
@@ -12474,7 +12504,7 @@ function ClientFirmCard({familyId,toast,reload}){
         <div style={{marginTop:12}}><Btn onClick={join} disabled={!agree||busy}>{busy?"Joining…":"Join "+look.firm}</Btn></div>
       </div>}
     </>}
-  </div>;
+  </CollapseBox>;
 }
 
 // What an ORDANIS admin sees on a household: its firm, the log of how it got there, and the only
@@ -12524,13 +12554,13 @@ function FirmMembershipCard({familyRow,toast,reload}){
     setBusy(false);
   };
   const EVENT_TEXT={joined:"Joined",moved:"Moved",removed:"Removed"};
-  return <div style={{background:B.white,borderRadius:12,padding:20,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,marginBottom:20}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:6}}>
-      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Firm</div>
-      <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",borderRadius:20,padding:"3px 10px",background:firmId?"rgba(206,182,129,0.22)":"#eceff3",color:firmId?"#7a5a19":"#5b6573"}}>
+  return <CollapseBox id="adminFirm"
+    box={{background:B.white,borderRadius:12,padding:"14px 20px",border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,marginBottom:12}}
+    head={<div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Firm</div>}
+    badge={<span style={{fontSize:10,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",borderRadius:20,padding:"3px 10px",background:firmId?"rgba(206,182,129,0.22)":"#eceff3",color:firmId?"#7a5a19":"#5b6573"}}>
         {firmId?nameOf(firmId):"Not in a firm"}
-      </span>
-    </div>
+      </span>}
+    summary={!firmId&&<div style={{fontSize:12,color:B.textSoft}}>Open this to add the household to a firm.</div>}>
     <div style={{fontSize:12,color:B.textSoft,lineHeight:1.55,marginBottom:12}}>
       {firmId
         ? "The firm's administrators can view what the household owner can see, view only."
@@ -12578,7 +12608,7 @@ function FirmMembershipCard({familyRow,toast,reload}){
         {ev.consent_note?<div style={{color:B.textMute,fontSize:11.5}}>{ev.consent_note}</div>:null}
       </div>)}
     </div>}
-  </div>;
+  </CollapseBox>;
 }
 
 function PayerCard({familyRow,userProfile,toast,reload}){
@@ -12629,14 +12659,13 @@ function PayerCard({familyRow,userProfile,toast,reload}){
   };
   const dirty=payer!==(familyRow.paidBy||"family")||note!==(familyRow.paid_by_note||"")||code!==(familyRow.discount_code||"")
     ||(Number(pct)||0)!==(Number(familyRow.discount_percent)||0)||(cap===""?null:Number(cap))!==(familyRow.monthly_spend_cap==null?null:Number(familyRow.monthly_spend_cap));
-  return <div style={{background:B.white,borderRadius:12,padding:20,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,marginBottom:20}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:6}}>
-      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Who pays</div>
-      <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",borderRadius:20,padding:"3px 10px",
+  return <CollapseBox id="payerCard"
+    box={{background:B.white,borderRadius:12,padding:"14px 20px",border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,marginBottom:12}}
+    head={<div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Who pays</div>}
+    badge={<span style={{fontSize:10,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",borderRadius:20,padding:"3px 10px",
         background:firmPaid?"rgba(206,182,129,0.22)":"#eceff3",color:firmPaid?"#7a5a19":"#5b6573"}}>
         {firmPaid?`Paid by ${label}`:"Paid by the household"}
-      </span>
-    </div>
+      </span>}>
     <div style={{fontSize:12,color:B.textSoft,lineHeight:1.55,marginBottom:isAdmin?14:0}}>
       {firmPaid
         ? `${label} is invoiced monthly for this household's plan and any extra workflows. No card is charged here.`
@@ -12664,7 +12693,7 @@ function PayerCard({familyRow,userProfile,toast,reload}){
       {payer==="enterprise"&&Number(pct)>0&&<div style={{fontSize:11.5,color:B.textSoft,marginBottom:12,lineHeight:1.5}}>The discount applies to the plan fee only. Extra workflows stay at list price.</div>}
       <div style={{display:"flex",justifyContent:"flex-end"}}><Btn small disabled={saving||!dirty} onClick={save}>{saving?"Saving…":"Save"}</Btn></div>
     </>}
-  </div>;
+  </CollapseBox>;
 }
 
 function FirmBillingView({toast}){
@@ -12894,6 +12923,10 @@ function EnterprisesView({toast,userProfile,onOpenBranding}){
       ["Plan MRR",sum(r=>r.rev.plan_mrr),data.plat.plan_mrr],
       ["Revenue this month",sum(r=>r.rev.total_revenue),data.plat.total_revenue],
       ["Net worth",sum(r=>r.nw.net_worth),data.plat.net_worth],
+      ["Real estate",sum(r=>r.nw.real_estate),data.plat.real_estate],
+      ["Debt",sum(r=>r.nw.debt),data.plat.debt],
+      ["Portfolio",sum(r=>r.nw.portfolio),data.plat.portfolio],
+      ["Valuables",sum(r=>r.nw.valuables),data.plat.valuables],
     ];
     const off=pairs.filter(([,a,b])=>Math.abs(Number(a)-Number(b))>0.005);
     return{ok:!off.length,off};
@@ -12913,14 +12946,14 @@ function EnterprisesView({toast,userProfile,onOpenBranding}){
     </p>
     <GoldLine/>
     {check&&<div style={{background:check.ok?"#e0f5e9":"#fde8e8",border:`1px solid ${check.ok?"#bfe8cf":"#f5c6c6"}`,color:check.ok?"#0d5c2b":"#8b1a1a",borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:13,lineHeight:1.5}}>
-      {check.ok?"Firms plus ORDANIS direct add up to the platform for households, plan MRR, this month's revenue and net worth."
+      {check.ok?"Firms plus ORDANIS direct add up to the platform for households, plan MRR, this month's revenue, net worth and each of its parts."
         :`Firms plus ORDANIS direct do not add up to the platform for: ${check.off.map(([k,a,b])=>`${k} (rows ${Number(a).toLocaleString()}, platform ${Number(b).toLocaleString()})`).join("; ")}. Tell the developer.`}
     </div>}
     <div style={entCard}>
       <div style={{overflowX:"auto"}}>
-        <table style={{width:"100%",borderCollapse:"collapse",minWidth:980}}>
+        <table style={{width:"100%",borderCollapse:"collapse",minWidth:1340}}>
           <thead><tr>
-            {["Firm","Skin","Domain","Code","Households","Users","Plan MRR","Usage (month)","Net worth","New, 30 days","Contract"].map(h=><th key={h} style={entTh}>{h}</th>)}
+            {["Firm","Skin","Domain","Code","Households","Users","Plan MRR","Usage (month)","Net worth","Real estate","Debt","Portfolio","Valuables","New, 30 days","Contract"].map(h=><th key={h} style={entTh}>{h}</th>)}
           </tr></thead>
           <tbody>
             {rows.map(r=><tr key={r.key} onClick={()=>setOpenKey(r.key)} style={{cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.background=B.bg} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
@@ -12932,7 +12965,11 @@ function EnterprisesView({toast,userProfile,onOpenBranding}){
               <td style={entTd}>{r.users.length}</td>
               <td style={entTd}>{money2(r.rev.plan_mrr)}</td>
               <td style={entTd}>{money2(r.rev.usage_revenue)}</td>
-              <td style={entTd}>{entMoney0(r.nw.net_worth)}</td>
+              <td style={{...entTd,fontWeight:600}}>{entMoney0(r.nw.net_worth)}</td>
+              <td style={entTd}>{entMoney0(r.nw.real_estate)}</td>
+              <td style={entTd}>{entMoney0(r.nw.debt)}</td>
+              <td style={entTd}>{entMoney0(r.nw.portfolio)}</td>
+              <td style={entTd}>{entMoney0(r.nw.valuables)}</td>
               <td style={entTd}>{r.signups30}</td>
               <td style={entTd}>{r.ent?entContractStatus(r.ent):"—"}</td>
             </tr>)}
@@ -12944,6 +12981,10 @@ function EnterprisesView({toast,userProfile,onOpenBranding}){
             <td style={{...entTd,fontWeight:700,borderTop:`2px solid ${B.border}`,borderBottom:"none"}}>{money2(plat.plan_mrr)}</td>
             <td style={{...entTd,fontWeight:700,borderTop:`2px solid ${B.border}`,borderBottom:"none"}}>{money2(rows.reduce((s,r)=>s+(Number(r.rev.usage_revenue)||0),0))}</td>
             <td style={{...entTd,fontWeight:700,borderTop:`2px solid ${B.border}`,borderBottom:"none"}}>{entMoney0(plat.net_worth)}</td>
+            <td style={{...entTd,fontWeight:700,borderTop:`2px solid ${B.border}`,borderBottom:"none"}}>{entMoney0(plat.real_estate)}</td>
+            <td style={{...entTd,fontWeight:700,borderTop:`2px solid ${B.border}`,borderBottom:"none"}}>{entMoney0(plat.debt)}</td>
+            <td style={{...entTd,fontWeight:700,borderTop:`2px solid ${B.border}`,borderBottom:"none"}}>{entMoney0(plat.portfolio)}</td>
+            <td style={{...entTd,fontWeight:700,borderTop:`2px solid ${B.border}`,borderBottom:"none"}}>{entMoney0(plat.valuables)}</td>
             <td style={{...entTd,borderTop:`2px solid ${B.border}`,borderBottom:"none"}} colSpan={2}/>
           </tr></tfoot>}
         </table>
