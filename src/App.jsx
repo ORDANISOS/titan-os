@@ -747,9 +747,19 @@ const TABLES=["families","contacts","properties","deals","notes","tasks","portfo
 const FAMILY_SCOPED=["contacts","properties","deals","notes","tasks","portfolio_accounts","account_balances","valuables","documents","cash_flow_events","cash_flow_payment_log","deadline_acks","family_contacts","property_contacts","family_partners"];
 // Display label of the signed-in user, set at login; used to stamp task completions.
 let CURRENT_USER_LABEL="";
+let CURRENT_USER_ROLE="";
+// A firm administrator opening a Vault document or attachment is recorded first, and if the record cannot be
+// written the file is not opened. Everyone else passes straight through.
+async function firmDocGate(path,name,action="open_document"){
+  if(CURRENT_USER_ROLE!=="enterprise_admin")return true;
+  const fid=String(path||"").split("/")[0];
+  const{error}=await sb.rpc("firm_log_access",{p_family_id:fid,p_action:action,p_detail:String(name||path||"").slice(0,300)});
+  return !error;
+}
+const FIRM_GATE_MSG="This access could not be recorded, so the file was not opened.";
 // Display-only rename: the underlying role value stored in the DB/permissions stays "advisor";
 // only the label shown to users reads "ORDANIS Expert".
-const ROLE_LABELS={admin:"Admin",advisor:"ORDANIS Expert",client:"Client",partner:"Partner"};
+const ROLE_LABELS={admin:"Admin",advisor:"ORDANIS Expert",client:"Client",partner:"Partner",enterprise_admin:"Firm Administrator"};
 const roleLabel=r=>ROLE_LABELS[(r||"").toLowerCase()]||r;
 
 
@@ -942,6 +952,7 @@ function PhoneLink({value,style}){
 // without hunting through the Vault.
 async function openStoredDoc(doc,toast){
   if(!doc?.filePath){toast&&toast("No file on record for this document","error");return;}
+  if(!await firmDocGate(doc.filePath,doc.name||doc.title)){toast&&toast(FIRM_GATE_MSG,"error");return;}
   const{data,error}=await sb.storage.from("documents").createSignedUrl(doc.filePath,300);
   if(error||!data?.signedUrl){toast&&toast(error?.message||"Could not open that document","error");return;}
   window.open(data.signedUrl,"_blank","noopener");
@@ -2721,7 +2732,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   // create/edit/delete anywhere except uploading documents (handled separately
   // below). Enforced for real via RLS (write_access policies exclude partner);
   // this just keeps the UI from showing controls that would fail server-side.
-  const canEdit=userProfile?.role!=="partner";
+  const canEdit=userProfile?.role!=="partner"&&userProfile?.role!=="enterprise_admin"; // firm administrators are view only, enforced by the database as well
   // PROVIDERS_COLLAPSE
   // Keyed by property and defaulting closed. A Set rather than a single id because
   // comparing two properties' vendors means having both open at once.
@@ -2828,7 +2839,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   //
   // Obligations is absent entirely on Core rather than shown disabled. A locked door on every
   // visit is worse than no door, and the tab row is already the tightest thing on this screen.
-  const TABS=["Overview","Properties","Portfolio","Cash Flow",...(hasWorkflows?["Obligations"]:[]),"Valuables","Deals","Notes","Tasks","Vault",...(canSeePrompts?["Prompts"]:[]),"Ask ORDANIS"];
+  const TABS=["Overview","Properties","Portfolio","Cash Flow",...(hasWorkflows?["Obligations"]:[]),"Valuables",...(userProfile?.role==="enterprise_admin"?[]:["Deals"]),"Notes","Tasks","Vault",...(canSeePrompts?["Prompts"]:[]),...(userProfile?.role==="enterprise_admin"?[]:["Ask ORDANIS"])];
   const assistantName=(familyRow.assistantName||"").trim()||"ORDANIS";
   const[showWelcome,setShowWelcome]=useState(false);
   // Carries "attach a document to this property section" from the Properties tab
@@ -2895,6 +2906,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   };
   // Download a note attachment via signed URL
   const downloadNoteAttachment=async(att)=>{
+    if(!await firmDocGate(att.filePath,att.name,"download_document")){toast(FIRM_GATE_MSG,"error");return;}
     const{data,error}=await sb.storage.from("documents").createSignedUrl(att.filePath,300,{download:att.name||true});
     if(error){toast(error.message,"error");return;}
     const a=document.createElement("a");a.href=data.signedUrl;a.download=att.name||"file";document.body.appendChild(a);a.click();document.body.removeChild(a);
@@ -3199,6 +3211,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
 
         {/* OVERVIEW TAB */}
         {activeTab==="overview"&&<div style={{padding:isMobile?"16px 14px":"24px 28px"}}>
+          {userProfile?.role==="admin"&&<FirmMembershipCard familyRow={familyRow} toast={toast} reload={reload}/>}
           {familyRow.enterprise_id&&(userProfile?.role==="admin"||userProfile?.role==="advisor")&&<PayerCard familyRow={familyRow} userProfile={userProfile} toast={toast} reload={reload}/>}
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(140px,100%),1fr))",gap:14,marginBottom:24}}>
             <StatBox label="Net Worth Est." value={fmtMoney(netWorth)} accent={B.navy}/>
@@ -3701,7 +3714,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
 
       {/* VAULT TAB */}
       {activeTab==="vault"&&<div style={{height:"100%",display:"flex",flexDirection:"column",minHeight:0}}>
-        <DocumentsView familyId={family.id} readOnly={false} canUpload={true} canDelete={canEdit} canScan={canEdit} canEditMetadata={canEdit} toast={toast} reload={reload}
+        <DocumentsView familyId={family.id} readOnly={false} canUpload={userProfile?.role!=="enterprise_admin"} canDelete={canEdit} canScan={canEdit} canEditMetadata={canEdit} toast={toast} reload={reload}
           attachIntent={attachIntent} onAttachHandled={()=>setAttachIntent(null)}/>
       </div>}
 
@@ -5435,6 +5448,7 @@ function NotesView({data,reload,toast,userProfile,prospectMode=false}){
   const del=async id=>{const{error}=await sb.from("notes").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Deleted");reload("notes");reload("note_attachments");}};
   const saveEdit=async id=>{if(!editBody.trim())return;const{error}=await sb.from("notes").update({body:editBody}).eq("id",id);if(error)toast(error.message,"error");else{toast("Note updated");setEditId(null);setEditBody("");reload("notes");}};
   const download=async(att)=>{
+    if(!await firmDocGate(att.filePath,att.name,"download_document")){toast(FIRM_GATE_MSG,"error");return;}
     const{data,error}=await sb.storage.from("documents").createSignedUrl(att.filePath,300,{download:att.name||true});
     if(error){toast(error.message,"error");return;}
     const a=document.createElement("a");a.href=data.signedUrl;a.download=att.name||"file";document.body.appendChild(a);a.click();document.body.removeChild(a);
@@ -6499,6 +6513,8 @@ function UserManagementView({userProfile,data={},toast}){
   const[newName,setNewName]=useState("");
   const[newRole,setNewRole]=useState("advisor");
   const[newFamily,setNewFamily]=useState("");
+  const[newFirm,setNewFirm]=useState("");
+  const[firms,setFirms]=useState([]);
   const[newPartnerFamilies,setNewPartnerFamilies]=useState([]); // family ids, role="partner" only
   const[newCanRunPrompts,setNewCanRunPrompts]=useState(false); // role="partner" only — Scheduled Prompts access
   const[newPassword,setNewPassword]=useState("");
@@ -6542,14 +6558,14 @@ function UserManagementView({userProfile,data={},toast}){
       setPlatformCfg(row||null);
     }catch(_e){setPlatformCfg(null);}
   };
-  useEffect(()=>{loadUsers();loadFamilyPartners();loadPlatformCfg();},[]);
+  useEffect(()=>{loadUsers();loadFamilyPartners();loadPlatformCfg();sb.from("enterprises").select("id,name").order("name").then(r=>{if(!r.error)setFirms(r.data||[]);});},[]);
 
   const toggleActive=async u=>{
     const{error}=await sb.from("user_profiles").update({active:!u.active}).eq("id",u.id);
     if(error)toast(error.message,"error");else{toast(u.active?"Deactivated":"Activated");loadUsers();}
   };
   const changeRole=async(u,role)=>{
-    const{error}=await sb.from("user_profiles").update({role}).eq("id",u.id);
+    const{error}=await sb.from("user_profiles").update(u.role==="enterprise_admin"&&role!=="enterprise_admin"?{role,enterprise_id:null}:{role}).eq("id",u.id);
     if(error)toast(error.message,"error");else{toast("Role updated");loadUsers();}
   };
   const assignFamily=async(u,familyId)=>{
@@ -6627,6 +6643,7 @@ function UserManagementView({userProfile,data={},toast}){
 
   const createUser=async()=>{
     if(!newEmail.trim()||!newPassword.trim())return toast("Email and password are required","error");
+    if(newRole==="enterprise_admin"&&!newFirm)return toast("Choose which firm this administrator belongs to","error");
     if(newPassword.length<MIN_PASSWORD_LENGTH)return toast(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`,"error");
     setCreating(true);
     // Sign up the new user
@@ -6645,6 +6662,7 @@ function UserManagementView({userProfile,data={},toast}){
         full_name:newName||newEmail.trim(),
         role:newRole,
         family_id:newRole==="client"?(newFamily||null):null,
+        ...(newRole==="enterprise_admin"?{enterprise_id:newFirm}:{}),
         active:true,
         can_run_scheduled_prompts:newRole==="partner"?newCanRunPrompts:false,
       });
@@ -6654,7 +6672,7 @@ function UserManagementView({userProfile,data={},toast}){
     }
     setCreating(false);
     setCreated({email:newEmail,role:newRole,password:newPassword});
-    setNewEmail("");setNewName("");setNewRole("advisor");setNewFamily("");setNewPartnerFamilies([]);setNewCanRunPrompts(false);setNewPassword("");
+    setNewEmail("");setNewName("");setNewRole("advisor");setNewFamily("");setNewFirm("");setNewPartnerFamilies([]);setNewCanRunPrompts(false);setNewPassword("");
     setTimeout(()=>{loadUsers();loadFamilyPartners();},1500);
   };
 
@@ -6725,6 +6743,7 @@ function UserManagementView({userProfile,data={},toast}){
                   <option value="advisor">ORDANIS Expert</option>
                   <option value="partner">Partner</option>
                   <option value="client">Client</option>
+                  {u.role==="enterprise_admin"&&<option value="enterprise_admin">Firm Administrator</option>}
                 </select>}
             </div>
             <div>
@@ -6890,8 +6909,15 @@ function UserManagementView({userProfile,data={},toast}){
                   <option value="partner">Partner — view-only, upload/download docs only</option>
                   <option value="admin">Admin — sees everything</option>
                   <option value="client">Client — read-only portal</option>
+                  <option value="enterprise_admin">Firm Administrator — one firm's households, view only</option>
                 </Sel>
               </Field>
+              {newRole==="enterprise_admin"&&<Field label="Firm">
+                <Sel value={newFirm} onChange={e=>setNewFirm(e.target.value)}>
+                  <option value="">— Select firm —</option>
+                  {firms.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
+                </Sel>
+              </Field>}
               {newRole==="client"&&<Field label="Assign to Family">
                 <Sel value={newFamily} onChange={e=>setNewFamily(e.target.value)}>
                   <option value="">— Select family —</option>
@@ -6925,7 +6951,7 @@ function UserManagementView({userProfile,data={},toast}){
             </Field>}
             <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}>
               <Btn variant="ghost" onClick={()=>setModal(null)}>Cancel</Btn>
-              <Btn onClick={createUser} disabled={creating||!newEmail||!newPassword}>{creating?"Creating…":"Create User"}</Btn>
+              <Btn onClick={createUser} disabled={creating||!newEmail||!newPassword||(newRole==="enterprise_admin"&&!newFirm)}>{creating?"Creating…":"Create User"}</Btn>
             </div>
           </div>
         )}
@@ -8136,6 +8162,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
 
   const download=async(doc)=>{
     try{
+      if(!await firmDocGate(doc.filePath,doc.name,"download_document")){toast(FIRM_GATE_MSG,"error");return;}
       const{data,error}=await sb.storage.from("documents").createSignedUrl(doc.filePath,300,{download:doc.name||true});
       if(error||!data?.signedUrl){toast("Could not get download link","error");return;}
       // Use anchor element to bypass popup blockers
@@ -9578,6 +9605,8 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           </div>
         </div>
 
+        <ClientFirmCard familyId={family.id} toast={toast||(()=>{})} reload={reload}/>
+
         {/* Business Partner portal seats -- a running total, not a toggle (there can be several).
             Managed from the Household tab; this is just the cost roll-up so it shows up where
             billing questions actually get asked. Available on every plan; Premier's seats are
@@ -9704,6 +9733,159 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
 // (current_user_allowed_family_ids(), joined through the family_partners table),
 // so no extra client-side filtering is needed here — same trust model as the
 // client and advisor branches above.
+const FIRM_LOG_TEXT={open_household:"Opened household",open_document:"Opened a document",download_document:"Downloaded a document"};
+const FIRM_TABLES=["contacts","properties","notes","tasks","portfolio_accounts","account_balances","valuables","documents","cash_flow_events","cash_flow_payment_log","deadline_acks","family_contacts","property_contacts","family_partners"];
+// A firm's administrator: the firm's households, view only. What they can read is limited by the database to
+// their own firm's households (see 20261010100300_firm_access.sql), and every household they open is recorded
+// before any of its data is loaded.
+function FirmDashboard({userProfile,logout,toast}){
+  const[loading,setLoading]=useState(true);
+  const[err,setErr]=useState("");
+  const[fams,setFams]=useState([]);
+  const[hh,setHh]=useState([]);
+  const[taskSum,setTaskSum]=useState({});
+  const[wfSum,setWfSum]=useState({});
+  const[worth,setWorth]=useState(null);
+  const[firmName,setFirmName]=useState("");
+  const[log,setLog]=useState([]);
+  const[people,setPeople]=useState({});
+  const[view,setView]=useState("households");
+  const[selectedId,setSelectedId]=useState(null);
+  const[fdata,setFdata]=useState(null);
+  const[opening,setOpening]=useState(false);
+
+  const loadOverview=useCallback(async()=>{
+    setLoading(true);setErr("");
+    const[f,h,t,w,n,l,u]=await Promise.all([
+      sb.rpc("firm_family_rows"),
+      sb.rpc("enterprise_household_list"),
+      sb.rpc("enterprise_task_summary"),
+      sb.rpc("enterprise_workflow_summary"),
+      sb.rpc("enterprise_net_worth"),
+      sb.from("firm_access_log").select("*").order("created_at",{ascending:false}).limit(100),
+      sb.rpc("enterprise_user_list"),
+    ]);
+    const bad=[f,h,t,w,n,l,u].find(x=>x.error);
+    if(bad){setErr(bad.error.message||"Could not load your households.");setLoading(false);return;}
+    setFams((f.data||[]).map(toClient));
+    setHh((h.data||[]).filter(r=>!r.archived_at));
+    const ts={};(t.data||[]).forEach(r=>{ts[r.family_id]=r;});setTaskSum(ts);
+    const ws={};(w.data||[]).forEach(r=>{(ws[r.family_id]=ws[r.family_id]||[]).push(r);});setWfSum(ws);
+    const row=(n.data||[])[0]||null;setWorth(row);setFirmName(row?.enterprise_name||"");
+    setLog(l.data||[]);
+    const pm={};(u.data||[]).forEach(r=>{pm[r.user_id]=r.full_name||r.email;});setPeople(pm);
+    setLoading(false);
+  },[]);
+  useEffect(()=>{loadOverview();},[loadOverview]);
+
+  const loadHousehold=useCallback(async(id,record)=>{
+    if(record){
+      // Recorded first. If it cannot be recorded, nothing is loaded.
+      const{error}=await sb.rpc("firm_log_access",{p_family_id:id,p_action:"open_household",p_detail:null});
+      if(error)throw new Error("This could not be recorded, so the household was not opened.");
+    }
+    const results=await Promise.all(FIRM_TABLES.map(t=>sb.from(t).select("*").eq("family_id",id).order("created_at",{ascending:false})));
+    const bundle={families:fams.filter(x=>x.id===id),deals:[],note_attachments:[]};
+    FIRM_TABLES.forEach((t,i)=>{
+      if(results[i].error)throw new Error(results[i].error.message);
+      bundle[t]=(results[i].data||[]).map(toClient);
+    });
+    const noteIds=(bundle.notes||[]).map(x=>x.id);
+    if(noteIds.length){
+      const{data,error}=await sb.from("note_attachments").select("*").in("note_id",noteIds);
+      if(error)throw new Error(error.message);
+      bundle.note_attachments=(data||[]).map(toClient);
+    }
+    setFdata(bundle);
+  },[fams]);
+
+  const open=async id=>{
+    setOpening(true);
+    try{await loadHousehold(id,true);setSelectedId(id);}
+    catch(e){toast(e.message||"Could not open that household","error");}
+    setOpening(false);
+  };
+  const back=()=>{setSelectedId(null);setFdata(null);sb.from("firm_access_log").select("*").order("created_at",{ascending:false}).limit(100).then(r=>{if(!r.error)setLog(r.data||[]);});};
+  const reload=useCallback(async()=>{if(selectedId)try{await loadHousehold(selectedId,false);}catch(_e){}},[selectedId,loadHousehold]);
+
+  const Header=({children})=><div style={{padding:"12px 20px",borderBottom:`1px solid ${B.borderLight}`,background:B.white,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+    <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+      <PCMLogo compact/>
+      {children}
+    </div>
+    <div style={{display:"flex",alignItems:"center",gap:14}}>
+      <div style={{textAlign:"right"}}>
+        <div style={{fontSize:12,color:B.navy,fontWeight:600}}>{userProfile.fullName||userProfile.email}</div>
+        <div style={{fontSize:9,color:B.navyMid,letterSpacing:"0.1em",textTransform:"uppercase"}}>{firmName?firmName+" · ":""}Firm Administrator · View Only</div>
+      </div>
+      <button onClick={logout} style={{background:"none",border:`1px solid ${B.border}`,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontFamily:"inherit",fontSize:12,color:B.textSoft}}>Sign Out</button>
+    </div>
+  </div>;
+
+  const selected=fams.find(x=>x.id===selectedId);
+  if(selected&&fdata){
+    return <div style={{height:"100vh",display:"flex",flexDirection:"column",background:B.bg,fontFamily:"'DM Sans','Helvetica Neue',sans-serif"}}>
+      <Header/>
+      <div style={{flex:1,minHeight:0}}>
+        <ViewErrorBoundary label="the household" onBack={back}>
+          <FamilyDashboard family={selected} data={fdata} reload={reload} toast={toast} onBack={back} userProfile={userProfile}/>
+        </ViewErrorBoundary>
+      </div>
+    </div>;
+  }
+
+  const famName=id=>(fams.find(x=>x.id===id)||{}).name||"A household that has since left the firm";
+  const openTasks=Object.values(taskSum).reduce((a,r)=>a+(r.open_tasks||0),0);
+  const overdueTasks=Object.values(taskSum).reduce((a,r)=>a+(r.overdue_tasks||0),0);
+  const tabBtn=(id,label)=><button key={id} onClick={()=>setView(id)} style={{background:view===id?B.navy:"transparent",color:view===id?B.white:B.navy,border:`1px solid ${view===id?B.navy:B.border}`,borderRadius:8,padding:"7px 14px",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{label}</button>;
+
+  return <div style={{minHeight:"100vh",background:B.bg,fontFamily:"'DM Sans','Helvetica Neue',sans-serif"}}>
+    <Header/>
+    <div style={{padding:24,maxWidth:1100,margin:"0 auto"}}>
+      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:4}}>{firmName||"Your firm"}</div>
+      <div style={{fontSize:12.5,color:B.textSoft,marginBottom:16,lineHeight:1.5}}>You can see everything each household's owner sees. You cannot change anything. ORDANIS records each household and document you open.</div>
+      {err&&<div style={{...entCard,color:"#8b1a1a",borderColor:"#e8b4b4"}}>{err}</div>}
+      {loading?<div style={{height:200}}><Spinner/></div>:<>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:10,marginBottom:16}}>
+          <EntTile label="Households" value={worth?worth.households:fams.length} sub={worth&&worth.households_with_data<worth.households?`${worth.households_with_data} with data entered`:null}/>
+          <EntTile label="Combined net worth" value={worth?entMoney0(worth.net_worth):"—"} sub="Entered by households and their Expert, not synced from banks"/>
+          <EntTile label="Open tasks" value={openTasks} sub={overdueTasks?`${overdueTasks} overdue`:"None overdue"}/>
+        </div>
+        <div style={{display:"flex",gap:8,marginBottom:14}}>{tabBtn("households","Households")}{tabBtn("activity","Access record")}</div>
+        {view==="households"&&<div style={{...entCard,padding:"8px 14px",overflowX:"auto"}}>
+          {hh.length===0?<Empty text="No households have joined your firm yet."/>:<table style={{width:"100%",borderCollapse:"collapse",minWidth:620}}>
+            <thead><tr><th style={entTh}>Household</th><th style={entTh}>Plan</th><th style={entTh}>Status</th><th style={entTh}>Open tasks</th><th style={entTh}>Overdue</th><th style={entTh}>Workflows</th><th style={entTh}>Joined</th><th style={entTh}></th></tr></thead>
+            <tbody>{hh.map(r=>{const t=taskSum[r.family_id]||{};const w=wfSum[r.family_id]||[];const active=w.reduce((a,x)=>a+(x.instances||0),0);
+              return <tr key={r.family_id}>
+                <td style={{...entTd,fontWeight:600,color:B.navy}}>{r.name}</td>
+                <td style={entTd}>{planLabel(r.plan)}</td>
+                <td style={entTd}>{r.subscription_state||"—"}</td>
+                <td style={entTd}>{t.open_tasks||0}</td>
+                <td style={{...entTd,color:(t.overdue_tasks||0)>0?"#8b1a1a":B.text,fontWeight:(t.overdue_tasks||0)>0?700:400}}>{t.overdue_tasks||0}</td>
+                <td style={entTd}>{active}</td>
+                <td style={entTd}>{entDay(r.joined_enterprise_at)}</td>
+                <td style={entTd}><Btn small variant="gold" disabled={opening} onClick={()=>open(r.family_id)}>{opening?"Opening…":"Open"}</Btn></td>
+              </tr>;})}</tbody>
+          </table>}
+        </div>}
+        {view==="activity"&&<div style={{...entCard,padding:"8px 14px",overflowX:"auto"}}>
+          <div style={{fontSize:12,color:B.textSoft,padding:"8px 10px"}}>The most recent 100 times someone at your firm opened a household or a document.</div>
+          {log.length===0?<Empty text="Nothing has been opened yet."/>:<table style={{width:"100%",borderCollapse:"collapse",minWidth:520}}>
+            <thead><tr><th style={entTh}>When</th><th style={entTh}>Who</th><th style={entTh}>What</th><th style={entTh}>Household</th><th style={entTh}>Detail</th></tr></thead>
+            <tbody>{log.map(r=><tr key={r.id}>
+              <td style={entTd}>{new Date(r.created_at).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</td>
+              <td style={entTd}>{people[r.user_id]||"Firm administrator"}</td>
+              <td style={entTd}>{FIRM_LOG_TEXT[r.action]||r.action}</td>
+              <td style={entTd}>{famName(r.family_id)}</td>
+              <td style={{...entTd,color:B.textSoft}}>{r.detail||""}</td>
+            </tr>)}</tbody>
+          </table>}
+        </div>}
+      </>}
+    </div>
+  </div>;
+}
+
 function PartnerDashboard({data,userProfile,logout,toast,reload}){
   const myFamilies=data.families||[];
   const[selectedId,setSelectedId]=useState(null);
@@ -12196,6 +12378,209 @@ const monthStartISO=offset=>{const d=new Date();return new Date(Date.UTC(d.getFu
 const monthLabelOf=iso=>new Date(iso+"T00:00:00Z").toLocaleString("en-US",{month:"long",year:"numeric",timeZone:"UTC"});
 const INVOICE_STATUS_TINT={draft:{bg:"#eef0f4",text:"#5b6573",label:"Draft"},open:{bg:"rgba(206,182,129,0.22)",text:"#7a5a19",label:"Sent, unpaid"},paid:{bg:"#e0f5e9",text:"#0d5c2b",label:"Paid"},void:{bg:"#fde8e8",text:"#8b1a1a",label:"Voided"}};
 
+// ── FIRM MEMBERSHIP (Phase 6) ──────────────────────────────────────────────
+// A household enters a firm only through the firm-join function, which checks the code, requires the
+// data-sharing notice (or an admin's recorded agreement) and writes the membership log. Nothing in the
+// browser writes families.enterprise_id.
+async function callFirmJoin(body){
+  const{data,error}=await sb.functions.invoke("firm-join",{body});
+  if(error){
+    let msg=error.message;
+    try{const b=await error.context.json();if(b&&b.error)msg=b.error;}catch(_e){}
+    throw new Error(msg);
+  }
+  if(data&&data.error)throw new Error(data.error);
+  return data;
+}
+const JOINED_VIA_TEXT={signup_code:"signed up with the firm's code",client_join:"entered the firm's code",admin_move:"moved in by ORDANIS, with the client's agreement",admin_created:"set up by the firm"};
+const dateOnly=v=>v?new Date(v).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}):"";
+
+// What a signed-in client sees: which firm they belong to, or a way to join one with a code.
+function ClientFirmCard({familyId,toast,reload}){
+  const[info,setInfo]=useState(null);
+  const[loaded,setLoaded]=useState(false);
+  const[joinOpen,setJoinOpen]=useState(false);
+  const[noticeOpen,setNoticeOpen]=useState(true);
+  const[code,setCode]=useState("");
+  const[look,setLook]=useState(null);
+  const[agree,setAgree]=useState(false);
+  const[busy,setBusy]=useState(false);
+  const[err,setErr]=useState("");
+  const load=async()=>{
+    const[f,n]=await Promise.all([
+      sb.rpc("family_firm_info",{p_family_id:familyId}),
+      sb.from("signup_disclosures").select("id").eq("kind","firm_data_sharing").eq("is_draft",false).limit(1),
+    ]);
+    setInfo({firm:f.data&&f.data[0]||null,open:!!(n.data&&n.data.length)});
+    setLoaded(true);
+  };
+  useEffect(()=>{load();},[familyId]);
+  const reset=()=>{setJoinOpen(false);setCode("");setLook(null);setAgree(false);setErr("");};
+  const check=async()=>{
+    setErr("");setLook(null);setAgree(false);setBusy(true);
+    try{const r=await callFirmJoin({action:"lookup",code:code.trim()});setLook({firm:r.firm_name,notice:r.notice});}
+    catch(e){setErr(e.message);}
+    setBusy(false);
+  };
+  const join=async()=>{
+    if(!look||!agree)return;
+    setErr("");setBusy(true);
+    try{
+      const r=await callFirmJoin({action:"join",code:code.trim(),notice_id:look.notice.id});
+      toast("You joined "+(r.firm_name||look.firm));
+      reset();await load();if(reload)await reload("families");
+    }catch(e){setErr(e.message);}
+    setBusy(false);
+  };
+  if(!loaded||!info)return null;
+  const firm=info.firm&&info.firm.firm_name?info.firm:null;
+  if(!firm&&!info.open)return null;
+  const box={background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:14,padding:"20px 24px",marginBottom:16,boxShadow:B.shadow};
+  const label={fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8};
+  if(firm)return <div style={box}>
+    <div style={label}>Your firm</div>
+    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:B.navy,fontWeight:600}}>{firm.firm_name}</div>
+    <div style={{fontSize:12.5,color:B.textSoft,marginTop:4,lineHeight:1.6}}>
+      {firm.joined_at?`Joined ${dateOnly(firm.joined_at)}`:"Member"}{firm.joined_via&&JOINED_VIA_TEXT[firm.joined_via]?` (${JOINED_VIA_TEXT[firm.joined_via]})`:""}.
+      {" "}The firm's administrators can view everything you can see in your household's portal, including your documents. They see nothing beyond that, have view access only, and cannot change anything.
+      {" "}To leave the firm, ask your ORDANIS contact.
+    </div>
+  </div>;
+  return <div style={box}>
+    <div style={label}>Join a firm</div>
+    {!joinOpen&&<>
+      <div style={{fontSize:13,color:B.textSoft,lineHeight:1.6,marginBottom:12}}>If an advisory firm gave you a firm code, you can join it here. You will see exactly what the firm can see before you agree.</div>
+      <Btn small variant="ghost" onClick={()=>setJoinOpen(true)}>I have a firm code</Btn>
+    </>}
+    {joinOpen&&<>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <input value={code} maxLength={40} autoComplete="off" spellCheck={false} placeholder="Firm code"
+          onChange={e=>{setCode(e.target.value);if(look||err){setLook(null);setAgree(false);setErr("");}}}
+          onKeyDown={e=>{if(e.key==="Enter"&&code.trim()&&!busy)check();}}
+          style={{flex:"1 1 200px",padding:"9px 12px",border:`1px solid ${B.border}`,borderRadius:8,fontSize:14,fontFamily:"inherit",color:B.text,minWidth:0}}/>
+        <Btn small onClick={check} disabled={busy||!code.trim()}>{busy&&!look?"Checking…":"Check"}</Btn>
+        <Btn small variant="ghost" onClick={reset} disabled={busy}>Cancel</Btn>
+      </div>
+      {err&&<div style={{marginTop:10,fontSize:12.5,color:"#8b1a1a"}}>{err}</div>}
+      {look&&<div style={{marginTop:14}}>
+        <div style={{fontSize:13.5,fontWeight:700,color:B.navy,marginBottom:6}}>Join {look.firm}</div>
+        {look.notice&&look.notice.title&&<div style={{fontSize:12.5,fontWeight:700,color:B.navy,marginBottom:6}}>{look.notice.title}</div>}
+        <div style={{maxHeight:200,overflowY:"auto",border:`1px solid ${B.borderLight}`,borderRadius:8,padding:"10px 12px",fontSize:12.5,color:B.textSoft,lineHeight:1.55,background:B.bg}}
+          dangerouslySetInnerHTML={{__html:(look.notice&&look.notice.body_html)||""}}/>
+        <label style={{display:"flex",gap:8,alignItems:"flex-start",marginTop:10,fontSize:13,color:B.text,cursor:"pointer"}}>
+          <input type="checkbox" checked={agree} onChange={e=>setAgree(e.target.checked)} style={{marginTop:2}}/>
+          I have read the notice above and agree to share this with {look.firm}.
+        </label>
+        <div style={{marginTop:12}}><Btn onClick={join} disabled={!agree||busy}>{busy?"Joining…":"Join "+look.firm}</Btn></div>
+      </div>}
+    </>}
+  </div>;
+}
+
+// What an ORDANIS admin sees on a household: its firm, the log of how it got there, and the only
+// ways to move it in or out. The move records that the client agreed; the server refuses without it.
+function FirmMembershipCard({familyRow,toast,reload}){
+  const[firms,setFirms]=useState([]);
+  const[events,setEvents]=useState([]);
+  const[target,setTarget]=useState("");
+  const[agreed,setAgreed]=useState(false);
+  const[note,setNote]=useState("");
+  const[removeNote,setRemoveNote]=useState("");
+  const[confirmRemove,setConfirmRemove]=useState(false);
+  const[busy,setBusy]=useState(false);
+  const firmId=familyRow.enterprise_id||null;
+  const firmPaid=familyRow.paidBy==="enterprise";
+  const load=async()=>{
+    const[f,e]=await Promise.all([
+      sb.from("enterprises").select("id,name,active").order("name"),
+      sb.from("enterprise_membership_events").select("id,event_type,how,created_at,consent_note,from_enterprise_id,to_enterprise_id,actor_role")
+        .eq("family_id",familyRow.id).order("created_at",{ascending:false}).limit(6),
+    ]);
+    if(!f.error&&f.data)setFirms(f.data);
+    if(!e.error&&e.data)setEvents(e.data);
+  };
+  useEffect(()=>{load();},[familyRow.id,firmId]);
+  const nameOf=id=>(firms.find(f=>f.id===id)||{}).name||"a firm";
+  const options=firms.filter(f=>f.active&&f.id!==firmId);
+  const canMove=!!target&&agreed&&note.trim().length>=5&&!busy&&!firmPaid;
+  const move=async()=>{
+    setBusy(true);
+    try{
+      const r=await callFirmJoin({action:"admin_move",family_id:familyRow.id,enterprise_id:target,client_agreed:true,note:note.trim()});
+      toast((r.status==="moved"?"Moved to ":"Added to ")+(r.firm_name||"the firm"));
+      setTarget("");setAgreed(false);setNote("");
+      await load();if(reload)await reload("families");
+    }catch(e){toast(e.message,"error");}
+    setBusy(false);
+  };
+  const remove=async()=>{
+    setBusy(true);
+    try{
+      await callFirmJoin({action:"admin_remove",family_id:familyRow.id,note:removeNote.trim()});
+      toast("Removed from the firm");
+      setConfirmRemove(false);setRemoveNote("");
+      await load();if(reload)await reload("families");
+    }catch(e){toast(e.message,"error");}
+    setBusy(false);
+  };
+  const EVENT_TEXT={joined:"Joined",moved:"Moved",removed:"Removed"};
+  return <div style={{background:B.white,borderRadius:12,padding:20,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,marginBottom:20}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:6}}>
+      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Firm</div>
+      <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",borderRadius:20,padding:"3px 10px",background:firmId?"rgba(206,182,129,0.22)":"#eceff3",color:firmId?"#7a5a19":"#5b6573"}}>
+        {firmId?nameOf(firmId):"Not in a firm"}
+      </span>
+    </div>
+    <div style={{fontSize:12,color:B.textSoft,lineHeight:1.55,marginBottom:12}}>
+      {firmId
+        ? "The firm's administrators can view what the household owner can see, view only."
+        : "A household joins a firm by entering the firm's code, or here, once the client has agreed."}
+      {firmPaid&&" This household's plan is paid by its firm, so it cannot be moved or removed until it pays for itself again."}
+    </div>
+
+    {!firmPaid&&<div style={{borderTop:`1px solid ${B.borderLight}`,paddingTop:12}}>
+      <div style={{fontSize:12,fontWeight:700,color:B.navy,marginBottom:8}}>{firmId?"Move to another firm":"Move into a firm"}</div>
+      <select value={target} onChange={e=>setTarget(e.target.value)} style={{width:"100%",maxWidth:360,padding:"8px 10px",border:`1px solid ${B.border}`,borderRadius:8,fontSize:13,fontFamily:"inherit",color:B.text,background:B.white}}>
+        <option value="">Choose a firm…</option>
+        {options.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
+      </select>
+      {target&&<div style={{marginTop:10}}>
+        <label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:12.5,color:B.text,cursor:"pointer"}}>
+          <input type="checkbox" checked={agreed} onChange={e=>setAgreed(e.target.checked)} style={{marginTop:2}}/>
+          The client has agreed to share this household's summary information with {nameOf(target)}.
+        </label>
+        <textarea value={note} onChange={e=>setNote(e.target.value)} rows={2} maxLength={400} placeholder="How did they agree? Who confirmed it, and when? (recorded in the log)"
+          style={{width:"100%",maxWidth:520,boxSizing:"border-box",marginTop:8,padding:"8px 10px",border:`1px solid ${B.border}`,borderRadius:8,fontSize:12.5,fontFamily:"inherit",color:B.text,resize:"vertical"}}/>
+        <div style={{marginTop:8}}><Btn small onClick={move} disabled={!canMove}>{busy?"Saving…":(firmId?"Move household":"Add to firm")}</Btn></div>
+      </div>}
+    </div>}
+
+    {firmId&&!firmPaid&&<div style={{borderTop:`1px solid ${B.borderLight}`,paddingTop:12,marginTop:12}}>
+      {!confirmRemove
+        ? <Btn small variant="danger" onClick={()=>setConfirmRemove(true)}>Remove from {nameOf(firmId)}</Btn>
+        : <div>
+            <div style={{fontSize:12.5,color:B.text,marginBottom:8}}>Remove this household from {nameOf(firmId)}? The firm loses access straight away. The household keeps its plan and its data.</div>
+            <input value={removeNote} onChange={e=>setRemoveNote(e.target.value)} maxLength={300} placeholder="Reason (optional, recorded in the log)"
+              style={{width:"100%",maxWidth:520,boxSizing:"border-box",padding:"8px 10px",border:`1px solid ${B.border}`,borderRadius:8,fontSize:12.5,fontFamily:"inherit",color:B.text}}/>
+            <div style={{display:"flex",gap:8,marginTop:8}}>
+              <Btn small variant="danger" onClick={remove} disabled={busy}>{busy?"Removing…":"Yes, remove"}</Btn>
+              <Btn small variant="ghost" onClick={()=>{setConfirmRemove(false);setRemoveNote("");}} disabled={busy}>Cancel</Btn>
+            </div>
+          </div>}
+    </div>}
+
+    {events.length>0&&<div style={{borderTop:`1px solid ${B.borderLight}`,paddingTop:12,marginTop:12}}>
+      <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:6}}>Firm history</div>
+      {events.map(ev=><div key={ev.id} style={{fontSize:12,color:B.textSoft,padding:"4px 0",lineHeight:1.5}}>
+        <strong style={{color:B.text}}>{EVENT_TEXT[ev.event_type]||ev.event_type}</strong>
+        {ev.event_type==="removed"?` from ${nameOf(ev.from_enterprise_id)}`:` ${ev.event_type==="moved"?`from ${nameOf(ev.from_enterprise_id)} to `:"into "}${nameOf(ev.to_enterprise_id)}`}
+        {" · "}{dateOnly(ev.created_at)}{ev.how&&JOINED_VIA_TEXT[ev.how]?` · ${JOINED_VIA_TEXT[ev.how]}`:""}
+        {ev.consent_note?<div style={{color:B.textMute,fontSize:11.5}}>{ev.consent_note}</div>:null}
+      </div>)}
+    </div>}
+  </div>;
+}
+
 function PayerCard({familyRow,userProfile,toast,reload}){
   const isAdmin=userProfile?.role==="admin";
   const[firmName,setFirmName]=useState("");
@@ -12424,6 +12809,572 @@ function FirmBillingView({toast}){
   </div></div>;
 }
 
+// ── ENTERPRISES (Phase 7) ──────────────────────────────────────────────────
+// ORDANIS admin only. One row per firm plus ORDANIS direct, and a firm page that opens from each row.
+// Every revenue and net worth figure comes from a database function (enterprise_revenue,
+// enterprise_net_worth, enterprise_platform_totals), so the list, the firm page and the platform total
+// are computed in one place. Nothing here edits a figure.
+const entCard={background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:14,padding:"20px 24px",marginBottom:16,boxShadow:B.shadow};
+const entLab={fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10};
+const entTh={textAlign:"left",fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",padding:"8px 10px",borderBottom:`2px solid ${B.border}`,whiteSpace:"nowrap"};
+const entTd={fontSize:12.5,color:B.text,padding:"9px 10px",borderBottom:`1px solid ${B.borderLight}`,verticalAlign:"top"};
+const entMoney0=n=>(Number(n)<0?"-":"")+"$"+Math.abs(Math.round(Number(n)||0)).toLocaleString("en-US");
+const ENT_HOW={signup_code:"Code at signup",client_join:"Client joined with code",admin_move:"Admin move",admin_created:"Admin created"};
+const ENT_EVENT={joined:"Joined",moved:"Moved",removed:"Removed",code_rotated:"Code rotated",default_expert_set:"Default Expert set",skin_linked:"Skin or domain linked",status_changed:"Status changed"};
+const entDay=v=>v?new Date(v).toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"}):"—";
+const entCodeLink=code=>`${window.location.origin}/signup?code=${encodeURIComponent(code)}`;
+// Same formula the household's own dashboard uses.
+function entNetWorth(props,accts,vals){
+  const re=props.reduce((s,p)=>s+(Number(p.current_value)||Number(p.purchase_price)||0),0);
+  const debt=props.reduce((s,p)=>s+(Number(p.loan_balance)||0)+(Number(p.second_mortgage_balance)||0),0)+accts.filter(a=>a.account_type==="Line of Credit").reduce((s,a)=>s+(Number(a.current_balance)||0),0);
+  const pf=accts.filter(a=>a.account_type!=="Line of Credit").reduce((s,a)=>s+(Number(a.current_balance)||0),0);
+  const va=vals.reduce((s,v)=>s+(Number(v.estimated_value)||0),0);
+  return re-debt+pf+va;
+}
+function EntTile({label,value,sub}){
+  return <div style={{background:B.bg,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"12px 14px",minWidth:0}}>
+    <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:4}}>{label}</div>
+    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:B.navy,fontWeight:600,lineHeight:1.15}}>{value}</div>
+    {sub&&<div style={{fontSize:11,color:B.textSoft,marginTop:3,lineHeight:1.4}}>{sub}</div>}
+  </div>;
+}
+function entContractStatus(e){
+  if(!e)return"";
+  if(!e.active)return"Inactive";
+  if(!e.contract_signed_at)return"Not signed";
+  if(Number(e.build_fee)>0&&!e.build_fee_paid_at)return"Build fee unpaid";
+  return"Active";
+}
+
+function EnterprisesView({toast,userProfile,onOpenBranding}){
+  const[data,setData]=useState(null);
+  const[err,setErr]=useState("");
+  const[openKey,setOpenKey]=useState(null);
+  const load=useCallback(async()=>{
+    const month=monthStartISO(0);
+    const[ents,rev,nw,plat,fams,users,plans,skins]=await Promise.all([
+      sb.from("enterprises").select("*").order("name"),
+      sb.rpc("enterprise_revenue",{p_month:month}),
+      sb.rpc("enterprise_net_worth"),
+      sb.rpc("enterprise_platform_totals",{p_month:month}),
+      sb.from("families").select("id,name,enterprise_id,plan,subscription_state,created_at,joined_enterprise_at,joined_via,archived_at,customer_number,advisor_name,advisor_email,paid_by,onboarding_contacted_at").is("archived_at",null),
+      sb.from("user_profiles").select("id,email,full_name,role,active,family_id,enterprise_id"),
+      sb.from("plan_features").select("plan,label,monthly_price"),
+      sb.from("brand_profiles").select("id,brand_name"),
+    ]);
+    const bad=[ents,rev,nw,plat,fams,users].find(r=>r.error);
+    if(bad){setErr(bad.error.message);setData({failed:true});return;}
+    setErr("");
+    setData({month,ents:ents.data||[],rev:rev.data||[],nw:nw.data||[],plat:(plat.data||[])[0]||null,fams:fams.data||[],users:users.data||[],plans:plans.data||[],skins:skins.data||[]});
+  },[]);
+  useEffect(()=>{load();},[load]);
+
+  const rows=useMemo(()=>{
+    if(!data||data.failed)return[];
+    const since=Date.now()-30*86400000;
+    const mk=(id,name,ent)=>{
+      const same=x=>(x.enterprise_id||null)===id;
+      const r=data.rev.find(same)||{};
+      const n=data.nw.find(same)||{};
+      const fams=data.fams.filter(same);
+      const famIds=new Set(fams.map(f=>f.id));
+      const users=data.users.filter(u=>(id?u.enterprise_id===id:false)||(u.family_id&&famIds.has(u.family_id)));
+      const skin=ent&&ent.brand_profile_id?(data.skins.find(s=>s.id===ent.brand_profile_id)||{}).brand_name||"":"";
+      return{key:id||"direct",id,name,ent,rev:r,nw:n,fams,users,
+        signups30:fams.filter(f=>new Date(f.joined_enterprise_at||f.created_at).getTime()>=since).length,skinName:skin};
+    };
+    return[...data.ents.map(e=>mk(e.id,e.name,e)),mk(null,"ORDANIS direct",null)];
+  },[data]);
+
+  const check=useMemo(()=>{
+    if(!data||data.failed||!data.plat)return null;
+    const sum=f=>rows.reduce((s,r)=>s+(Number(f(r))||0),0);
+    const pairs=[
+      ["Households",sum(r=>r.nw.households),data.plat.households],
+      ["Plan MRR",sum(r=>r.rev.plan_mrr),data.plat.plan_mrr],
+      ["Revenue this month",sum(r=>r.rev.total_revenue),data.plat.total_revenue],
+      ["Net worth",sum(r=>r.nw.net_worth),data.plat.net_worth],
+    ];
+    const off=pairs.filter(([,a,b])=>Math.abs(Number(a)-Number(b))>0.005);
+    return{ok:!off.length,off};
+  },[data,rows]);
+
+  if(data===null)return <Spinner/>;
+  if(data.failed)return <div style={{padding:"24px 28px"}}><div style={{background:"#fde8e8",border:"1px solid #f5c6c6",color:"#8b1a1a",borderRadius:10,padding:"12px 16px",fontSize:13}}>Could not load enterprises: {err}</div></div>;
+
+  const open=openKey?rows.find(r=>r.key===openKey):null;
+  if(open)return <EntFirmPage row={open} rows={rows} data={data} toast={toast} onBack={()=>setOpenKey(null)} onChanged={load} onOpenBranding={onOpenBranding}/>;
+
+  const plat=data.plat;
+  return <div style={{height:"100%",overflowY:"auto"}}><div style={{maxWidth:1180,padding:"24px 28px"}}>
+    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,color:B.navy,fontWeight:600,marginBottom:4}}>Enterprises</div>
+    <p style={{fontSize:13,color:B.textSoft,margin:"0 0 16px",maxWidth:720,lineHeight:1.6}}>
+      Each advisory firm on the platform, with ORDANIS direct as the last row, so the rows add up to the whole platform. Open a firm to see its households, revenue, net worth and contract.
+    </p>
+    <GoldLine/>
+    {check&&<div style={{background:check.ok?"#e0f5e9":"#fde8e8",border:`1px solid ${check.ok?"#bfe8cf":"#f5c6c6"}`,color:check.ok?"#0d5c2b":"#8b1a1a",borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:13,lineHeight:1.5}}>
+      {check.ok?"Firms plus ORDANIS direct add up to the platform for households, plan MRR, this month's revenue and net worth."
+        :`Firms plus ORDANIS direct do not add up to the platform for: ${check.off.map(([k,a,b])=>`${k} (rows ${Number(a).toLocaleString()}, platform ${Number(b).toLocaleString()})`).join("; ")}. Tell the developer.`}
+    </div>}
+    <div style={entCard}>
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",minWidth:980}}>
+          <thead><tr>
+            {["Firm","Skin","Domain","Code","Households","Users","Plan MRR","Usage (month)","Net worth","New, 30 days","Contract"].map(h=><th key={h} style={entTh}>{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {rows.map(r=><tr key={r.key} onClick={()=>setOpenKey(r.key)} style={{cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.background=B.bg} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+              <td style={{...entTd,fontWeight:700,color:B.navy}}>{r.name}{r.ent&&!r.ent.active&&<span style={{marginLeft:8,fontSize:9.5,fontWeight:700,textTransform:"uppercase",background:"#eceff3",color:"#5b6573",borderRadius:20,padding:"2px 8px"}}>Inactive</span>}</td>
+              <td style={entTd}>{r.ent?(r.skinName||"—"):"ORDANIS"}</td>
+              <td style={entTd}>{r.ent?(r.ent.domain||"—"):"—"}</td>
+              <td style={entTd}>{r.ent?(r.ent.signup_code_active?"On":"Off"):"—"}</td>
+              <td style={entTd}>{r.nw.households||0}</td>
+              <td style={entTd}>{r.users.length}</td>
+              <td style={entTd}>{money2(r.rev.plan_mrr)}</td>
+              <td style={entTd}>{money2(r.rev.usage_revenue)}</td>
+              <td style={entTd}>{entMoney0(r.nw.net_worth)}</td>
+              <td style={entTd}>{r.signups30}</td>
+              <td style={entTd}>{r.ent?entContractStatus(r.ent):"—"}</td>
+            </tr>)}
+          </tbody>
+          {plat&&<tfoot><tr>
+            <td style={{...entTd,fontWeight:700,color:B.navy,borderTop:`2px solid ${B.border}`,borderBottom:"none"}} colSpan={4}>Platform</td>
+            <td style={{...entTd,fontWeight:700,borderTop:`2px solid ${B.border}`,borderBottom:"none"}}>{plat.households}</td>
+            <td style={{...entTd,fontWeight:700,borderTop:`2px solid ${B.border}`,borderBottom:"none"}}>{data.users.filter(u=>u.role==="client"||u.role==="partner"||u.role==="enterprise_admin").length}</td>
+            <td style={{...entTd,fontWeight:700,borderTop:`2px solid ${B.border}`,borderBottom:"none"}}>{money2(plat.plan_mrr)}</td>
+            <td style={{...entTd,fontWeight:700,borderTop:`2px solid ${B.border}`,borderBottom:"none"}}>{money2(rows.reduce((s,r)=>s+(Number(r.rev.usage_revenue)||0),0))}</td>
+            <td style={{...entTd,fontWeight:700,borderTop:`2px solid ${B.border}`,borderBottom:"none"}}>{entMoney0(plat.net_worth)}</td>
+            <td style={{...entTd,borderTop:`2px solid ${B.border}`,borderBottom:"none"}} colSpan={2}/>
+          </tr></tfoot>}
+        </table>
+      </div>
+      <div style={{fontSize:11.5,color:B.textSoft,marginTop:12,lineHeight:1.55}}>
+        Plan MRR is list price for active and past-due households. Usage is what was actually billed this month (extra workflows, storage, partner seats) and reads zero until the billing ledger is being written from Stripe. Net worth is what households and the team have entered, not a bank feed.
+      </div>
+    </div>
+  </div></div>;
+}
+
+function EntFirmPage({row,rows,data,toast,onBack,onChanged,onOpenBranding}){
+  const isFirm=!!row.id;
+  const e=row.ent;
+  const TABS=isFirm?["Overview","Signups","Households and users","Expert","Skin and domain","Contract and fees","Activity"]:["Overview","Signups"];
+  const[tab,setTab]=useState("Overview");
+  const[busy,setBusy]=useState("");
+  const[confirm,setConfirm]=useState(null);
+  const[newCode,setNewCode]=useState("");
+  const call=async(key,fn,args,ok)=>{
+    setBusy(key);
+    try{const{data:d,error}=await sb.rpc(fn,args);if(error)throw new Error(error.message);toast(ok);await onChanged();return d;}
+    catch(x){toast(x.message,"error");}
+    finally{setBusy("");}
+  };
+  const rotate=async()=>{setConfirm(null);const code=await call("rot","enterprise_rotate_code",{p_enterprise_id:row.id},"Code rotated. The old code no longer works.");if(code)setNewCode(code);};
+  const toggleCode=()=>call("cd","enterprise_set_status",{p_enterprise_id:row.id,p_what:"code_active",p_value:!e.signup_code_active},e.signup_code_active?"Code switched off":"Code switched on");
+  const setActive=async v=>{setConfirm(null);await call("act","enterprise_set_status",{p_enterprise_id:row.id,p_what:"active",p_value:v},v?"Firm reactivated":"Firm deactivated");};
+  const copy=async txt=>{try{await navigator.clipboard.writeText(txt);toast("Copied");}catch(_x){toast("Could not copy. Select the text and copy it.","error");}};
+  const common={row,rows,data,toast,onChanged};
+  return <div style={{height:"100%",overflowY:"auto"}}><div style={{maxWidth:1180,padding:"24px 28px"}}>
+    <div style={{marginBottom:10}}><Btn small variant="ghost" onClick={onBack}>← All enterprises</Btn></div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap",marginBottom:8}}>
+      <div>
+        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:28,color:B.navy,fontWeight:600}}>{row.name}</div>
+        <div style={{fontSize:12.5,color:B.textSoft,marginTop:2}}>
+          {isFirm?<>{entContractStatus(e)}{e.domain?` · ${e.domain}`:""}{row.skinName?` · skin: ${row.skinName}`:""}</>:"Households that belong to no firm"}
+        </div>
+      </div>
+      {isFirm&&<div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <Btn small variant="ghost" disabled={!!busy} onClick={()=>setConfirm("rotate")}>Rotate code</Btn>
+        <Btn small variant="ghost" disabled={!!busy} onClick={toggleCode}>{e.signup_code_active?"Switch code off":"Switch code on"}</Btn>
+        {e.active
+          ?<Btn small variant="danger" disabled={!!busy} onClick={()=>setConfirm("deactivate")}>Deactivate firm</Btn>
+          :<Btn small variant="gold" disabled={!!busy} onClick={()=>setActive(true)}>Reactivate firm</Btn>}
+      </div>}
+    </div>
+    {isFirm&&<div style={{...entCard,padding:"12px 16px",marginBottom:12,display:"flex",gap:14,alignItems:"center",flexWrap:"wrap"}}>
+      <div style={{fontSize:12,color:B.textSoft}}>Firm code <strong style={{fontFamily:"monospace",fontSize:13,color:B.navy,marginLeft:4}}>{e.signup_code}</strong> <span style={{marginLeft:6}}>({e.signup_code_active?"on":"off"})</span></div>
+      <Btn small variant="ghost" onClick={()=>copy(e.signup_code)}>Copy code</Btn>
+      <Btn small variant="ghost" onClick={()=>copy(entCodeLink(e.signup_code))}>Copy signup link</Btn>
+    </div>}
+    <GoldLine/>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
+      {TABS.map(t=><button key={t} onClick={()=>setTab(t)} style={{padding:"7px 14px",borderRadius:20,border:`1px solid ${tab===t?B.navy:B.border}`,background:tab===t?B.navy:B.white,color:tab===t?B.white:B.navyMid,fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{t}</button>)}
+    </div>
+    {tab==="Overview"&&<EntOverview {...common}/>}
+    {tab==="Signups"&&<EntSignups {...common}/>}
+    {tab==="Households and users"&&isFirm&&<EntPeople {...common}/>}
+    {tab==="Expert"&&isFirm&&<EntExpert {...common}/>}
+    {tab==="Skin and domain"&&isFirm&&<EntSkin {...common} onOpenBranding={onOpenBranding}/>}
+    {tab==="Contract and fees"&&isFirm&&<EntContract {...common}/>}
+    {tab==="Activity"&&isFirm&&<EntActivity {...common}/>}
+
+    {confirm==="rotate"&&<Modal title="Rotate the firm code?" onClose={()=>setConfirm(null)}>
+      <div style={{fontSize:14,color:B.text,lineHeight:1.6,marginTop:6}}>The current code stops working at once, including any link or message that already carries it. Households already in the firm stay in. You will be shown the new code once, to send to the firm.</div>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:20}}><Btn variant="ghost" onClick={()=>setConfirm(null)}>Cancel</Btn><Btn variant="gold" onClick={rotate}>Rotate code</Btn></div>
+    </Modal>}
+    {confirm==="deactivate"&&<Modal title="Deactivate this firm?" onClose={()=>setConfirm(null)}>
+      <div style={{fontSize:14,color:B.text,lineHeight:1.6,marginTop:6}}>Nobody can join {row.name} while it is inactive. Its households stay where they are and keep their plans. You can reactivate it at any time.</div>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:20}}><Btn variant="ghost" onClick={()=>setConfirm(null)}>Cancel</Btn><Btn variant="danger" onClick={()=>setActive(false)}>Deactivate</Btn></div>
+    </Modal>}
+    {newCode&&<Modal title="New firm code" onClose={()=>setNewCode("")}>
+      <div style={{fontSize:13,color:B.textSoft,lineHeight:1.6,marginTop:6}}>Send this to the firm. It is also shown on this page.</div>
+      <div style={{fontFamily:"monospace",fontSize:20,color:B.navy,fontWeight:700,margin:"12px 0"}}>{newCode}</div>
+      <div style={{fontSize:12,color:B.textSoft,wordBreak:"break-all"}}>{entCodeLink(newCode)}</div>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:18}}><Btn variant="ghost" onClick={()=>copy(entCodeLink(newCode))}>Copy link</Btn><Btn onClick={()=>setNewCode("")}>Done</Btn></div>
+    </Modal>}
+  </div></div>;
+}
+
+function EntOverview({row,data,toast,onChanged}){
+  const r=row.rev,n=row.nw,plat=data.plat;
+  const[snaps,setSnaps]=useState(null);
+  const[busy,setBusy]=useState(false);
+  const loadSnaps=useCallback(async()=>{
+    let q=sb.from("enterprise_snapshots").select("snapshot_month,households,plan_mrr,usage_revenue,total_revenue,net_worth").order("snapshot_month",{ascending:false}).limit(6);
+    q=row.id?q.eq("enterprise_id",row.id):q.is("enterprise_id",null);
+    const{data:d}=await q;setSnaps(d||[]);
+  },[row.id]);
+  useEffect(()=>{loadSnaps();},[loadSnaps]);
+  const takeSnapshot=async()=>{
+    setBusy(true);
+    const{error}=await sb.rpc("enterprise_snapshot_run",{p_month:monthStartISO(0)});
+    setBusy(false);
+    if(error){toast(error.message,"error");return;}
+    toast("Snapshot saved for "+monthLabelOf(monthStartISO(0)));await loadSnaps();
+  };
+  const usage=Number(r.usage_revenue)||0,mrr=Number(r.plan_mrr)||0;
+  const shareH=plat&&plat.households?Math.round(100*(n.households||0)/plat.households):0;
+  const shareR=plat&&Number(plat.total_revenue)>0?Math.round(100*(Number(r.total_revenue)||0)/Number(plat.total_revenue)):null;
+  const none=!(n.households>0);
+  return <div>
+    <div style={entCard}>
+      <div style={entLab}>{monthLabelOf(data.month)}</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(170px,100%),1fr))",gap:10}}>
+        <EntTile label="Households" value={n.households||0} sub={`${shareH}% of the platform`}/>
+        <EntTile label="Users" value={row.users.length}/>
+        <EntTile label="Plan MRR" value={money2(mrr)} sub="List price, active and past due"/>
+        <EntTile label="Usage billed" value={money2(usage)} sub="Extra workflows, storage, seats"/>
+        <EntTile label="Revenue billed" value={money2(r.total_revenue)} sub={shareR==null?"Billing ledger is empty":`${shareR}% of the platform`}/>
+        <EntTile label="Annualised" value={money2((mrr+usage)*12)} sub="(Plan MRR + usage) × 12"/>
+      </div>
+      {row.id&&<div style={{fontSize:12,color:B.textSoft,marginTop:12}}>Paid by the firm {money2(r.paid_by_firm)} · paid by households {money2(r.paid_by_families)}</div>}
+    </div>
+    <div style={entCard}>
+      <div style={entLab}>Net worth under administration</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(170px,100%),1fr))",gap:10}}>
+        <EntTile label="Net worth" value={entMoney0(n.net_worth)} sub={none?"No households yet":`${entMoney0((Number(n.net_worth)||0)/Math.max(1,n.households||1))} per household`}/>
+        <EntTile label="Real estate" value={entMoney0(n.real_estate)}/>
+        <EntTile label="Debt" value={entMoney0(n.debt)}/>
+        <EntTile label="Portfolio" value={entMoney0(n.portfolio)}/>
+        <EntTile label="Valuables" value={entMoney0(n.valuables)}/>
+      </div>
+      <div style={{fontSize:11.5,color:B.textSoft,marginTop:12,lineHeight:1.55}}>
+        {n.households_with_data||0} of {n.households||0} households have entered any data. These figures are entered by clients or the team, not synced from banks or county records.
+        {n.accounts_total>0?` ${n.accounts_with_date} of ${n.accounts_total} portfolio accounts carry a balance date${n.oldest_balance_date?`, the oldest ${entDay(n.oldest_balance_date)}`:""}.`:""}
+        {" "}Property values and valuables carry no date.
+      </div>
+    </div>
+    <div style={entCard}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+        <div style={entLab}>Monthly snapshots</div>
+        <Btn small variant="ghost" disabled={busy} onClick={takeSnapshot}>{busy?"Saving…":"Save this month's snapshot now"}</Btn>
+      </div>
+      {snaps===null?<Empty text="Loading…"/>:!snaps.length?<Empty text="No snapshots yet. One is saved automatically at 06:15 UTC on the 1st of each month, and trends start from the first one."/>:
+        <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",minWidth:520}}>
+          <thead><tr>{["Month","Households","Plan MRR","Usage","Revenue","Net worth"].map(h=><th key={h} style={entTh}>{h}</th>)}</tr></thead>
+          <tbody>{snaps.map(s=><tr key={s.snapshot_month}>
+            <td style={entTd}>{monthLabelOf(String(s.snapshot_month).slice(0,10))}</td><td style={entTd}>{s.households}</td>
+            <td style={entTd}>{money2(s.plan_mrr)}</td><td style={entTd}>{money2(s.usage_revenue)}</td><td style={entTd}>{money2(s.total_revenue)}</td><td style={entTd}>{entMoney0(s.net_worth)}</td>
+          </tr>)}</tbody></table></div>}
+    </div>
+  </div>;
+}
+
+function EntSignups({row,data}){
+  const[x,setX]=useState(null);
+  useEffect(()=>{
+    let stop=false;
+    const ids=row.fams.map(f=>f.id);
+    if(!ids.length){setX({nw:{},usage:{},notice:{}});return;}
+    Promise.all([
+      sb.from("properties").select("family_id,current_value,purchase_price,loan_balance,second_mortgage_balance").in("family_id",ids),
+      sb.from("portfolio_accounts").select("family_id,account_type,current_balance").in("family_id",ids),
+      sb.from("valuables").select("family_id,estimated_value").in("family_id",ids),
+      sb.from("billing_ledger").select("family_id,amount,line_type").eq("period_month",data.month).in("family_id",ids),
+      sb.from("enterprise_membership_events").select("family_id,event_type,how,detail,created_at").in("family_id",ids).in("event_type",["joined","moved"]).order("created_at",{ascending:false}),
+      sb.from("signup_disclosures").select("id,version").eq("kind","firm_data_sharing"),
+    ]).then(([p,a,v,l,ev,dc])=>{
+      if(stop)return;
+      const by=(arr,id)=>(arr.data||[]).filter(q=>q.family_id===id);
+      const nw={},usage={},notice={};
+      ids.forEach(id=>{
+        nw[id]=entNetWorth(by(p,id),by(a,id),by(v,id));
+        usage[id]=by(l,id).reduce((s,q)=>s+(Number(q.amount)||0),0);
+        const e=(ev.data||[]).find(q=>q.family_id===id);
+        if(e){const d=(dc.data||[]).find(q=>q.id===(e.detail&&e.detail.notice_id));notice[id]=d?`Notice v${d.version}`:(e.how==="admin_move"?"Recorded by admin":"—");}
+      });
+      setX({nw,usage,notice});
+    });
+    return()=>{stop=true;};
+  },[row.key,data.month]);
+  const price=plan=>Number((data.plans.find(p=>p.plan===plan)||{}).monthly_price)||0;
+  const planLabel=plan=>(data.plans.find(p=>p.plan===plan)||{}).label||plan;
+  const list=[...row.fams].sort((a,b)=>new Date(b.joined_enterprise_at||b.created_at)-new Date(a.joined_enterprise_at||a.created_at));
+  return <div style={entCard}>
+    <div style={entLab}>{row.id?"Households that joined this firm":"ORDANIS direct households"}</div>
+    {!list.length?<Empty text="No households yet."/>:
+    <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",minWidth:1020}}>
+      <thead><tr>{["Joined","No.","Household","Plan","How","Billing","Plan MRR","Usage","Expert","Onboarded","Consent","Net worth"].map(h=><th key={h} style={entTh}>{h}</th>)}</tr></thead>
+      <tbody>{list.map(f=>{const live=f.subscription_state==="active"||f.subscription_state==="past_due";return <tr key={f.id}>
+        <td style={entTd}>{entDay(f.joined_enterprise_at||f.created_at)}</td>
+        <td style={entTd}>{f.customer_number||"—"}</td>
+        <td style={{...entTd,fontWeight:700,color:B.navy}}>{f.name}{f.paid_by==="enterprise"&&<span style={{marginLeft:6,fontSize:9.5,fontWeight:700,textTransform:"uppercase",background:"rgba(206,182,129,0.22)",color:"#7a5a19",borderRadius:20,padding:"2px 7px"}}>Firm pays</span>}</td>
+        <td style={entTd}>{planLabel(f.plan)}</td>
+        <td style={entTd}>{f.joined_via?ENT_HOW[f.joined_via]||f.joined_via:(row.id?"—":"Direct")}</td>
+        <td style={entTd}>{f.subscription_state||"—"}</td>
+        <td style={entTd}>{live?money2(price(f.plan)):money2(0)}</td>
+        <td style={entTd}>{x?money2(x.usage[f.id]||0):"…"}</td>
+        <td style={entTd}>{f.advisor_name||f.advisor_email||"—"}</td>
+        <td style={entTd}>{f.onboarding_contacted_at?"Yes":"No"}</td>
+        <td style={entTd}>{row.id?(x?(x.notice[f.id]||"—"):"…"):"—"}</td>
+        <td style={entTd}>{x?entMoney0(x.nw[f.id]||0):"…"}</td>
+      </tr>;})}</tbody></table></div>}
+  </div>;
+}
+
+function EntPeople({row,data,toast,onChanged}){
+  const[target,setTarget]=useState("");
+  const[agreed,setAgreed]=useState(false);
+  const[note,setNote]=useState("");
+  const[busy,setBusy]=useState(false);
+  const[removing,setRemoving]=useState(null);
+  const[removeNote,setRemoveNote]=useState("");
+  const others=data.fams.filter(f=>f.enterprise_id!==row.id&&f.paid_by!=="enterprise");
+  const firmName=id=>id?((data.ents.find(x=>x.id===id)||{}).name||"another firm"):"ORDANIS direct";
+  const move=async()=>{
+    setBusy(true);
+    try{
+      const r=await callFirmJoin({action:"admin_move",family_id:target,enterprise_id:row.id,client_agreed:true,note:note.trim()});
+      toast((r.status==="moved"?"Moved into ":"Added to ")+(r.firm_name||row.name));
+      setTarget("");setAgreed(false);setNote("");await onChanged();
+    }catch(x){toast(x.message,"error");}
+    setBusy(false);
+  };
+  const remove=async()=>{
+    setBusy(true);
+    try{
+      await callFirmJoin({action:"admin_remove",family_id:removing.id,note:removeNote.trim()});
+      toast("Removed from "+row.name);setRemoving(null);setRemoveNote("");await onChanged();
+    }catch(x){toast(x.message,"error");}
+    setBusy(false);
+  };
+  const famName=id=>(data.fams.find(f=>f.id===id)||{}).name||"—";
+  const users=[...row.users].sort((a,b)=>(a.role==="enterprise_admin"?0:1)-(b.role==="enterprise_admin"?0:1)||String(a.email).localeCompare(String(b.email)));
+  return <div>
+    <div style={entCard}>
+      <div style={entLab}>Households ({row.fams.length})</div>
+      {!row.fams.length?<Empty text="No households in this firm."/>:row.fams.map(f=><div key={f.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",padding:"8px 0",borderBottom:`1px solid ${B.borderLight}`}}>
+        <div style={{fontSize:13,color:B.navy,fontWeight:700}}>{f.name}<span style={{fontWeight:400,color:B.textSoft,marginLeft:8,fontSize:12}}>{f.paid_by==="enterprise"?"Plan paid by the firm":"Pays its own plan"}</span></div>
+        {f.paid_by!=="enterprise"
+          ?<Btn small variant="ghost" disabled={busy} onClick={()=>{setRemoving(f);setRemoveNote("");}}>Remove from firm</Btn>
+          :<span style={{fontSize:11.5,color:B.textMute}}>Can't be removed while the firm pays</span>}
+      </div>)}
+    </div>
+    <div style={entCard}>
+      <div style={entLab}>Move a household into {row.name}</div>
+      <div style={{fontSize:12,color:B.textSoft,lineHeight:1.55,marginBottom:10}}>Only with the client's agreement. Firm-paid households can't be moved. The move is written to the log with your note.</div>
+      <div style={{maxWidth:420}}><Sel value={target} onChange={e=>setTarget(e.target.value)}>
+        <option value="">Choose a household…</option>
+        {others.map(f=><option key={f.id} value={f.id}>{f.name} (now in {firmName(f.enterprise_id)})</option>)}
+      </Sel></div>
+      {target&&<div style={{marginTop:10}}>
+        <label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:12.5,color:B.text,cursor:"pointer"}}><input type="checkbox" checked={agreed} onChange={e=>setAgreed(e.target.checked)} style={{marginTop:2}}/>The client has agreed to share this household's information with {row.name}.</label>
+        <textarea value={note} onChange={e=>setNote(e.target.value)} rows={2} maxLength={400} placeholder="How did they agree? Who confirmed it, and when?" style={{width:"100%",maxWidth:520,boxSizing:"border-box",marginTop:8,padding:"8px 10px",border:`1px solid ${B.border}`,borderRadius:8,fontSize:12.5,fontFamily:"inherit",color:B.text,resize:"vertical"}}/>
+        <div style={{marginTop:8}}><Btn small disabled={busy||!agreed||note.trim().length<5} onClick={move}>{busy?"Saving…":"Move household"}</Btn></div>
+      </div>}
+    </div>
+    <div style={entCard}>
+      <div style={entLab}>People ({users.length})</div>
+      {!users.length?<Empty text="No users yet."/>:<div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",minWidth:560}}>
+        <thead><tr>{["Name","Email","Role","Household","Active"].map(h=><th key={h} style={entTh}>{h}</th>)}</tr></thead>
+        <tbody>{users.map(u=><tr key={u.id}>
+          <td style={{...entTd,fontWeight:700,color:B.navy}}>{u.full_name||"—"}</td><td style={entTd}>{u.email}</td>
+          <td style={entTd}>{u.role==="enterprise_admin"?<span style={{fontSize:9.5,fontWeight:700,textTransform:"uppercase",background:"rgba(206,182,129,0.22)",color:"#7a5a19",borderRadius:20,padding:"2px 8px"}}>Firm admin</span>:u.role}</td>
+          <td style={entTd}>{u.family_id?famName(u.family_id):"—"}</td><td style={entTd}>{u.active===false?"No":"Yes"}</td>
+        </tr>)}</tbody></table></div>}
+      <div style={{fontSize:11.5,color:B.textSoft,marginTop:10}}>Firm admin accounts are created by an ORDANIS admin from the Users screen.</div>
+    </div>
+    {removing&&<Modal title="Remove from firm?" onClose={()=>setRemoving(null)}>
+      <div style={{fontSize:14,color:B.text,lineHeight:1.6,marginTop:6}}>Remove <strong>{removing.name}</strong> from {row.name}? The firm loses access straight away. The household keeps its plan and its data.</div>
+      <input value={removeNote} onChange={e=>setRemoveNote(e.target.value)} maxLength={300} placeholder="Reason (optional, recorded in the log)" style={{width:"100%",boxSizing:"border-box",marginTop:12,padding:"8px 10px",border:`1px solid ${B.border}`,borderRadius:8,fontSize:13,fontFamily:"inherit",color:B.text}}/>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:18}}><Btn variant="ghost" onClick={()=>setRemoving(null)}>Cancel</Btn><Btn variant="danger" disabled={busy} onClick={remove}>{busy?"Removing…":"Remove"}</Btn></div>
+    </Modal>}
+  </div>;
+}
+
+function EntExpert({row,data,toast,onChanged}){
+  const e=row.ent;
+  const experts=data.users.filter(u=>u.role==="advisor"&&u.active!==false&&u.email).sort((a,b)=>String(a.full_name||a.email).localeCompare(String(b.full_name||b.email)));
+  const[pick,setPick]=useState(e.default_expert_email||"");
+  const[apply,setApply]=useState(false);
+  const[busy,setBusy]=useState(false);
+  const[result,setResult]=useState(null);
+  const current=experts.find(u=>String(u.email).toLowerCase()===String(e.default_expert_email||"").toLowerCase());
+  const setBy=e.default_expert_set_by?data.users.find(u=>u.id===e.default_expert_set_by):null;
+  const needsApply=row.fams.filter(f=>String(f.advisor_email||"").toLowerCase()!==String(pick||"").toLowerCase()).length;
+  const save=async()=>{
+    setBusy(true);setResult(null);
+    const{data:d,error}=await sb.rpc("enterprise_set_default_expert",{p_enterprise_id:row.id,p_email:pick||null,p_apply_existing:apply&&!!pick});
+    setBusy(false);
+    if(error){toast(error.message==="expert_not_found"?"That person is not an active Expert.":error.message,"error");return;}
+    setResult(d);toast(pick?"Default Expert saved":"Default Expert cleared");setApply(false);await onChanged();
+  };
+  return <div style={entCard}>
+    <div style={entLab}>Assign Expert</div>
+    <p style={{fontSize:12.5,color:B.textSoft,margin:"0 0 12px",lineHeight:1.6,maxWidth:640}}>
+      The default Expert is given to every household that signs up with this firm's code. Any single household can still be changed on its own page.
+      {e.default_expert_email?` Right now: ${current?(current.full_name||current.email):e.default_expert_email}${e.default_expert_set_at?`, set ${entDay(e.default_expert_set_at)}${setBy?` by ${setBy.full_name||setBy.email}`:""}`:""}.`:" No default Expert is set."}
+    </p>
+    <div style={{maxWidth:420}}><Field label="Default Expert"><Sel value={pick} onChange={ev=>setPick(ev.target.value)}>
+      <option value="">None</option>
+      {experts.map(u=><option key={u.id} value={u.email}>{u.full_name||u.email}</option>)}
+    </Sel></Field></div>
+    {pick&&row.fams.length>0&&<label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:12.5,color:B.text,cursor:"pointer",marginBottom:12}}>
+      <input type="checkbox" checked={apply} onChange={ev=>setApply(ev.target.checked)} style={{marginTop:2}}/>
+      Also give this Expert to the {needsApply} existing household{needsApply===1?"":"s"} in the firm that {needsApply===1?"has":"have"} a different Expert. An Expert's household limit still applies.
+    </label>}
+    <Btn small disabled={busy||pick===(e.default_expert_email||"")&&!apply} onClick={save}>{busy?"Saving…":"Save"}</Btn>
+    {result&&<div style={{marginTop:12,fontSize:12.5,color:B.text,lineHeight:1.6}}>
+      {result.applied>0&&<div>Given to {result.applied} existing household{result.applied===1?"":"s"}.</div>}
+      {result.could_not_apply&&result.could_not_apply.length>0&&<div style={{color:"#8b1a1a"}}>Could not be given (the Expert's limit or a conflict): {result.could_not_apply.join(", ")}.</div>}
+    </div>}
+  </div>;
+}
+
+function EntSkin({row,data,toast,onChanged,onOpenBranding}){
+  const e=row.ent;
+  const[skin,setSkin]=useState(e.brand_profile_id||"");
+  const[domain,setDomain]=useState(e.domain||"");
+  const[busy,setBusy]=useState(false);
+  const save=async()=>{
+    setBusy(true);
+    const{error}=await sb.rpc("enterprise_link_skin",{p_enterprise_id:row.id,p_brand_profile_id:skin||null,p_domain:domain.trim()||null});
+    setBusy(false);
+    if(error){toast(/enterprises_domain_key/.test(error.message)?"Another firm already uses that domain.":/enterprises_domain_check/.test(error.message)?"Enter just the host name, like portal.firm.com.":error.message,"error");return;}
+    toast("Saved");await onChanged();
+  };
+  return <div style={entCard}>
+    <div style={entLab}>Skin and domain</div>
+    <p style={{fontSize:12.5,color:B.textSoft,margin:"0 0 12px",lineHeight:1.6,maxWidth:640}}>The skin is the firm's look: name, colours, logo. The domain is the web address the firm's households use. Linking them here records the choice; showing the skin by address comes with the domain work.</p>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(260px,100%),1fr))",gap:12,maxWidth:760}}>
+      <Field label="Skin"><Sel value={skin} onChange={ev=>setSkin(ev.target.value)}><option value="">None</option>{data.skins.map(s=><option key={s.id} value={s.id}>{s.brand_name}</option>)}</Sel></Field>
+      <Field label="Domain"><Inp placeholder="portal.firm.com" value={domain} onChange={ev=>setDomain(ev.target.value)}/></Field>
+    </div>
+    <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+      <Btn small disabled={busy||(skin===(e.brand_profile_id||"")&&domain.trim().toLowerCase()===(e.domain||""))} onClick={save}>{busy?"Saving…":"Save"}</Btn>
+      {onOpenBranding&&<Btn small variant="ghost" onClick={onOpenBranding}>Edit skins in Branding</Btn>}
+    </div>
+  </div>;
+}
+
+function entRebateWindow(e){
+  const now=new Date();
+  let due;
+  if(e.maintenance_start_date){
+    due=new Date(e.maintenance_start_date+"T00:00:00Z");
+    while(due<now)due=new Date(Date.UTC(due.getUTCFullYear()+1,due.getUTCMonth(),due.getUTCDate()));
+  }else due=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,1));
+  const from=new Date(Date.UTC(due.getUTCFullYear()-1,due.getUTCMonth(),due.getUTCDate()));
+  return{due,from,fromISO:from.toISOString().slice(0,10),dueISO:due.toISOString().slice(0,10),hasDue:!!e.maintenance_start_date};
+}
+function EntContract({row,toast,onChanged}){
+  const e=row.ent;
+  const blank=v=>v==null?"":String(v);
+  const[f,setF]=useState({contract_signed_at:blank(e.contract_signed_at),build_fee:blank(e.build_fee),build_fee_paid_at:blank(e.build_fee_paid_at),maintenance_fee:blank(e.maintenance_fee),maintenance_start_date:blank(e.maintenance_start_date),rebate_threshold:blank(e.rebate_threshold),contract_notes:blank(e.contract_notes)});
+  const[busy,setBusy]=useState(false);
+  const[win,setWin]=useState(null);
+  const w=entRebateWindow(e);
+  useEffect(()=>{
+    sb.from("billing_ledger").select("amount").eq("enterprise_id",row.id).gte("period_month",w.fromISO).lt("period_month",w.dueISO).then(({data:d})=>setWin((d||[]).reduce((s,x)=>s+(Number(x.amount)||0),0)));
+  },[row.id,e.maintenance_start_date]);
+  const set=k=>ev=>setF(p=>({...p,[k]:ev.target.value}));
+  const save=async()=>{
+    const num=k=>f[k]===""?null:Number(f[k]);
+    for(const k of["build_fee","maintenance_fee","rebate_threshold"])if(f[k]!==""&&!(Number(f[k])>=0)){toast("Fees and the threshold must be zero or more","error");return;}
+    setBusy(true);
+    const{error}=await sb.from("enterprises").update({
+      contract_signed_at:f.contract_signed_at||null,build_fee:num("build_fee"),build_fee_paid_at:f.build_fee_paid_at||null,
+      maintenance_fee:num("maintenance_fee"),maintenance_start_date:f.maintenance_start_date||null,rebate_threshold:num("rebate_threshold"),
+      contract_notes:f.contract_notes.trim()||null,
+    }).eq("id",row.id);
+    setBusy(false);
+    if(error){toast(error.message,"error");return;}
+    toast("Saved");await onChanged();
+  };
+  const thr=Number(e.rebate_threshold)||0;
+  const runRate=(Number(row.rev.total_revenue)||0)*12;
+  const pct=thr>0&&win!=null?Math.min(100,Math.round(100*win/thr)):0;
+  return <div>
+    <div style={entCard}>
+      <div style={entLab}>Rebate test</div>
+      <p style={{fontSize:12.5,color:B.textSoft,margin:"0 0 12px",lineHeight:1.6,maxWidth:700}}>
+        Revenue billed through ORDANIS to this firm's households (plan fees plus usage, from the billing ledger), over the 12 months before the maintenance fee is due. It leaves out the build and maintenance fees the firm itself pays.
+        {w.hasDue?` Window: ${entDay(w.fromISO+"T00:00:00Z")} to ${entDay(w.dueISO+"T00:00:00Z")} (next fee due).`:" Set a maintenance start date to measure the right window. Until then this shows the next 12 months back from the end of this month."}
+      </p>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(190px,100%),1fr))",gap:10}}>
+        <EntTile label="Revenue in the window" value={win==null?"…":money2(win)} sub={win===0?"Nothing in the ledger yet":undefined}/>
+        <EntTile label="Threshold" value={thr>0?money2(thr):"Not set"}/>
+        <EntTile label="Still to reach" value={thr>0&&win!=null?money2(Math.max(0,thr-win)):"—"}/>
+        <EntTile label="Run rate" value={money2(runRate)} sub="This month's billed revenue × 12"/>
+      </div>
+      {thr>0&&<div style={{marginTop:14}}><div style={{height:8,background:B.borderLight,borderRadius:8,overflow:"hidden"}}><div style={{width:pct+"%",height:"100%",background:B.gold}}/></div><div style={{fontSize:11.5,color:B.textSoft,marginTop:5}}>{pct}% of the threshold</div></div>}
+    </div>
+    <div style={entCard}>
+      <div style={entLab}>Contract and fees</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(220px,100%),1fr))",gap:12,maxWidth:900}}>
+        <Field label="Contract signed"><Inp type="date" value={f.contract_signed_at} onChange={set("contract_signed_at")}/></Field>
+        <Field label="Build fee ($)"><Inp type="number" min="0" step="0.01" value={f.build_fee} onChange={set("build_fee")}/></Field>
+        <Field label="Build fee paid on"><Inp type="date" value={f.build_fee_paid_at} onChange={set("build_fee_paid_at")}/></Field>
+        <Field label="Maintenance fee ($ a year)"><Inp type="number" min="0" step="0.01" value={f.maintenance_fee} onChange={set("maintenance_fee")}/></Field>
+        <Field label="Maintenance starts"><Inp type="date" value={f.maintenance_start_date} onChange={set("maintenance_start_date")}/></Field>
+        <Field label="Rebate threshold ($)"><Inp type="number" min="0" step="1" value={f.rebate_threshold} onChange={set("rebate_threshold")}/></Field>
+      </div>
+      <Field label="Notes"><textarea value={f.contract_notes} onChange={set("contract_notes")} rows={3} style={{width:"100%",maxWidth:900,boxSizing:"border-box",padding:"8px 10px",border:`1px solid ${B.border}`,borderRadius:8,fontSize:13,fontFamily:"inherit",color:B.text,resize:"vertical"}}/></Field>
+      <Btn small disabled={busy} onClick={save}>{busy?"Saving…":"Save contract terms"}</Btn>
+    </div>
+  </div>;
+}
+
+function EntActivity({row,data}){
+  const[ev,setEv]=useState(null);
+  useEffect(()=>{
+    sb.from("enterprise_membership_events").select("id,event_type,how,family_name,from_enterprise_id,to_enterprise_id,actor_id,actor_role,consent_note,detail,created_at")
+      .or(`to_enterprise_id.eq.${row.id},from_enterprise_id.eq.${row.id}`).order("created_at",{ascending:false}).limit(80).then(({data:d})=>setEv(d||[]));
+  },[row.id]);
+  const who=id=>{const u=data.users.find(x=>x.id===id);return u?(u.full_name||u.email):"System";};
+  const firm=id=>id?((data.ents.find(x=>x.id===id)||{}).name||"another firm"):"ORDANIS direct";
+  const line=x=>{
+    const d=x.detail||{};
+    if(x.event_type==="joined")return`${x.family_name} joined (${ENT_HOW[x.how]||x.how||""})`;
+    if(x.event_type==="moved")return`${x.family_name} moved from ${firm(x.from_enterprise_id)} to ${firm(x.to_enterprise_id)} (${ENT_HOW[x.how]||x.how||""})`;
+    if(x.event_type==="removed")return`${x.family_name} removed from ${firm(x.from_enterprise_id)}`;
+    if(x.event_type==="default_expert_set")return d.expert_email?`Default Expert set to ${d.expert_email}${d.applied_to_existing?`, given to ${d.applied_to_existing} existing household${d.applied_to_existing===1?"":"s"}`:""}`:"Default Expert cleared";
+    if(x.event_type==="status_changed")return`${d.field==="code_active"?"Code":"Firm"} switched ${d.value?"on":"off"}`;
+    if(x.event_type==="skin_linked")return`Skin or domain linked${d.domain?` (${d.domain})`:""}`;
+    return ENT_EVENT[x.event_type]||x.event_type;
+  };
+  return <div style={entCard}>
+    <div style={entLab}>Activity</div>
+    {ev===null?<Empty text="Loading…"/>:!ev.length?<Empty text="Nothing yet."/>:ev.map(x=><div key={x.id} style={{padding:"9px 0",borderBottom:`1px solid ${B.borderLight}`}}>
+      <div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+        <div style={{fontSize:13,color:B.text}}><strong style={{color:B.navy}}>{ENT_EVENT[x.event_type]||x.event_type}</strong> · {line(x)}</div>
+        <div style={{fontSize:11.5,color:B.textMute,whiteSpace:"nowrap"}}>{entDay(x.created_at)} · {x.actor_id?who(x.actor_id):"Stripe or system"}</div>
+      </div>
+      {x.consent_note&&<div style={{fontSize:11.5,color:B.textSoft,marginTop:2}}>{x.consent_note}</div>}
+    </div>)}
+  </div>;
+}
+
 const NAV_SECTIONS=[
   {section:"CLIENT MANAGEMENT",items:[
     {id:"dashboard",label:"Dashboard",icon:"⬡"},
@@ -12444,6 +13395,7 @@ const NAV_SECTIONS=[
   {section:"ADMIN",items:[
     {id:"users",label:"Users",icon:"⊕"},
     {id:"signups",label:"Signups",icon:"◈"},
+    {id:"enterprises",label:"Enterprises",icon:"▣"},
     {id:"firmbilling",label:"Firm billing",icon:"▤"},
     {id:"staterules",label:"State Rules",icon:"⚖"},
     // Only surfaced on instances running database-driven branding (the demo /
@@ -12512,6 +13464,7 @@ export default function App(){
       // the whole app for no reason, which is what was interrupting open forms.
       setUserProfile(prev=>prev&&JSON.stringify(prev)===JSON.stringify(p)?prev:p);
       CURRENT_USER_LABEL=(d.full_name||d.email||"").trim();
+      CURRENT_USER_ROLE=d.role||"";
     }
   },[]);
 
@@ -12588,7 +13541,9 @@ export default function App(){
     if(!authed||!userProfile)return;
     (async()=>{
       setLoading(true);
-      if(userProfile.role==="client"){
+      if(userProfile.role==="enterprise_admin"){
+        // Firm administrator: FirmDashboard loads one household at a time, after recording that it was opened.
+      } else if(userProfile.role==="client"){
         // Client: only load their family's data
         await Promise.all(TABLES.map(fetchTable));
       } else {
@@ -12674,6 +13629,11 @@ export default function App(){
   }
 
 
+  // Firm administrator: their own firm's households, view only
+  if(userProfile.role==="enterprise_admin"){
+    return <><FirmDashboard userProfile={userProfile} logout={logout} toast={showToast}/>{toastState&&<Toast msg={toastState.msg} type={toastState.type}/>}<UpdateBanner/></>;
+  }
+
   // For families tab, header shows differently when inside a family dashboard
   const isFamiliesTab=tab==="families";
 
@@ -12753,6 +13713,7 @@ export default function App(){
               open. */}
           {tab==="users"       &&isAdminRole&&<UserManagementView key={navNonce} userProfile={userProfile} data={data} toast={showToast}/>}
           {tab==="signups"     &&isAdminRole&&<SignupsRevenueView key={navNonce} data={data} toast={showToast} userProfile={userProfile} reload={reload}/>}
+          {tab==="enterprises" &&isAdminRole&&<EnterprisesView key={navNonce} toast={showToast} userProfile={userProfile} onOpenBranding={BRAND_ADMIN?()=>setTab("branding"):null}/>}
           {tab==="firmbilling" &&isAdminRole&&<FirmBillingView key={navNonce} toast={showToast}/>}
           {tab==="staterules"  &&isAdminRole&&<StateRulesView key={navNonce} userProfile={userProfile} toast={showToast}/>}
           {tab==="branding"    &&isAdminRole&&BRAND_ADMIN&&<BrandingView key={navNonce} toast={showToast}/>}

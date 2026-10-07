@@ -279,6 +279,46 @@ function AccountStep({ planKey, prices, onBack, onDone }) {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // Optional firm code. A household can sign up under a firm (an advisory firm that has an
+  // ORDANIS enterprise account) by entering the firm's code. The code is checked on the server,
+  // which also hands back the firm's name and the data-sharing notice the client must accept.
+  // A wrong, expired or switched-off code all give the same answer, on purpose.
+  const [firmCode, setFirmCode] = useState("");
+  const [firmInfo, setFirmInfo] = useState(null);
+  const [firmChecking, setFirmChecking] = useState(false);
+  const [firmError, setFirmError] = useState("");
+  const [agreeFirm, setAgreeFirm] = useState(false);
+  const lookupFirm = async (rawCode) => {
+    const code = String(rawCode ?? firmCode).trim();
+    setFirmInfo(null);
+    setAgreeFirm(false);
+    setFirmError("");
+    if (!code) return;
+    setFirmChecking(true);
+    try {
+      const resp = await fetch(SIGNUP_FN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY },
+        body: JSON.stringify({ action: "lookup_code", code }),
+      });
+      const json = await resp.json().catch(() => ({}));
+      if (resp.ok && json?.valid) setFirmInfo({ code, name: json.firm_name, notice: json.notice });
+      else setFirmError(json?.error || "That firm code is not valid. Check it and try again.");
+    } catch (_e) {
+      setFirmError("Could not check the code. Please try again.");
+    }
+    setFirmChecking(false);
+  };
+  useEffect(() => {
+    // A firm can share a link ending in ?code=THEIRCODE. Fill the box and check it right away.
+    try {
+      const q = new URLSearchParams(window.location.search);
+      const c = (q.get("code") || q.get("firm") || "").trim().slice(0, 40);
+      if (c) { setFirmCode(c); lookupFirm(c); }
+    } catch (_e) { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Disclosures: fetched live from signup_disclosures (public_read RLS -- see that table's
   // migration) rather than hardcoded here, same reasoning as plan_features pricing above -- the
   // text a person actually saw has to be the same text public-signup validates and records
@@ -309,6 +349,8 @@ function AccountStep({ planKey, prices, onBack, onDone }) {
     if (!EMAIL_RE.test(email.trim())) return "Enter a valid email address.";
     if (password.length < MIN_PASSWORD_LENGTH) return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
     if (!householdName.trim()) return "Tell us what to call the household.";
+    if (firmCode.trim() && !firmInfo) return "Check your firm code first, or clear the box to sign up on your own.";
+    if (firmInfo && !agreeFirm) return `Please read and accept the notice about what ${firmInfo.name} can see to continue.`;
     if (!disclosures.subscription_terms || !disclosures.sms_consent) return "Disclosures are still loading -- one moment and try again.";
     if (!agreeTerms) return "Please read and agree to the Subscription Terms to continue.";
     if (!agreeSms) return "Please read and respond to the SMS consent notice to continue.";
@@ -331,6 +373,7 @@ function AccountStep({ planKey, prices, onBack, onDone }) {
           full_name: fullName.trim(),
           household_name: householdName.trim(),
           plan: planKey,
+          ...(firmInfo ? { firm_code: firmInfo.code, firm_notice_id: firmInfo.notice?.id } : {}),
           success_url: `${origin}/?welcome=1`,
           cancel_url: `${origin}/signup`,
           // public-signup re-validates these are the CURRENT version of each disclosure and
@@ -376,6 +419,48 @@ function AccountStep({ planKey, prices, onBack, onDone }) {
           <Field label="Email" type="email" placeholder="james@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
           <Field label="Password" type="password" placeholder="At least 12 characters" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
           <Field label="What should we call the household?" type="text" placeholder="The Harrington Family" value={householdName} onChange={(e) => setHouseholdName(e.target.value)} autoComplete="off" />
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", fontSize: ".72rem", fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: C.muted, marginBottom: 6 }}>
+              Firm code <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional, only if your advisory firm gave you one)</span>
+            </label>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="text"
+                value={firmCode}
+                maxLength={40}
+                autoComplete="off"
+                spellCheck={false}
+                autoCapitalize="characters"
+                placeholder="Firm code"
+                onChange={(e) => { setFirmCode(e.target.value); if (firmInfo || firmError) { setFirmInfo(null); setAgreeFirm(false); setFirmError(""); } }}
+                style={{ flex: 1, padding: "12px 14px", border: `1px solid ${C.rule}`, borderRadius: 3, fontSize: ".95rem", fontFamily: "inherit", color: C.navy, background: "#fff", boxSizing: "border-box", minWidth: 0 }}
+              />
+              <button
+                type="button"
+                onClick={() => lookupFirm()}
+                disabled={firmChecking || !firmCode.trim()}
+                style={{ padding: "0 18px", borderRadius: 3, border: `1px solid ${C.navy}`, background: "#fff", color: C.navy, fontSize: ".78rem", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", fontFamily: "inherit", cursor: firmChecking || !firmCode.trim() ? "default" : "pointer", opacity: firmChecking || !firmCode.trim() ? 0.5 : 1 }}
+              >
+                {firmChecking ? "Checking…" : "Check"}
+              </button>
+            </div>
+            {firmError && <div style={{ marginTop: 8, fontSize: ".82rem", color: "#8b1a1a" }}>{firmError}</div>}
+            {firmInfo && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ fontSize: ".86rem", color: C.navy, fontWeight: 600, marginBottom: 8 }}>You are signing up under {firmInfo.name}.</div>
+                {firmInfo.notice?.title && <div style={{ fontSize: ".82rem", fontWeight: 700, color: C.navy, marginBottom: 6 }}>{firmInfo.notice.title}</div>}
+                <div
+                  style={{ maxHeight: 170, overflowY: "auto", border: `1px solid ${C.rule}`, borderRadius: 4, padding: "10px 12px", fontSize: ".8rem", color: C.slate, lineHeight: 1.5, background: "#fafaf8" }}
+                  dangerouslySetInnerHTML={{ __html: firmInfo.notice?.body_html || "" }}
+                />
+                <label style={{ display: "flex", gap: 8, alignItems: "flex-start", marginTop: 8, fontSize: ".82rem", color: C.navy, cursor: "pointer" }}>
+                  <input type="checkbox" checked={agreeFirm} onChange={(e) => setAgreeFirm(e.target.checked)} style={{ marginTop: 2 }} />
+                  I have read the notice above and agree to share this with {firmInfo.name}.
+                </label>
+              </div>
+            )}
+          </div>
         </div>
 
         <div style={{ marginTop: 8, marginBottom: 8, maxWidth: 520 }}>

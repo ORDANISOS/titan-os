@@ -39,7 +39,7 @@
 // create-checkout-session -- nothing to set by hand).
 // Deploy: supabase functions deploy public-signup --no-verify-jwt
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.49.4";
 // npm: specifier, not esm.sh -- esm.sh's Stripe bundle pulls in a Node.js "process.nextTick"
 // polyfill that calls Deno.core.runMicrotasks(), which the current Supabase Edge Runtime does
 // not support. That crashes the isolate (visible in function logs as "event loop error:
@@ -70,6 +70,25 @@ const stripe = new Stripe(STRIPE_SECRET_KEY, {
 });
 
 const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+const clean = (s: unknown) => String(s ?? "").trim();
+
+// Firm codes (see the enterprise_check_code migration). A wrong, expired or inactive code all look the
+// same to the caller, and repeated failures from one address are blocked by the database.
+const BAD_FIRM_CODE = "That firm code is not valid. Check it and try again.";
+const clientIp = (req: Request) =>
+  req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("cf-connecting-ip") ?? null;
+async function currentFirmNotice() {
+  const { data } = await admin.from("signup_disclosures")
+    .select("id, title, body_html, version").eq("kind", "firm_data_sharing").eq("is_draft", false)
+    .lte("effective_at", new Date().toISOString()).order("version", { ascending: false }).limit(1).maybeSingle();
+  return data;
+}
+async function checkFirmCode(code: string, context: string, ip: string | null) {
+  const { data, error } = await admin.rpc("enterprise_check_code", { p_code: code, p_context: context, p_ip: ip, p_user_id: null });
+  if (error) throw new Error(error.message);
+  const row = Array.isArray(data) ? data[0] : data;
+  return { blocked: !!row?.blocked, enterpriseId: (row?.enterprise_id as string) ?? null, name: (row?.enterprise_name as string) ?? null };
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -77,6 +96,7 @@ Deno.serve(async (req) => {
   if (!STRIPE_SECRET_KEY) return json({ error: "STRIPE_SECRET_KEY is not configured" }, 500);
 
   let body: {
+    action?: string; code?: string; firm_code?: string; firm_notice_id?: string;
     email?: string; password?: string; full_name?: string; household_name?: string;
     plan?: string; success_url?: string; cancel_url?: string;
     disclosures_acknowledged?: { subscription_terms_disclosure_id?: string; sms_consent_disclosure_id?: string };
@@ -85,6 +105,17 @@ Deno.serve(async (req) => {
     body = await req.json();
   } catch {
     return json({ error: "Invalid JSON body" }, 400);
+  }
+
+  // Lets the sign-up screen show which firm a code belongs to, and the notice the person must accept,
+  // before any account exists.
+  if (body.action === "lookup_code") {
+    const notice = await currentFirmNotice();
+    if (!notice) return json({ error: "Joining a firm is not open yet." }, 409);
+    const chk = await checkFirmCode(String(body.code ?? ""), "signup_lookup", clientIp(req));
+    if (chk.blocked) return json({ error: "Too many attempts. Please wait a few minutes and try again." }, 429);
+    if (!chk.enterpriseId) return json({ valid: false, error: BAD_FIRM_CODE }, 400);
+    return json({ valid: true, firm_name: chk.name, notice: { id: notice.id, title: notice.title, body_html: notice.body_html } });
   }
 
   const { email, password, full_name, household_name, plan, success_url, cancel_url, disclosures_acknowledged } = body;
@@ -125,6 +156,23 @@ Deno.serve(async (req) => {
     return json({
       error: "The Subscription Terms or SMS consent notice changed since this page loaded. Please refresh and try again.",
     }, 409);
+  }
+
+  // Optional firm code. Checked on the server, before any account or payment exists. The household is
+  // placed in the firm by the payment webhook once it is created, carrying the notice they accepted.
+  let firmEnterpriseId: string | null = null;
+  let firmNoticeId: string | null = null;
+  if (clean(body.firm_code)) {
+    const notice = await currentFirmNotice();
+    if (!notice) return json({ error: "Joining a firm is not open yet." }, 409);
+    if (body.firm_notice_id !== notice.id) {
+      return json({ error: "Please read and accept what the firm can see before continuing." }, 400);
+    }
+    const chk = await checkFirmCode(String(body.firm_code), "signup", clientIp(req));
+    if (chk.blocked) return json({ error: "Too many attempts. Please wait a few minutes and try again." }, 429);
+    if (!chk.enterpriseId) return json({ error: BAD_FIRM_CODE }, 400);
+    firmEnterpriseId = chk.enterpriseId;
+    firmNoticeId = notice.id;
   }
 
   // Service role read -- there is no session yet for RLS to key off, same reasoning as the rest of
@@ -257,7 +305,10 @@ Deno.serve(async (req) => {
       cancel_url,
       // No family_id yet -- these are what stripe-webhook's checkout.session.completed handler
       // reads to create the family and link this auth user to it once payment actually succeeds.
-      metadata: { auth_user_id: authUserId, household_name, plan: tier.plan, full_name, email },
+      metadata: {
+        auth_user_id: authUserId, household_name, plan: tier.plan, full_name, email,
+        ...(firmEnterpriseId ? { enterprise_id: firmEnterpriseId, firm_notice_id: String(firmNoticeId) } : {}),
+      },
       subscription_data: { metadata: { auth_user_id: authUserId, household_name, plan: tier.plan } },
     });
 

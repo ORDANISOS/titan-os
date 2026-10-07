@@ -29,7 +29,9 @@
 //     notification, not an assignment -- nothing here sets families.advisor_name/advisor_email.
 //     Someone still has to read that email and do it within the promised 24-48 hours.
 //   - On invoice.payment_succeeded for a firm invoice (metadata.kind = enterprise_invoice) it marks that
-//     invoice paid (enterprise_invoice_set_status) and does nothing else.
+//     invoice paid (enterprise_invoice_set_status).
+//   - On every invoice.payment_succeeded, firm or household, it records each paid line in the billing
+//     ledger (recordInvoiceInLedger -> billing_ledger_record). Repeats are harmless.
 //   - On invoice.upcoming it lowers a household's extra-workflow Stripe quantity to the slots it still
 //     holds (see lowerWorkflowSlotsBeforeRenewal). It never charges and never raises the quantity.
 //   - It does NOT run the day-by-day dunning cadence (which notice to send on which day of being
@@ -166,6 +168,31 @@ async function createFamilyFromSignup(session: Stripe.Checkout.Session, authUser
 
   if (profileErr) console.error(`user_profiles upsert failed for ${authUserId}:`, profileErr.message);
 
+  // Signed up with a firm code (validated by public-signup before payment): place the household in the
+  // firm now that it exists, keep the client's acceptance of the notice on the membership log, give it the
+  // firm's default Expert, and tell the firm. The household is already paid for, so a failure here is
+  // logged for follow-up and never turns into a Stripe retry.
+  const firmId = session.metadata?.enterprise_id;
+  if (firmId) {
+    try {
+      const { data: joined, error: joinErr } = await admin.rpc("enterprise_join_family", {
+        p_family_id: family.id, p_enterprise_id: firmId, p_how: "signup_code", p_actor: authUserId,
+        p_consent: true, p_consent_note: "Entered the firm code at signup and accepted the notice.",
+        p_disclosure_id: session.metadata?.firm_notice_id ?? null, p_apply_default_expert: true,
+      });
+      if (joinErr) throw new Error(joinErr.message);
+      if (joined?.event_id) {
+        await fetch(`${SUPABASE_URL}/functions/v1/firm-join`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "notify", event_id: joined.event_id }),
+        }).then(async (r) => { if (!r.ok) console.error(`firm-join notify returned ${r.status}:`, (await r.text()).slice(0, 200)); });
+      }
+    } catch (e) {
+      console.error(`FIRM JOIN AFTER SIGNUP FAILED for family ${family.id} firm ${firmId}:`, e instanceof Error ? e.message : e);
+    }
+  }
+
   // Looked up once and passed to both emails below, rather than each one querying plan_features
   // itself, since they need the exact same answer (which plan, does it carry an Expert).
   const { data: tier } = await admin.from("plan_features")
@@ -238,6 +265,74 @@ async function logDunning(familyId: string, kind: string, dayNumber: number, ext
     ...extra,
   });
   if (error) console.error(`dunning_notices insert failed for ${familyId}:`, error.message);
+}
+
+// Writes every paid line of an invoice into the billing ledger (billing_ledger_record), which the firm
+// revenue figures, the rebate and the monthly snapshots all read. Each amount is what was actually
+// charged: the line total less any discount on it, before tax. Safe to repeat for the same invoice, since
+// a line already recorded is skipped, so Stripe retrying this webhook cannot double-count.
+// Firm invoices carry the household and line type on each line (set by enterprise-invoice as invoice item
+// metadata, which Stripe repeats on the invoice line). Household invoices are classified by Stripe product:
+// the standing extra-workflow product (found by its metadata kind), the plan products in plan_features,
+// partner seats by name, anything else as 'other'. A subscription line's own metadata is the subscription's,
+// not the item's, so it is not used to classify.
+async function recordInvoiceInLedger(invoice: Stripe.Invoice, subscriptionFamilyId: string | null) {
+  const isFirm = invoice.metadata?.kind === "enterprise_invoice";
+  const { data: plans, error: pErr } = await admin.from("plan_features").select("stripe_product_id");
+  if (pErr) throw new Error(`plan_features read failed: ${pErr.message}`);
+  const planProducts = new Set((plans ?? []).map((r: { stripe_product_id: string | null }) => r.stripe_product_id).filter(Boolean));
+  const paidAt = invoice.status_transitions?.paid_at
+    ? new Date(invoice.status_transitions.paid_at * 1000).toISOString() : new Date().toISOString();
+  const productKind = new Map<string, string>();
+  const kindOf = async (productId: string): Promise<string> => {
+    if (!productId) return "";
+    if (!productKind.has(productId)) {
+      try {
+        const prod = await stripe.products.retrieve(productId);
+        productKind.set(productId, String(prod.metadata?.kind ?? ""));
+      } catch (_e) {
+        productKind.set(productId, "");
+      }
+    }
+    return productKind.get(productId) ?? "";
+  };
+  const FIRM_LINE_TYPE: Record<string, string> = {
+    plan: "plan", plan_discount: "plan", workflow_slots: "workflow_overage", workflow_catchup: "workflow_overage",
+  };
+
+  const lines: Array<Record<string, unknown>> = [];
+  for await (const l of stripe.invoices.listLineItems(invoice.id, { limit: 100 })) {
+    const discount = (l.discount_amounts ?? []).reduce((n, d) => n + d.amount, 0);
+    const net = (l.amount - discount) / 100;
+    if (!net) continue;
+    const familyId = isFirm ? (l.metadata?.family_id || null) : subscriptionFamilyId;
+    if (!familyId) {
+      console.error(`ledger: line ${l.id} on invoice ${invoice.id} has no household, not recorded`);
+      continue;
+    }
+    const productId = typeof l.price?.product === "string" ? l.price.product : ((l.price?.product as { id?: string } | null)?.id ?? "");
+    let lineType = "other";
+    if (isFirm) {
+      lineType = FIRM_LINE_TYPE[l.metadata?.line_type ?? ""] ?? "other";
+    } else if ((await kindOf(productId)) === "workflow_slots") {
+      lineType = "workflow_overage";
+    } else if (productId && planProducts.has(productId)) {
+      lineType = "plan";
+    } else if ((l.description ?? "").includes("Business Partner Portal Seat")) {
+      lineType = "partner_seats";
+    }
+    const period = isFirm && invoice.metadata?.period_month
+      ? `${invoice.metadata.period_month}T00:00:00Z`
+      : new Date((l.period?.start ?? invoice.created) * 1000).toISOString();
+    lines.push({
+      stripe_invoice_id: invoice.id, stripe_line_id: l.id, family_id: familyId, period, amount: net,
+      currency: l.currency, line_type: lineType, paid_by: isFirm ? "enterprise" : "family",
+      description: l.description ?? "", paid_at: paidAt,
+    });
+  }
+  if (!lines.length) return;
+  const { error } = await admin.rpc("billing_ledger_record", { p_lines: lines });
+  if (error) throw new Error(`billing_ledger_record failed for ${invoice.id}: ${error.message}`);
 }
 
 const clean = (s: unknown) => String(s ?? "").replace(/[\r\n<>]/g, " ").trim();
@@ -497,6 +592,7 @@ Deno.serve(async (req) => {
               throw new Error(m);
             }
           }
+          await recordInvoiceInLedger(invoice, null);
           break;
         }
         const sub = invoice.subscription
@@ -516,6 +612,7 @@ Deno.serve(async (req) => {
             await logDunning(familyId, "payment_recovered", 0, { sent_to: invoice.customer_email ?? null });
           }
         }
+        await recordInvoiceInLedger(invoice, familyId ?? null);
         break;
       }
 
