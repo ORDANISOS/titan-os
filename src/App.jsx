@@ -1265,7 +1265,13 @@ function BrandMark({reversed=false,size=40}){
 function PCMLogo({dark=false,compact=false}){
   // Explicit target widths (not a fixed height) so wide white-label raster
   // wordmarks scale down to fit their container instead of overflowing it.
-  const usingDefaultLogo=!import.meta.env.VITE_BRAND_LOGO_URL;
+  // The drawn text lockup is built for the short ORDANIS wordmark: its canvas is a fixed 760 units wide,
+  // so a long firm name ("Accurate Advisory Group") runs off both ends and is clipped. Use the drawn
+  // lockup only for the default ORDANIS brand, or when the live skin has no logo image of its own; any
+  // other skin that supplies a logo shows that image, scaled to fit.
+  const _skinHasLogo=!!BRAND.logo&&BRAND.logo!=="/ordanis-logo.png";
+  const _isDefaultBrand=String(BRAND.name||"").toUpperCase()==="ORDANIS";
+  const usingDefaultLogo=!import.meta.env.VITE_BRAND_LOGO_URL&&(_isDefaultBrand||!_skinHasLogo);
   const rasterStyle={maxHeight:compact||dark?64:110,maxWidth:"100%",width:"auto",height:"auto",display:"block",margin:dark||compact?0:"0 auto"};
   const content=(w,c=false)=>usingDefaultLogo?<BrandLockupSVG width={w} compact={c}/>:<BrandImg src={BRAND.logo} alt={BRAND.name} style={rasterStyle}/>;
   if(dark)return <div style={{background:"rgba(255,255,255,0.97)",borderRadius:8,padding:"8px 14px",display:"inline-block"}}>{content(190)}</div>;
