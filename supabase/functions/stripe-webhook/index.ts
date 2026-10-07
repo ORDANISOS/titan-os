@@ -28,6 +28,8 @@
 //     so a human actually finds out a household needs an Expert assigned. IMPORTANT: this is a
 //     notification, not an assignment -- nothing here sets families.advisor_name/advisor_email.
 //     Someone still has to read that email and do it within the promised 24-48 hours.
+//   - On invoice.upcoming it lowers a household's extra-workflow Stripe quantity to the slots it still
+//     holds (see lowerWorkflowSlotsBeforeRenewal). It never charges and never raises the quantity.
 //   - It does NOT run the day-by-day dunning cadence (which notice to send on which day of being
 //     overdue, moving a household to final_notice, archiving it). It only logs that a payment
 //     failed or recovered into dunning_notices, so that whatever already reads that table (or a
@@ -181,6 +183,48 @@ async function createFamilyFromSignup(session: Stripe.Checkout.Session, authUser
     } catch (e) {
       console.error(`notifyInternalTeamOfPremierSignup threw for family ${family.id}:`, e instanceof Error ? e.message : e);
     }
+  }
+}
+
+// Workflow purchases (see purchase-workflow): a household pays monthly for each extra workflow slot
+// it holds. When a workflow finishes, the database releases its slot at once, but the Stripe
+// quantity is only lowered by the app (purchase-workflow "sync") -- so a workflow completed any other
+// way would keep being billed. Stripe sends invoice.upcoming a few days before every renewal; this
+// brings the quantity down to the slots the household still holds BEFORE that invoice is created.
+// It only ever lowers (never charges, never raises) and never throws: a failure here is logged and
+// the renewal event is still acknowledged, so it cannot disturb any other billing event.
+async function lowerWorkflowSlotsBeforeRenewal(familyId: string) {
+  try {
+    await admin.rpc("workflow_slots_rebalance", { p_family_id: familyId });
+    const { count, error: cErr } = await admin.from("workflow_purchases")
+      .select("id", { count: "exact", head: true })
+      .eq("family_id", familyId).in("status", ["available", "in_use", "pending"]);
+    if (cErr) throw new Error(cErr.message);
+    const target = count ?? 0;
+
+    const { data: b } = await admin.from("workflow_slot_billing")
+      .select("stripe_item_id, billed_qty").eq("family_id", familyId).maybeSingle();
+    if (!b?.stripe_item_id || target >= b.billed_qty) return; // nothing to lower
+
+    const save = (itemId: string | null, qty: number) =>
+      admin.from("workflow_slot_billing").upsert({
+        family_id: familyId, stripe_item_id: itemId, billed_qty: qty, synced_at: new Date().toISOString(),
+      });
+    try {
+      if (target <= 0) {
+        await stripe.subscriptionItems.del(b.stripe_item_id, { proration_behavior: "none" });
+        await save(null, 0);
+      } else {
+        await stripe.subscriptionItems.update(b.stripe_item_id, { quantity: target, proration_behavior: "none" });
+        await save(b.stripe_item_id, target);
+      }
+    } catch (e) {
+      const err = e as { code?: string; statusCode?: number };
+      if (err?.code === "resource_missing" || err?.statusCode === 404) await save(null, 0); // item already gone in Stripe
+      else throw e;
+    }
+  } catch (e) {
+    console.error(`lowerWorkflowSlotsBeforeRenewal failed for ${familyId}:`, e instanceof Error ? e.message : e);
   }
 }
 
@@ -452,6 +496,18 @@ Deno.serve(async (req) => {
               .eq("id", familyId);
             await logDunning(familyId, "payment_recovered", 0, { sent_to: invoice.customer_email ?? null });
           }
+        }
+        break;
+      }
+
+      case "invoice.upcoming": {
+        // Sent by Stripe ahead of a renewal. Needs this event ticked on the webhook endpoint in the
+        // Stripe dashboard; until it is, this case simply never runs.
+        const invoice = event.data.object as Stripe.Invoice;
+        if (invoice.subscription) {
+          const { data: fam } = await admin.from("families")
+            .select("id").eq("stripe_subscription_id", String(invoice.subscription)).maybeSingle();
+          if (fam?.id) await lowerWorkflowSlotsBeforeRenewal(fam.id);
         }
         break;
       }

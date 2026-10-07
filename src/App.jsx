@@ -8924,32 +8924,29 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   // renders). Reads straight from data already loaded for this dashboard rather than a fresh
   // query, same as everywhere else in ClientDashboard that filters data.* by family.id.
   const billPayLostCount=(data.cash_flow_events||[]).filter(e=>e.familyId===family.id&&e.pcm_responsible_cleared_by_downgrade).length;
-  // ── Workflow usage & overage charges, for the Billing tab ──────────────────
-  // Same family_workflow_month_usage RPC the Workflows tab's banner reads (so the two numbers
-  // can never disagree), plus the raw ledger rows so Billing can show WHICH months and HOW MANY
-  // extra workflows -- not just this month's running total. workflow_overage_charges' own
-  // read_access RLS already lets a client read its own family's rows.
+  // ── Workflows & extra-workflow purchases, for the Billing tab ──────────────
+  // Same family_workflow_slots RPC the Workflows tab's banner reads (so the two numbers can never
+  // disagree), plus the household's workflow_purchases rows (what was bought, when, at what price,
+  // who approved it). The purchases table's read policy lets a client read only its own family's rows.
   const[billingWorkflowUsage,setBillingWorkflowUsage]=useState(null);
-  const[overageHistory,setOverageHistory]=useState([]);
-  useEffect(()=>{
-    if(!clientHasWorkflows)return;
-    let stopped=false;
-    sb.rpc("family_workflow_month_usage",{p_family_id:family.id}).then(({data:rows,error})=>{
-      if(!stopped&&!error&&rows&&rows[0])setBillingWorkflowUsage(rows[0]);
-    });
-    sb.from("workflow_overage_charges").select("period,unit_price,status").eq("family_id",family.id).order("period",{ascending:false}).then(({data:rows,error})=>{
-      if(stopped||error||!rows)return;
-      const byPeriod=new Map();
-      for(const r of rows){
-        const e=byPeriod.get(r.period)||{period:r.period,count:0,total:0,invoiced:0,pending:0};
-        e.count++;e.total+=Number(r.unit_price);
-        if(r.status==="invoiced")e.invoiced+=Number(r.unit_price);else if(r.status==="pending")e.pending+=Number(r.unit_price);
-        byPeriod.set(r.period,e);
-      }
-      setOverageHistory([...byPeriod.values()].sort((a,b)=>b.period.localeCompare(a.period)));
-    });
-    return()=>{stopped=true;};
-  },[family.id,clientHasWorkflows]);
+  const[workflowPurchases,setWorkflowPurchases]=useState([]);
+  const[slotBusy,setSlotBusy]=useState(false);
+  const loadBillingWorkflows=async()=>{
+    const[u,p]=await Promise.all([
+      sb.rpc("family_workflow_slots",{p_family_id:family.id}),
+      sb.from("workflow_purchases").select("id,status,unit_price,approved_by_label,approved_at,workflow_label,released_at,release_reason")
+        .eq("family_id",family.id).in("status",["available","in_use","released"]).order("approved_at",{ascending:false}),
+    ]);
+    if(!u.error&&u.data&&u.data[0])setBillingWorkflowUsage(u.data[0]);
+    if(!p.error&&p.data)setWorkflowPurchases(p.data);
+  };
+  useEffect(()=>{if(!clientHasWorkflows)return;loadBillingWorkflows();},[family.id,clientHasWorkflows]);
+  const cancelUnusedSlot=async id=>{
+    setSlotBusy(true);
+    try{await callPurchaseWorkflow({action:"cancel_unused",family_id:family.id,purchase_id:id});await loadBillingWorkflows();}
+    catch(e){setBillingMsg({type:"error",text:e.message});}
+    setSlotBusy(false);
+  };
   const requestPlanChange=async newPlan=>{
     setBillingBusy(true); setBillingMsg(null);
     try{
@@ -9568,28 +9565,29 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600}}>{fmtMoney(clientPlan==="premier"?0:businessPartners.length*5)}<span style={{fontSize:11,color:B.textSoft,fontWeight:400}}>/mo</span></div>
         </div>}
 
-        {/* Workflow usage & overage charges -- the exact breakdown behind whatever this month's
-            bill includes beyond the base plan price. Unlimited plans (Premier) show nothing here;
-            there is nothing metered to break down. */}
+        {/* Workflows -- what is included, and every extra workflow the household has bought (what,
+            when, price, who approved it). Unlimited plans (Premier) show nothing here. */}
         {clientHasWorkflows&&billingWorkflowUsage&&!billingWorkflowUsage.unlimited&&<div style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:14,padding:"20px 24px",marginBottom:16,boxShadow:B.shadow}}>
-          <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10}}>Workflow Usage & Charges</div>
+          <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10}}>Workflows</div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:4}}>
             <div style={{fontSize:13.5,color:B.text}}>{billingWorkflowUsage.active_count} of {billingWorkflowUsage.included} included workflows active</div>
-            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600}}>{fmtMoney(billingWorkflowUsage.charged_this_month)}</div>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600}}>${Number(billingWorkflowUsage.slots_monthly_cost||0).toFixed(2)}<span style={{fontSize:11,color:B.textSoft,fontWeight:400}}>/mo extra</span></div>
           </div>
-          <div style={{fontSize:12,color:B.textSoft,marginBottom:overageHistory.length?14:0}}>
-            {billingWorkflowUsage.overage_count>0
-              ? `${billingWorkflowUsage.overage_count} beyond your included ${billingWorkflowUsage.included}, at $${Number(billingWorkflowUsage.overage_price).toFixed(2)}/month each for as long as they stay active. Completing a workflow removes it from this count and stops its charge.`
-              : `Additional active workflows beyond your included ${billingWorkflowUsage.included} are $${Number(billingWorkflowUsage.overage_price).toFixed(2)}/month each, for as long as they stay active -- no cap. You'll see the exact cost when you start one.`}
+          <div style={{fontSize:12,color:B.textSoft,marginBottom:workflowPurchases.length?14:0}}>
+            {`Extra workflows are $${Number(billingWorkflowUsage.unit_price||0).toFixed(2)}/month each for as long as they stay active. You approve each one when you start it. Completing or cancelling a workflow stops its charge from your next renewal.`}
           </div>
-          {overageHistory.length>0&&<div style={{borderTop:`1px solid ${B.borderLight}`,paddingTop:12}}>
-            <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:8}}>By Month</div>
+          {workflowPurchases.length>0&&<div style={{borderTop:`1px solid ${B.borderLight}`,paddingTop:12}}>
+            <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:8}}>Extra workflows you've added</div>
             <div style={{display:"flex",flexDirection:"column",gap:6}}>
-              {overageHistory.map(h=><div key={h.period} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12.5,color:B.text,padding:"6px 0"}}>
-                <span>{new Date(h.period+"T00:00:00Z").toLocaleDateString("en-US",{month:"long",year:"numeric",timeZone:"UTC"})} — {h.count} additional workflow{h.count===1?"":"s"}</span>
+              {workflowPurchases.map(p=><div key={p.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",fontSize:12.5,color:B.text,padding:"6px 0"}}>
+                <span>
+                  <strong>{p.workflow_label||"Not used yet"}</strong>
+                  <span style={{color:B.textSoft}}> — added {fmt(String(p.approved_at).slice(0,10))} by {p.approved_by_label}{p.status==="released"&&p.released_at?`, ended ${fmt(String(p.released_at).slice(0,10))}`:""}</span>
+                </span>
                 <span style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{fontWeight:600,color:B.navy}}>{fmtMoney(h.total)}</span>
-                  <span style={{fontSize:9.5,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",borderRadius:20,padding:"2px 8px",background:h.pending>0?"rgba(206,182,129,0.22)":"#e0f5e9",color:h.pending>0?"#7a5a19":"#0d5c2b"}}>{h.pending>0?"Pending":"On invoice"}</span>
+                  <span style={{fontWeight:600,color:B.navy}}>${Number(p.unit_price).toFixed(2)}/mo</span>
+                  <span style={{fontSize:9.5,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",borderRadius:20,padding:"2px 8px",background:p.status==="in_use"?"#e0f5e9":p.status==="available"?"rgba(206,182,129,0.22)":"#eceff3",color:p.status==="in_use"?"#0d5c2b":p.status==="available"?"#7a5a19":"#5b6573"}}>{p.status==="in_use"?"Active":p.status==="available"?"Paid, not used":"Ended"}</span>
+                  {p.status==="available"&&<Btn small variant="ghost" disabled={slotBusy} onClick={()=>cancelUnusedSlot(p.id)}>Cancel</Btn>}
                 </span>
               </div>)}
             </div>
@@ -10662,6 +10660,19 @@ const statusWord=s=>({awaiting_approval:"Needs approval",ready:"Ready",pending:"
   approved:"Approved — not sent",sent:"Sent",done:"Done",skipped:"Not required",blocked:"Blocked",
   paused:"Paused — plan change"}[s]||s);
 
+// Calls the purchase-workflow edge function and surfaces its plain-language error (the
+// function answers 402/409 with a JSON body, which supabase-js hides behind a generic message).
+async function callPurchaseWorkflow(body){
+  const{data,error}=await sb.functions.invoke("purchase-workflow",{body});
+  if(error){
+    let msg=error.message;
+    try{const b=await error.context.json();if(b&&b.error)msg=b.error;}catch(_e){}
+    throw new Error(msg);
+  }
+  if(data&&data.error)throw new Error(data.error);
+  return data;
+}
+
 // Builds one cycle from a playbook. Conditional steps whose flag isn't set are
 // written as 'skipped' rather than omitted, so the record shows they were
 // considered. If the cycle is being started too late for its own lead times, it
@@ -10922,14 +10933,16 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
   // Live usage against plan_features.workflows_included -- Core gets 10 ACTIVE workflows
   // included and $8/month for each one beyond that, for as long as it stays active; completing a
   // workflow (see advance() below) drops it out of this count from the next monthly billing cycle
-  // on. Read via the family_workflow_month_usage RPC so this card can never show a figure the
+  // on. Read via the family_workflow_slots RPC so this card can never show a figure the
   // database itself doesn't agree with. Null `usage` just means "still loading" or "unlimited
   // plan" -- both render nothing here rather than a misleading zero.
   const[usage,setUsage]=useState(null);
   const loadUsage=async()=>{
-    const{data:rows,error}=await sb.rpc("family_workflow_month_usage",{p_family_id:family.id});
+    const{data:rows,error}=await sb.rpc("family_workflow_slots",{p_family_id:family.id});
     if(!error&&rows&&rows[0])setUsage(rows[0]);
   };
+  const[buyPrompt,setBuyPrompt]=useState(null);
+  const[buying,setBuying]=useState(false);
   useEffect(()=>{loadUsage();},[family.id]);
 
   const load=async()=>{
@@ -10979,24 +10992,55 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
     setSaving(false);
   };
 
+  // The database refuses a workflow beyond the included number unless the household holds a paid,
+  // unused slot (see the workflow_purchases migration). So the flow is: read a FRESH count; if the
+  // household is at its limit, ask the person to approve the monthly cost; the purchase-workflow
+  // function charges the card and creates the slot; only then is the cycle created, which uses it.
+  const createCycle=async(ob,paid)=>{
+    const t=tplFor(ob.template_key);
+    try{
+      const inst=await generateWorkflowCycle({template:t,obligation:ob,dueDate:ob.due_date,familyId:family.id});
+      const base=inst.status==="at_risk"?"Cycle started — flagged at risk.":"Cycle started.";
+      toast(base+(paid?" This is a paid workflow: it is billed monthly for as long as it stays active.":""));
+      setOpenInst(inst.id);load();loadUsage();
+      return true;
+    }catch(e){
+      if(/workflow_limit_reached/.test(e.message||"")){
+        loadUsage();
+        toast("All included workflows are in use. Press Start cycle again to add one.","error");
+      }else toast(e.message||"Could not start the cycle.","error");
+      return false;
+    }
+  };
   const startCycle=async ob=>{
     const t=tplFor(ob.template_key);
     if(!t){toast("Choose a playbook on this obligation first","error");return;}
     if(instances.some(i=>i.obligation_id===ob.id&&i.due_date===ob.due_date)){
       toast("This cycle already exists","error");return;}
-    // Snapshot BEFORE creating the cycle, so active_count here is the count this new one is
-    // about to become #(active_count+1) of -- used to tell the household the cost of THIS cycle.
-    // Core has no cap (plan_features.default_monthly_cap is null for it) -- workflows beyond the
-    // included 10 are simply billed every month they stay active, never blocked, but the
-    // household is told the cost every single time a new one pushes them over, right here.
-    const willBeBilled=usage&&!usage.unlimited&&usage.active_count>=usage.included;
-    try{
-      const inst=await generateWorkflowCycle({template:t,obligation:ob,dueDate:ob.due_date,familyId:family.id});
-      const base=inst.status==="at_risk"?"Cycle started — flagged at risk.":"Cycle started.";
-      const costNote=willBeBilled?` This is active workflow #${usage.active_count+1} -- $${Number(usage.overage_price).toFixed(2)}/month has been added to your bill for as long as it stays active. Completing it removes it from the count.`:"";
-      toast(base+costNote);
-      setOpenInst(inst.id);load();loadUsage();
-    }catch(e){toast(e.message||"Could not start the cycle.","error");}
+    let u=usage;
+    const{data:rows}=await sb.rpc("family_workflow_slots",{p_family_id:family.id});
+    if(rows&&rows[0]){u=rows[0];setUsage(u);}
+    if(u&&!u.unlimited&&u.free_remaining<=0&&u.slots_available<=0){
+      if(!u.can_buy){
+        toast(`This household has used all ${u.included} included workflows. Only the household owner can add more ($${Number(u.unit_price||0).toFixed(2)}/month each, up to their monthly limit) — ask them to approve it.`,"error");
+        return;
+      }
+      setBuyPrompt({ob,u});
+      return;
+    }
+    await createCycle(ob,false);
+  };
+  const confirmBuy=async()=>{
+    const{ob}=buyPrompt;
+    setBuying(true);
+    let bought=null;
+    try{bought=await callPurchaseWorkflow({action:"buy",family_id:family.id});}
+    catch(e){toast(e.message,"error");setBuying(false);return;}
+    setBuyPrompt(null);
+    const ok=await createCycle(ob,true);
+    if(!ok)toast("Your extra workflow was added and is ready to use, but the cycle did not start. Press Start cycle again — you won't be charged twice.","error");
+    loadUsage();
+    setBuying(false);
   };
 
   // Approving records WHO approved it, which is the point of the gate.
@@ -11010,7 +11054,10 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
     if(!remaining.length&&["done","sent"].includes(to)){
       await sb.from("workflow_instances").update({status:"completed",completed_at:new Date().toISOString()}).eq("id",st.instance_id);
       toast("Cycle complete");
-      loadUsage(); // this instance just dropped out of the active/overage count
+      loadUsage(); // this instance just dropped out of the active count
+      if(usage&&(usage.slots_in_use>0||usage.slots_available>0)){
+        callPurchaseWorkflow({action:"sync",family_id:family.id}).then(()=>loadUsage()).catch(()=>{});
+      }
     }
     load();
   };
@@ -11034,14 +11081,30 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
         null; Premier's is null so this renders nothing for them). Active, not monthly-started:
         10 workflows may be in progress at once for free, $8/month for each additional one that
         stays active, and completing a workflow removes it from this count going forward. */}
-    {usage&&!usage.unlimited&&<div style={{background:usage.remaining_before_cap===0?"#fdecec":"rgba(206,182,132,0.12)",border:`1px solid ${usage.remaining_before_cap===0?"#f3c6c6":B.gold}`,borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12.5,color:B.text,lineHeight:1.5}}>
+    {usage&&!usage.unlimited&&(()=>{const atLimit=usage.free_remaining<=0&&usage.slots_available<=0;return <div style={{background:atLimit?"#fdecec":"rgba(206,182,132,0.12)",border:`1px solid ${atLimit?"#f3c6c6":B.gold}`,borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12.5,color:B.text,lineHeight:1.5}}>
       <strong>{usage.active_count} of {usage.included} included workflows active.</strong>{" "}
-      {usage.remaining_before_cap>0
-        ? `${usage.remaining_before_cap} more can be started at no extra cost.`
-        : usage.overage_count>0
-          ? `${usage.overage_count} beyond your included ${usage.included}, at $${Number(usage.overage_price).toFixed(2)}/month each for as long as they stay active (${fmtMoney(usage.charged_this_month)} this month). Completing a workflow removes it from this count.`
-          : `Additional active workflows beyond your included ${usage.included} are $${Number(usage.overage_price).toFixed(2)}/month each, for as long as they stay active. Completing a workflow removes it from the count.`}
-    </div>}
+      {usage.free_remaining>0
+        ? `${usage.free_remaining} more can be started at no extra cost.`
+        : usage.slots_available>0
+          ? `${usage.slots_available} paid workflow${usage.slots_available===1?"":"s"} ready to start.`
+          : `You are at your included limit. Another workflow is $${Number(usage.unit_price||0).toFixed(2)}/month for as long as it stays active — you'll be asked to approve it when you start one.`}
+      {usage.slots_in_use>0&&` ${usage.slots_in_use} paid workflow${usage.slots_in_use===1?"":"s"} running ($${Number(usage.slots_monthly_cost||0).toFixed(2)}/month).`}
+    </div>;})()}
+
+    {buyPrompt&&<Modal title="Add another workflow?" onClose={()=>!buying&&setBuyPrompt(null)}>
+      <div style={{fontSize:14,color:B.text,lineHeight:1.6,marginTop:6}}>
+        You have used {buyPrompt.u.active_count} of {buyPrompt.u.included} included workflows.
+        Add another for <strong>${Number(buyPrompt.u.unit_price).toFixed(2)} a month</strong> while it stays active?
+      </div>
+      <div style={{fontSize:12.5,color:B.textSoft,lineHeight:1.6,marginTop:10}}>
+        You'll be charged a prorated amount now on your card on file, then ${Number(buyPrompt.u.unit_price).toFixed(2)} with each monthly renewal.
+        Completing or cancelling the workflow stops the charge from your next renewal. This approval is recorded with your name and the date.
+      </div>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:20,flexWrap:"wrap"}}>
+        <Btn variant="ghost" disabled={buying} onClick={()=>setBuyPrompt(null)}>Cancel</Btn>
+        <Btn variant="gold" disabled={buying} onClick={confirmBuy}>{buying?"Adding…":`Add for $${Number(buyPrompt.u.unit_price).toFixed(2)}/month`}</Btn>
+      </div>
+    </Modal>}
 
     {!obs.length&&<Empty text="No obligations on file for this client yet."/>}
 
