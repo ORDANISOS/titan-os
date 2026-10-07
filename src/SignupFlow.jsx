@@ -15,7 +15,7 @@
 // success_url, the main app's own sb.auth.getSession() picks up that persisted session and the
 // existing role==="client" branch in App.jsx (ClientDashboard) takes over from there -- nothing
 // else needed to be built for that landing experience.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // Standalone mobile check -- this file is rendered by main.jsx in place of <App/> (see the
@@ -36,8 +36,8 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 const SIGNUP_FN_URL = `${SUPABASE_URL}/functions/v1/public-signup`;
 
-const BRAND_NAME = import.meta.env.VITE_BRAND_NAME || "ORDANIS";
-const BRAND_TAGLINE = import.meta.env.VITE_BRAND_TAGLINE || "Private Wealth Administration";
+let BRAND_NAME = import.meta.env.VITE_BRAND_NAME || "ORDANIS";
+let BRAND_TAGLINE = import.meta.env.VITE_BRAND_TAGLINE || "Private Wealth Administration";
 
 // ── Palette, taken directly from the approved "Sign-up Flow" design (Plans.dc.html /
 // Account.dc.html). Deliberately not the app's own BRAND/PRIMARY constants -- this is the new,
@@ -49,6 +49,26 @@ const C = {
   rule: "#E2E0D8",
   muted: "#8A94A3",
 };
+
+// The page can be re-skinned for a firm: by the address it is opened on (an enterprise's own domain)
+// or by the firm code entered. The values below are the starting point, restored whenever a skin is
+// cleared. The skin only ever carries the public fields (name, tagline, colours), never fees or notes.
+const SKIN_BASE = { name: BRAND_NAME, tagline: BRAND_TAGLINE, c: { ...C } };
+function applySkin(b) {
+  Object.assign(C, SKIN_BASE.c);
+  BRAND_NAME = SKIN_BASE.name;
+  BRAND_TAGLINE = SKIN_BASE.tagline;
+  if (!b) return;
+  const hex = (v) => (typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v) ? v : null);
+  if (hex(b.color_primary)) C.navy = b.color_primary;
+  if (hex(b.color_accent)) C.gold = b.color_accent;
+  if (hex(b.color_primary_mid)) C.slate = b.color_primary_mid;
+  if (hex(b.color_text_mute)) C.muted = b.color_text_mute;
+  if (hex(b.color_border_light)) C.rule = b.color_border_light;
+  if (typeof b.brand_name === "string" && b.brand_name.trim()) BRAND_NAME = b.brand_name.trim();
+  if (typeof b.tagline === "string" && b.tagline.trim()) BRAND_TAGLINE = b.tagline.trim();
+  if (typeof document !== "undefined") document.title = BRAND_NAME;
+}
 
 // Static marketing copy -- feature bullet lists aren't data columns, so this stays hand-authored
 // to match the approved design. Prices are placeholders only: plan_features.monthly_price
@@ -268,7 +288,7 @@ function Field({ label, type, ...props }) {
   );
 }
 
-function AccountStep({ planKey, prices, onBack, onDone }) {
+function AccountStep({ planKey, prices, onBack, onDone, onSkin }) {
   const isMobile = useIsMobile();
   const plan = PLAN_COPY[planKey];
   const price = prices[planKey] ?? plan.price;
@@ -302,13 +322,21 @@ function AccountStep({ planKey, prices, onBack, onDone }) {
         body: JSON.stringify({ action: "lookup_code", code }),
       });
       const json = await resp.json().catch(() => ({}));
-      if (resp.ok && json?.valid) setFirmInfo({ code, name: json.firm_name, notice: json.notice });
+      if (resp.ok && json?.valid) setFirmInfo({ code, name: json.firm_name, notice: json.notice, brand: json.brand || null });
       else setFirmError(json?.error || "That firm code is not valid. Check it and try again.");
     } catch (_e) {
       setFirmError("Could not check the code. Please try again.");
     }
     setFirmChecking(false);
   };
+  // Show the firm's own look once its code checks out, and go back to the page's own look when the code
+  // is cleared or this step is left.
+  useEffect(() => {
+    if (onSkin) onSkin(firmInfo?.brand || null);
+    return () => { if (onSkin) onSkin(null); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firmInfo]);
+
   useEffect(() => {
     // A firm can share a link ending in ?code=THEIRCODE. Fill the box and check it right away.
     try {
@@ -550,6 +578,25 @@ export default function SignupFlow() {
   const [step, setStep] = useState("plans");
   const [selectedPlan, setSelectedPlan] = useState("core");
   const [prices, setPrices] = useState({});
+  const [, setSkinTick] = useState(0);
+  const [skinReady, setSkinReady] = useState(false);
+  const hostBrand = useRef(null);
+  const onSkin = (b) => { applySkin(b || hostBrand.current); setSkinTick((n) => n + 1); };
+
+  // Skin by the address this page is opened on. Not found, or any failure, keeps the page's own look.
+  useEffect(() => {
+    let cancelled = false;
+    const done = () => { if (!cancelled) setSkinReady(true); };
+    const timer = setTimeout(done, 2000);
+    Promise.resolve(sb.rpc("brand_for_host", { p_host: window.location.hostname }))
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (!error && data && typeof data === "object") { hostBrand.current = data; applySkin(data); }
+      })
+      .catch(() => {})
+      .finally(() => { clearTimeout(timer); done(); });
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -564,12 +611,14 @@ export default function SignupFlow() {
 
   const chooseAndAdvance = (planKey) => { setSelectedPlan(planKey); setStep("account"); };
 
+  if (!skinReady) return <div style={{ minHeight: "100vh", background: "#fff" }} />;
+
   return (
     <div style={{ minHeight: "100vh", background: "#fff", color: C.slate, fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif", fontWeight: 300, fontSize: 16.5, lineHeight: 1.75 }}>
       <Header onBack={step === "account" ? () => setStep("plans") : undefined} backLabel="Back to plans" />
       {step === "plans"
         ? <PlansStep prices={prices} onChoose={chooseAndAdvance} />
-        : <AccountStep planKey={selectedPlan} prices={prices} onBack={() => setStep("plans")} onDone={() => {}} />}
+        : <AccountStep planKey={selectedPlan} prices={prices} onBack={() => setStep("plans")} onDone={() => {}} onSkin={onSkin} />}
     </div>
   );
 }

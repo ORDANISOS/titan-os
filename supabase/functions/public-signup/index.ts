@@ -115,7 +115,12 @@ Deno.serve(async (req) => {
     const chk = await checkFirmCode(String(body.code ?? ""), "signup_lookup", clientIp(req));
     if (chk.blocked) return json({ error: "Too many attempts. Please wait a few minutes and try again." }, 429);
     if (!chk.enterpriseId) return json({ valid: false, error: BAD_FIRM_CODE }, 400);
-    return json({ valid: true, firm_name: chk.name, notice: { id: notice.id, title: notice.title, body_html: notice.body_html } });
+    let brand: unknown = null;
+    try {
+      const { data } = await admin.rpc("brand_for_enterprise", { p_enterprise_id: chk.enterpriseId });
+      brand = data ?? null;
+    } catch { brand = null; }
+    return json({ valid: true, firm_name: chk.name, brand, notice: { id: notice.id, title: notice.title, body_html: notice.body_html } });
   }
 
   const { email, password, full_name, household_name, plan, success_url, cancel_url, disclosures_acknowledged } = body;

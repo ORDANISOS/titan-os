@@ -188,8 +188,13 @@ const genTempPassword = () => {
 // BRAND and B are plain objects referenced by identity throughout the app, so
 // applying a profile is an in-place merge — no re-plumbing of the hundreds of
 // existing B.navy / BRAND.name references, and one re-render picks it all up.
+// The first skin applied is preceded by a copy of the build-time values. Every later skin starts from
+// that copy, so a field the new skin leaves empty shows the default, not the previous firm's value.
+let BRAND_BASE=null,B_BASE=null;
 function applyBrandProfile(row){
   if(!row)return;
+  if(!BRAND_BASE){BRAND_BASE={...BRAND};B_BASE={...B};}
+  else{Object.assign(BRAND,BRAND_BASE);Object.assign(B,B_BASE);}
   const set=(obj,key,val)=>{if(val!==null&&val!==undefined&&val!=="")obj[key]=val;};
   // A tenant replacing their logo keeps the same filename, so the browser would
   // happily go on showing the previous image. Tagging the URL with the profile's
@@ -249,13 +254,43 @@ function applyBrandProfile(row){
 // Read the active profile. Anonymous-readable by design: the login screen has to
 // be branded before anyone signs in. Any failure is non-fatal — the app simply
 // keeps its build-time branding rather than failing to load.
+// Which skin applies: a signed-in person gets their own firm's skin. Before sign-in, the address the
+// app is opened on decides (an enterprise's own domain), and an address no firm owns gets the default
+// skin. The database functions return public fields only. If they are not there yet (an older
+// database), the old read of the active skin is used instead.
+// Returns true when the skin on screen changed, so the caller can redraw.
+let SKIN_KEY="";
 async function loadActiveBrandProfile(){
-  if(!RUNTIME_BRAND)return;
+  if(!RUNTIME_BRAND)return false;
   try{
-    const{data,error}=await sb.from("brand_profiles").select("*").eq("is_active",true).maybeSingle();
-    if(error||!data)return;
-    applyBrandProfile(data);
-  }catch(_e){/* keep build-time branding */}
+    let row=null,ok=false;
+    try{
+      const{data:{session}}=await sb.auth.getSession();
+      const signedIn=!!session?.user;
+      const r=signedIn?await sb.rpc("brand_for_user"):await sb.rpc("brand_for_host",{p_host:window.location.hostname});
+      if(!r.error){
+        ok=true;row=r.data||null;
+        if(!row){const d=await sb.rpc("brand_default");if(!d.error)row=d.data||null;}
+      }
+    }catch(_e){ok=false;}
+    if(!ok){
+      const{data,error}=await sb.from("brand_profiles").select("*").eq("is_active",true).maybeSingle();
+      if(error||!data)return false;
+      row=data;
+    }
+    if(!row)return false;
+    const key=String(row.id||"")+"|"+String(row.updated_at||"");
+    if(key===SKIN_KEY)return false;
+    const hadSkin=SKIN_KEY!=="";
+    applyBrandProfile(row);
+    SKIN_KEY=key;
+    if(hadSkin){
+      // Templates and fee defaults belong to a skin: forget the previous firm's.
+      BRAND_DOCS.byKey={};BRAND_DOCS.loaded=false;BRAND_DOCS.error=null;
+      FIRM_DEFAULTS.loaded=false;FIRM_DEFAULTS.monthlyFee=null;FIRM_DEFAULTS.onboardingFee=null;FIRM_DEFAULTS.derivePropertyCosts=false;
+    }
+    return true;
+  }catch(_e){/* keep build-time branding */return false;}
 }
 
 // ── PER-TENANT DOCUMENT TEMPLATES ────────────────────────────────────────────
@@ -322,8 +357,14 @@ const FIRM_DEFAULTS={loaded:false,monthlyFee:null,onboardingFee:null,
 
 async function loadFirmDefaults(){
   try{
-    const{data,error}=await sb.from("brand_profiles")
-      .select("default_monthly_fee, default_onboarding_fee, derive_property_costs").eq("is_active",true).maybeSingle();
+    // The caller's own firm's defaults, through a function. The old direct read is kept only as the
+    // fallback for a database that does not have the function yet.
+    let{data,error}=await sb.rpc("my_firm_defaults");
+    if(error){
+      const old=await sb.from("brand_profiles")
+        .select("default_monthly_fee, default_onboarding_fee, derive_property_costs").eq("is_active",true).maybeSingle();
+      data=old.data;error=old.error;
+    }
     if(error)throw error;
     const num=v=>{ if(v==null)return null; const n=Number(v); return Number.isFinite(n)?n:null; };
     FIRM_DEFAULTS.monthlyFee=num(data?.default_monthly_fee);
@@ -13460,6 +13501,8 @@ export default function App(){
   // screen would flash the previous tenant's colours. Instances without
   // VITE_BRAND_RUNTIME resolve immediately and never wait on a request.
   const[brandReady,setBrandReady]=useState(!RUNTIME_BRAND);
+  // Bumped when the skin changes after the first paint (sign-in or sign-out), to redraw with it.
+  const[,setSkinTick]=useState(0);
   const isAdminRole=userProfile?.role==="admin";
   // Which nav items this role may actually reach. Derived from the same filter
   // the sidebar uses so the two can't drift apart.
@@ -13509,12 +13552,11 @@ export default function App(){
     }
   },[]);
 
+  // Runs at load and again whenever the person signs in or out, because the skin follows the person's firm.
   useEffect(()=>{
     if(!RUNTIME_BRAND)return;
-    let cancelled=false;
-    loadActiveBrandProfile().finally(()=>{if(!cancelled)setBrandReady(true);});
-    return()=>{cancelled=true;};
-  },[]);
+    loadActiveBrandProfile().then(changed=>{if(changed)setSkinTick(t=>t+1);}).finally(()=>setBrandReady(true));
+  },[authed]);
 
   // Send the user back to the dashboard whenever the current tab isn't one their
   // role is allowed to open — which is what happens after a sign-out/sign-in,
