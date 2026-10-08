@@ -10,7 +10,7 @@
 --     firm that are not archived. Rules for different firms never overlap.
 --   * The families table itself is not opened (it holds Stripe ids and internal notes). Firm administrators read
 --     households through firm_family_rows(), which leaves those columns out.
---   * Vault documents in storage are readable for the firm's own households only.
+--   * CHRIS documents in storage are readable for the firm's own households only.
 --   * What a firm administrator opens is recorded in firm_access_log by firm_log_access(). The household owner
 --     can read the rows about their own household. The log is written by the app when a household or document is
 --     opened, so it records use of the app, not a direct call to the database API.
@@ -82,7 +82,7 @@ create policy firm_admin_read on public.user_profiles for select to authenticate
 create policy firm_admin_read on public.note_attachments for select to authenticated
   using (exists (select 1 from public.notes n where n.id = note_attachments.note_id and n.family_id in (select public.current_user_firm_family_ids())));
 
--- 4. Vault documents (storage) -----------------------------------------------------------------------------
+-- 4. CHRIS documents (storage) -----------------------------------------------------------------------------
 create policy documents_read_firm on storage.objects for select to authenticated
   using (bucket_id = 'documents' and split_part(name, '/', 1) in (select f::text from public.current_user_firm_family_ids() f));
 

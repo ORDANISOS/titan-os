@@ -80,7 +80,7 @@ STANDFIRST = (
 PILLARS = [
     ("One record, not five tools",
      "Properties with their lenders, taxes, insurers and vendors. Portfolio with balance history. "
-     "Cash flow with projections. A Vault that knows what expires and when. The assistant answers "
+     "Cash flow with projections. CHRIS, which knows what expires and when. The assistant answers "
      "from that record and nothing else — ask what the household spends on landscaping and you get "
      "a real figure, traced to named vendors, not an estimate."),
     ("It does the work, not just the reporting",

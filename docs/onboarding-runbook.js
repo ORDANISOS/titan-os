@@ -65,7 +65,7 @@ add(new Paragraph({spacing:{before:200,after:0},alignment:AlignmentType.CENTER,
   children:[new TextRun({text:"New Tenant Onboarding Runbook",bold:true,size:32,color:NAVY,font:"Georgia"})]}));
 add(new Paragraph({spacing:{after:180},alignment:AlignmentType.CENTER,
   children:[new TextRun({text:"Internal — Operations.  Not for circulation to client firms.",size:18,color:RED,font:"Calibri",bold:true})]}));
-add(P("Every TitanOS client firm runs in its own fully isolated environment: a private database, a private document vault, its own AI pipeline and its own sending identity. Nothing is shared between firms. This runbook is the sequence for standing one up, in order, with the exact commands and the checks that prove each step worked.",{size:20}));
+add(P("Every TitanOS client firm runs in its own fully isolated environment: a private database, a private document store (CHRIS), its own AI pipeline and its own sending identity. Nothing is shared between firms. This runbook is the sequence for standing one up, in order, with the exact commands and the checks that prove each step worked.",{size:20}));
 add(P("Revised 28 July 2026. Reflects the platform as deployed: workflows, outbound sending, and per-tenant sending domains.",{size:18,color:SOFT,italics:true}));
 
 // ── READ THIS FIRST ──────────────────────────────────────────────────────────

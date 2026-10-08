@@ -315,7 +315,7 @@ Deno.serve(async () => {
   const failed: { name: string; error: string }[] = [];
   try {
     // Idempotent: remove anything a prior run of THIS seeder created, leaving
-    // the general Vault documents (property_section is null) untouched.
+    // the general CHRIS documents (property_section is null) untouched.
     const { data: old } = await sb.from("documents").select("id,file_path").not("property_section", "is", null);
     if (old?.length) {
       const paths = old.map((d: any) => d.file_path).filter(Boolean);

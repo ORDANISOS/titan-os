@@ -84,7 +84,7 @@ const BASE_FEATURES = [
   { text: "Client portal access" },
   { text: "Properties, portfolio and balance history" },
   { text: "Cash flow and projections" },
-  { text: "Vault: documents, folders, expiry tracking" },
+  { text: "CHRIS: documents, folders, expiry tracking" },
   { text: "Valuables, tasks, notes and deals" },
   { text: "AI assistant over the household's own record" },
 ];

@@ -127,7 +127,7 @@ Rules:
     // Each option is validated independently against the same rules a single
     // suggestion always had to pass -- an existing folder must actually be in the
     // household's list, and a proposed new one is held to a tighter standard,
-    // because the cost of a wrong suggestion there is a vault that slowly fills
+    // because the cost of a wrong suggestion there is a CHRIS that slowly fills
     // with near-duplicate folders nobody can navigate.
     const seen = new Set<string>();
     const options: { folder: string | null; newFolder: string | null; why: string }[] = [];

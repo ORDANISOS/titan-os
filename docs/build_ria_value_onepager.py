@@ -14,7 +14,7 @@ quote.
 BENEFITS, NOT CAPABILITIES
 --------------------------
 Every block below is written as something that happens to the FIRM — relationship depth, defensibility,
-capacity, referrals — not as something the software has. "Vault with expiry tracking" is a capability;
+capacity, referrals — not as something the software has. "CHRIS with expiry tracking" is a capability;
 "harder to leave than a performance number" is why a principal cares. Where a capability appears it
 is there as evidence for the benefit, never as the point.
 
@@ -91,7 +91,7 @@ BENEFITS = [
      "The Titan Expert reports to you, not around you. Every call made and document handled sits on "
      "your record, under your brand. You are never told about your own client second-hand."),
     ("A moat, not a feature",
-     "Hold the document vault, the renewal calendar and the vendor register, and a competitor is no "
+     "Hold the documents in CHRIS, the renewal calendar and the vendor register, and a competitor is no "
      "longer pitching against your performance. They are asking a family to rebuild its operating "
      "life. That is a conversation they lose."),
     ("Your advisors get their week back",

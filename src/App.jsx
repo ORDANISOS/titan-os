@@ -789,7 +789,7 @@ const FAMILY_SCOPED=["contacts","properties","deals","notes","tasks","portfolio_
 // Display label of the signed-in user, set at login; used to stamp task completions.
 let CURRENT_USER_LABEL="";
 let CURRENT_USER_ROLE="";
-// A firm administrator opening a Vault document or attachment is recorded first, and if the record cannot be
+// A firm administrator opening a CHRIS document or attachment is recorded first, and if the record cannot be
 // written the file is not opened. Everyone else passes straight through.
 async function firmDocGate(path,name,action="open_document"){
   if(CURRENT_USER_ROLE!=="enterprise_admin")return true;
@@ -990,7 +990,7 @@ function PhoneLink({value,style}){
 // Opens a stored file in a new tab through a short-lived signed URL. Used by the
 // inline "supporting document" links that sit next to figures on the property and
 // valuables cards, so a user can go from a number straight to its source document
-// without hunting through the Vault.
+// without hunting through CHRIS.
 async function openStoredDoc(doc,toast){
   if(!doc?.filePath){toast&&toast("No file on record for this document","error");return;}
   if(!await firmDocGate(doc.filePath,doc.name||doc.title)){toast&&toast(FIRM_GATE_MSG,"error");return;}
@@ -999,8 +999,8 @@ async function openStoredDoc(doc,toast){
   window.open(data.signedUrl,"_blank","noopener");
 }
 // Shown in place of DocLink when a section has no document yet: jumps to the
-// Vault with the property and section pre-selected, so attaching a bill is one
-// click from the figure it belongs to rather than a hunt through the Vault.
+// CHRIS with the property and section pre-selected, so attaching a bill is one
+// click from the figure it belongs to rather than a hunt through CHRIS.
 function AttachLink({onClick,section}){
   return <button onClick={e=>{e.stopPropagation();onClick();}} title={`Attach ${sectionLabel(section)}`}
     style={{background:"none",border:"none",padding:0,marginLeft:5,cursor:"pointer",color:B.textMute,fontSize:10.5,lineHeight:1,verticalAlign:"middle"}}
@@ -1032,7 +1032,7 @@ function AccountBalancesPanel({account,family,history,documents,reload,toast,can
 
   const startManual=()=>{setProposal(null);setForm({asOf:todayISO(),balance:"",documentId:"",note:"",source:"manual"});};
 
-  // Upload → file lands in the Vault against this account → AI proposes figures.
+  // Upload → file lands in CHRIS against this account → AI proposes figures.
   const handleFile=async(file)=>{
     if(!file)return;
     const ok=["application/pdf","image/png","image/jpeg","image/jpg","image/webp"];
@@ -1095,7 +1095,7 @@ function AccountBalancesPanel({account,family,history,documents,reload,toast,can
         note:form.note||null,
       },{onConflict:"account_id,as_of"});
       if(error)throw new Error(error.message);
-      // Record the period label on the document, so the Vault reads sensibly.
+      // Record the period label on the document, so CHRIS reads sensibly.
       if(form.documentId&&form.period){
         await sb.from("documents").update({account_period:form.period}).eq("id",form.documentId);
       }
@@ -1302,7 +1302,10 @@ function BrandMark({reversed=false,size=40}){
   // The live skin (applied at runtime from brand_profiles) can supply its own mark, so check BRAND.mark
   // and not only the build-time env var; otherwise a skinned instance keeps showing the drawn ORDANIS O.
   const _skinHasMark=!!BRAND.mark&&BRAND.mark!=="/ordanis-mark.png";
-  const usingDefaultMark=!import.meta.env.VITE_BRAND_MARK_URL&&!_skinHasMark;
+  // The default ORDANIS skin is always drawn here, never loaded from a stored image: the stored file can be
+  // the reversed (white-left) mark made for dark grounds, which loses half the O on a white surface.
+  const _isOrdanis=String(BRAND.short||BRAND.name||"").trim().toLowerCase()==="ordanis";
+  const usingDefaultMark=!import.meta.env.VITE_BRAND_MARK_URL&&(!_skinHasMark||_isOrdanis);
   const id=useId();
   if(!usingDefaultMark)return <img src={BRAND.mark} alt={BRAND.short||BRAND.name} style={{width:size,height:size,objectFit:"contain",display:"block"}}/>;
   const ringPath="M50,14 a33,36 0 1,0 0,72 a33,36 0 1,0 0,-72 Z M50,23 a21,27 0 1,1 0,54 a21,27 0 1,1 0,-54 Z";
@@ -2880,11 +2883,11 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   //
   // Obligations is absent entirely on Core rather than shown disabled. A locked door on every
   // visit is worse than no door, and the tab row is already the tightest thing on this screen.
-  const TABS=["Overview","Properties","Portfolio","Cash Flow",...(hasWorkflows?["Obligations"]:[]),"Valuables",...(userProfile?.role==="enterprise_admin"?[]:["Deals"]),"Notes","Tasks","Vault",...(canSeePrompts?["Prompts"]:[]),...(userProfile?.role==="enterprise_admin"?[]:["Ask ORDANIS"])];
+  const TABS=["Overview","Properties","Portfolio","Cash Flow",...(hasWorkflows?["Obligations"]:[]),"Valuables",...(userProfile?.role==="enterprise_admin"?[]:["Deals"]),"Notes","Tasks","CHRIS",...(canSeePrompts?["Prompts"]:[]),...(userProfile?.role==="enterprise_admin"?[]:["Ask ORDANIS"])];
   const assistantName=(familyRow.assistantName||"").trim()||"ORDANIS";
   const[showWelcome,setShowWelcome]=useState(false);
   // Carries "attach a document to this property section" from the Properties tab
-  // over to the Vault tab, which owns the upload form.
+  // over to the CHRIS tab, which owns the upload form.
   const[attachIntent,setAttachIntent]=useState(null);
   // Tab ids are the lowercased, de-spaced label (see the TABS map below).
   const startAttach=(propertyId,section)=>{setAttachIntent({propertyId,section});setActiveTab("vault");};
@@ -3205,7 +3208,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
           bottom border, which is what makes the join look continuous rather than butted. */}
       <div style={{borderBottom:`1px solid ${B.border}`,background:B.bg,padding:isMobile?"6px 8px 0":"8px 28px 0",display:"flex",gap:2,alignItems:"flex-end",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
         {TABS.map(t=>{
-          const id=t.toLowerCase().replace(/\s+/g,"");
+          const id=t==="CHRIS"?"vault":t.toLowerCase().replace(/\s+/g,"");
           const on=activeTab===id;
           const isAssistant=t==="Ask ORDANIS";
           const label=isAssistant?("Ask "+assistantName):t;
@@ -3753,7 +3756,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
         </div>}
       </div>
 
-      {/* VAULT TAB */}
+      {/* CHRIS TAB */}
       {activeTab==="vault"&&<div style={{height:"100%",display:"flex",flexDirection:"column",minHeight:0}}>
         <DocumentsView familyId={family.id} readOnly={false} canUpload={userProfile?.role!=="enterprise_admin"} canDelete={canEdit} canScan={canEdit} canEditMetadata={canEdit} toast={toast} reload={reload}
           attachIntent={attachIntent} onAttachHandled={()=>setAttachIntent(null)}/>
@@ -7221,7 +7224,7 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
     {key:"properties",label:"Properties",eligible:families,has:hasFamilyIn(data.properties)},
     {key:"portfolio",label:"Portfolio Accounts",eligible:families,has:hasFamilyIn(data.portfolio_accounts)},
     {key:"valuables",label:"Valuables",eligible:families,has:hasFamilyIn(data.valuables)},
-    {key:"documents",label:"Vault Documents",eligible:families,has:hasFamilyIn(data.documents)},
+    {key:"documents",label:"CHRIS Documents",eligible:families,has:hasFamilyIn(data.documents)},
     {key:"tasks",label:"Tasks",eligible:families,has:hasFamilyIn(data.tasks)},
     {key:"notes",label:"Notes",eligible:families,has:hasFamilyIn(data.notes)},
     {key:"deals",label:"Deals",eligible:families,has:hasFamilyIn(data.deals)},
@@ -7680,7 +7683,7 @@ const DOC_CATEGORIES = ["General","Tax","Legal","Insurance","Investment","Real E
 // A document may be pinned to one specific section of a property (or to the
 // family's valuables schedule), which is what makes the supporting-document
 // links appear next to the figures on the property and valuables cards.
-// `suggestCategory` pre-selects a sensible Vault folder when a section is chosen
+// `suggestCategory` pre-selects a sensible CHRIS folder when a section is chosen
 // so the user isn't asked the same thing twice.
 const DOC_SECTIONS=[
   {key:"mortgage",          label:"Mortgage / Loan Document", scope:"property", suggestCategory:"Real Estate"},
@@ -7767,7 +7770,7 @@ async function extractScannedPdfText(arrayBuffer,onProgress){
   return { text:combined.trim(), pagesScanned:total, totalPages:pdf.numPages, truncated };
 }
 
-// ── VAULT SEARCH RESULTS ─────────────────────────────────────────────────────
+// ── CHRIS SEARCH RESULTS ─────────────────────────────────────────────────────
 // Each row has to answer three questions the folder tree cannot: what is this,
 // where does it live, and is it the current one.
 //
@@ -7872,7 +7875,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
   const allowDelete=canDelete!==undefined?canDelete:!readOnly;
   const allowScan=canScan!==undefined?canScan:allowUpload; // the manual scan buttons stay advisor-side
   // Extraction at upload is NOT the same permission. A client uploading into their
-  // own vault must get their document read, or Vault search cannot find it later —
+  // own CHRIS must get their document read, or CHRIS search cannot find it later —
   // and search is most valuable to exactly the self-serve households that have no
   // advisor to press a scan button for them.
   const scanOnUpload=true;
@@ -7905,7 +7908,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     return()=>{cancelled=true;clearTimeout(t);};
   },[vaultQuery,familyId,toast]);
   // Folders this household has added, beyond the built-in eight. Per household by design,
-  // so one client's taxonomy never shows up on another's Vault.
+  // so one client's taxonomy never shows up on another's CHRIS.
   const[customFolders,setCustomFolders]=useState([]);
   const[newFolderName,setNewFolderName]=useState("");
   const[folderErr,setFolderErr]=useState("");
@@ -7914,7 +7917,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     if(!familyId){setCustomFolders([]);return;}
     const{data,error}=await sb.from("document_folders")
       .select("id,name,sort_order").eq("family_id",familyId).order("name");
-    // A failure here must not blank the Vault — the built-in folders still work, so fall
+    // A failure here must not blank CHRIS — the built-in folders still work, so fall
     // back to just those rather than throwing away the whole page.
     setCustomFolders(error?[]:(data||[]));
   },[familyId]);
@@ -8017,7 +8020,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     d.propertySection===section&&
     (section==="valuables_schedule"?true:d.propertyId===propertyId)&&
     d.id!==exceptId);
-  // Selecting a section implies a Vault folder; only pre-fill it if the user
+  // Selecting a section implies a CHRIS folder; only pre-fill it if the user
   // hasn't deliberately chosen one already.
   const chooseSection=(key,touchedCategory)=>{
     setLinkSection(key);
@@ -8177,7 +8180,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
       setUploadPhase("Saving…");
       // Displacing an existing section document: unlink it rather than delete it.
       // Prior-year tax bills and expired policies still have real value, so they
-      // stay in the Vault — they just stop being the one shown on the card.
+      // stay in CHRIS — they just stop being the one shown on the card.
       const section=linkSection||null;
       const propId=section&&DOC_SECTIONS.find(s=>s.key===section)?.scope==="property"?(linkPropertyId||null):null;
       let displaced=null;
@@ -8191,7 +8194,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
       const{error:dbError}=await sb.from("documents").insert({family_id:familyId||null,name,description:description||null,category,file_path:path,file_size:file.size,file_type:file.type||ext,extracted_text:extractedText,uploaded_by:CURRENT_USER_LABEL||null,property_id:propId,property_section:section});
       if(dbError)throw new Error(dbError.message);
       toast(displaced
-        ?`Uploaded and linked. "${displaced}" is still in the Vault, no longer linked.`
+        ?`Uploaded and linked. "${displaced}" is still in CHRIS, no longer linked.`
         :(section?`Uploaded and linked to ${sectionLabel(section)}`:(extractedText?"Document uploaded and scanned":"Document uploaded")));
       setModal(null);resetForm();
       loadDocs();
@@ -8237,7 +8240,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     const section=linkSection||null;
     const propId=section&&DOC_SECTIONS.find(s=>s.key===section)?.scope==="property"?(linkPropertyId||null):null;
     // Same rule as upload: the document being displaced is unlinked, never
-    // deleted, so history stays in the Vault.
+    // deleted, so history stays in CHRIS.
     let displaced=null;
     if(section){
       const occ=occupantOf(section,propId,doc.id);
@@ -8248,7 +8251,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     }
     const{error}=await sb.from("documents").update({name:name.trim(),description:description||null,category,property_id:propId,property_section:section}).eq("id",doc.id);
     if(error){toast(error.message,"error");setUploading(false);return;}
-    toast(displaced?`Saved. "${displaced}" is still in the Vault, no longer linked.`:"Document updated");
+    toast(displaced?`Saved. "${displaced}" is still in CHRIS, no longer linked.`:"Document updated");
     setModal(null);resetForm();
     loadDocs();setUploading(false);
     if(reload)reload("documents"); // property cards read links from global data
@@ -8256,7 +8259,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
 
   // Shared by the upload and edit forms: optionally pin this document to one
   // section of a property (or the family's valuables schedule) so it surfaces
-  // next to the figure it supports, instead of only living in the Vault.
+  // next to the figure it supports, instead of only living in CHRIS.
   const linkFields=(exceptId)=>{
     if(!familyId)return null;
     const sec=DOC_SECTIONS.find(s=>s.key===linkSection);
@@ -8267,7 +8270,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
       <Grid2>
         <Field label="Section">
           <Sel value={linkSection} onChange={e=>chooseSection(e.target.value,category!=="General")}>
-            <option value="">Not linked — Vault only</option>
+            <option value="">Not linked — CHRIS only</option>
             {DOC_SECTIONS.map(s=><option key={s.key} value={s.key}>{s.label}</option>)}
           </Sel>
         </Field>
@@ -8281,7 +8284,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
       {needsProperty&&linkSection&&!linkPropertyId&&
         <div style={{fontSize:11.5,color:"#8b1a1a",marginTop:-6,marginBottom:12}}>Choose a property to complete the link.</div>}
       {occ&&<div style={{fontSize:11.5,color:B.navy,background:"rgba(206,182,132,0.16)",border:`1px solid ${B.gold}`,borderRadius:8,padding:"9px 12px",marginBottom:12,lineHeight:1.5}}>
-        <strong>{sectionLabel(linkSection)}</strong> is already linked to “{occ.name}”. Saving will make this document the linked one — “{occ.name}” stays in the Vault, just unlinked.
+        <strong>{sectionLabel(linkSection)}</strong> is already linked to “{occ.name}”. Saving will make this document the linked one — “{occ.name}” stays in CHRIS, just unlinked.
       </div>}
       {linkSection&&!occ&&<div style={{fontSize:11.5,color:B.textSoft,marginBottom:12,lineHeight:1.5}}>
         This will appear as the supporting document next to {sectionLabel(linkSection)}.
@@ -8381,7 +8384,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     <style>{`.pcm-folder-card{transition:transform .15s ease, box-shadow .15s ease;}.pcm-folder-card:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(9,43,73,0.13);}`}</style>
     <div style={{padding:"14px 24px",borderBottom:`1px solid ${B.borderLight}`,background:B.white,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
       <div style={{flex:1,display:"flex",alignItems:"center",gap:10,minWidth:0}}>
-        {openFolder&&<button onClick={()=>setOpenFolder(null)} style={{background:"none",border:`1px solid ${B.border}`,color:B.textSoft,cursor:"pointer",fontSize:13,fontFamily:"inherit",padding:"6px 10px",borderRadius:6,flexShrink:0}}>← Vault</button>}
+        {openFolder&&<button onClick={()=>setOpenFolder(null)} style={{background:"none",border:`1px solid ${B.border}`,color:B.textSoft,cursor:"pointer",fontSize:13,fontFamily:"inherit",padding:"6px 10px",borderRadius:6,flexShrink:0}}>← CHRIS</button>}
         {openFolder&&<div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{openFolder}</div>}
         {openFolder&&<span style={{fontSize:12,color:B.textMute,flexShrink:0}}>{folderCount(openFolder)} file{folderCount(openFolder)!==1?"s":""}</span>}
         {openFolder&&customFolders.some(f=>f.name===openFolder)&&folderCount(openFolder)===0&&
@@ -8396,7 +8399,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
       <div style={{position:"relative",marginBottom:16}}>
         <input type="text" value={vaultQuery} onChange={e=>setVaultQuery(e.target.value)}
-          placeholder="Search the vault — a word from the document, a name, anything you remember"
+          placeholder="Search CHRIS — a word from the document, a name, anything you remember"
           style={{width:"100%",boxSizing:"border-box",padding:"11px 36px 11px 14px",fontSize:13.5,
             fontFamily:"inherit",color:B.text,border:`1px solid ${B.border}`,borderRadius:8,background:B.white}}/>
         {vaultQuery&&<button onClick={()=>setVaultQuery("")} aria-label="Clear search"
@@ -8421,7 +8424,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
           <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:14}}>
             <div style={{fontSize:13,color:B.textSoft}}>
               {sum.total} document{sum.total===1?"":"s"}
-              {/* Called out separately because "Other" holding nearly half the vault is the
+              {/* Called out separately because "Other" holding nearly half of CHRIS is the
                   real problem, and a single total hides it. */}
               {sum.unfiled>0&&<> · <span style={{color:"#8a5c00"}}>{sum.unfiled} unfiled</span></>}
               {sum.expiring>0&&<> · <span style={{color:"#8a5c00"}}>{sum.expiring} expiring within 90 days</span></>}
@@ -8475,13 +8478,13 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
                     <div style={{display:"flex",gap:12,alignItems:"flex-start",minWidth:0}}>
                       <div style={{flexShrink:0,width:46,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-                        <img src={BRAND.mark} alt={BRAND.short} style={{height:40,width:"auto",display:"block"}}/>
+                        <BrandMark size={40}/>
                         <span style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",color:B.navyMid,background:B.bg,border:`1px solid ${B.borderLight}`,borderRadius:4,padding:"1px 5px",lineHeight:1.45,whiteSpace:"nowrap"}}>{fileLabel(doc.fileType,doc.name)}</span>
                       </div>
                       <div style={{minWidth:0}}>
                         <div style={{fontWeight:700,color:B.navy,fontSize:15}}>{doc.name}</div>
                         {doc.description&&<div style={{fontSize:12,color:B.textSoft,marginTop:2}}>{doc.description}</div>}
-                        {/* Makes it obvious which Vault files are the ones being
+                        {/* Makes it obvious which CHRIS files are the ones being
                             surfaced on a property or valuables card. */}
                         {doc.propertySection&&<div style={{fontSize:11,color:B.navy,marginTop:4,display:"inline-flex",alignItems:"center",gap:5,background:"rgba(206,182,132,0.18)",border:`1px solid ${B.gold}`,borderRadius:20,padding:"2px 9px"}}>
                           🔗 {sectionLabel(doc.propertySection)}
@@ -8929,7 +8932,7 @@ function OnboardingWizard({onClose,addMember,addProfessional,addBusinessPartner,
 
   return shell(
     "You're all set",
-    "You can add more properties, accounts or valuables anytime from their own tabs, upload documents to your Vault.",
+    "You can add more properties, accounts or valuables anytime from their own tabs, upload documents to CHRIS.",
     <div style={{fontSize:13,color:B.textSoft,lineHeight:1.6}}>
       Added this session: {properties.length} propert{properties.length===1?"y":"ies"}, {accounts.length} account{accounts.length===1?"":"s"}, {valuables.length} valuable{valuables.length===1?"":"s"}.
     </div>,
@@ -9223,7 +9226,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     ...(clientHasWorkflows?[{id:"workflows",label:"Workflows",icon:"▦"}]:[]),
     {id:"valuables", label:"Valuables",  icon:"◆"},
     {id:"tasks",     label:"Tasks",      icon:"◻"},
-    {id:"documents", label:"Vault",  icon:"📁"},
+    {id:"documents", label:"CHRIS",  icon:"📁"},
     {id:"billing",   label:"Billing",   icon:"💳"},
     // Last in the row on purpose, and flagged so the renderer can mark it with a star: the
     // other tabs are ledgers, this one is the assistant.
@@ -9615,9 +9618,9 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         })}
       </div>}
 
-      {/* VAULT */}
+      {/* CHRIS */}
       {activeTab==="documents"&&<div style={{height:"calc(100vh - 200px)"}}>
-        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:20}}>Vault</div>
+        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:20}}>CHRIS</div>
         <DocumentsView familyId={family.id} canUpload={true} canDelete={false} canScan={false} toast={toast||(()=>{})} reload={reload}/>
       </div>}
 

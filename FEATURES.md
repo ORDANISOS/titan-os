@@ -51,7 +51,7 @@ Most platforms give you a folder. This links a document to the figure it support
 
 | Capability | Status |
 |---|---|
-| Vault organised into folders by category | LIVE |
+| CHRIS organised into folders by category | LIVE |
 | AI reads uploaded documents — embedded text, and OCR for scans | LIVE |
 | Documents linked to a specific property section: mortgage, tax bill, insurance declarations, insurance invoice, flood, rental agreement | LIVE |
 | Valuables linked to the schedule that covers them | LIVE |
@@ -59,9 +59,9 @@ Most platforms give you a folder. This links a document to the figure it support
 | Balance history per account, with the change between periods | LIVE |
 | Upload a statement and the AI proposes the closing balance for a person to confirm | LIVE |
 | A corrected statement replaces that period's figure rather than sitting beside it | LIVE |
-| Statements live in the Vault, so they are AI-readable and their downloads are logged | LIVE |
+| Statements live in CHRIS, so they are AI-readable and their downloads are logged | LIVE |
 | Attach from the figure itself — a paperclip beside Property Taxes opens a pre-filled upload | LIVE |
-| Replacing a document keeps the old one in the Vault, unlinked, for history | LIVE |
+| Replacing a document keeps the old one in CHRIS, unlinked, for history | LIVE |
 | Download audit log — who opened which document, and when | LIVE |
 | Time-limited signed URLs; no permanent public file links | LIVE |
 
@@ -107,7 +107,7 @@ something done.
 | At-risk flagged on day one when a cycle starts too late to fit its own lead times | LIVE |
 | Every outbound item held for named human approval | LIVE |
 | Sends from the platform, as the responsible Titan Expert on the firm's own verified domain | LIVE |
-| Attachments pulled from the Vault and sent with the message | LIVE |
+| Attachments pulled from CHRIS and sent with the message | LIVE |
 | Approval and sending recorded separately, each attributed; "sent" means the provider accepted it | LIVE |
 | Recipients checked against the client's known contacts; an unrecognised address stops the send | LIVE |
 | Send failures leave the step in the queue rather than looking successful | LIVE |

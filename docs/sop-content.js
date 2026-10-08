@@ -76,14 +76,14 @@ module.exports = [
     internal: [
       "Create the property with ownership, type and value. Add loan, tax, insurance, flood and rental detail as you have it.",
       "Add vendors under the property — gardener, manager, contractor. These become click-to-call and click-to-email for whoever is working the household.",
-      "Attach the document behind each figure. A paperclip beside an unlinked section takes you to the Vault with the property and section already chosen.",
+      "Attach the document behind each figure. A paperclip beside an unlinked section takes you to CHRIS with the property and section already chosen.",
       "To pre-fill a property from a closing document or statement, use the extract option on the property form and check every value it proposes before saving.",
     ],
     checks: [
       "Each section that should have a document has one: mortgage note, tax bill, insurance declarations, insurance invoice, flood declarations, tenancy agreement.",
     ],
     traps: [
-      "Replacing a document does not delete the old one. It is unlinked and stays in the Vault, so last year's tax bill and an expired policy remain available. This is deliberate; do not go looking for a delete.",
+      "Replacing a document does not delete the old one. It is unlinked and stays in CHRIS, so last year's tax bill and an expired policy remain available. This is deliberate; do not go looking for a delete.",
       "Anything the AI proposes from a document is a proposal. It is right often enough to be useful and wrong often enough that you must read it.",
     ],
     firm: [
@@ -101,7 +101,7 @@ module.exports = [
       "A balance is not a number, it is a number as at a date, from a statement. This is what lets you answer 'where did this figure come from' in a client meeting.",
     internal: [
       "Create the account with institution, type, banker and opening balance.",
-      "To record a balance from a statement: open Balance history on the account, choose Statement, and pick the file. It is filed to the Vault against the account first, then read.",
+      "To record a balance from a statement: open Balance history on the account, choose Statement, and pick the file. It is filed to CHRIS against the account first, then read.",
       "Check the proposed closing balance and period end against the statement, and against the figure already on file — the difference is shown for you. Correct anything wrong, then press Record balance.",
       "To record a figure with no statement — an opening position, or a balance a banker confirmed by phone — use + Balance and leave the document blank.",
       "Give the statement its period label as your firm writes it: 2026-Q2, June 2026, FY26. Whatever you use, use it consistently.",
@@ -160,7 +160,7 @@ module.exports = [
 
   {
     id: "vault",
-    title: "The Vault",
+    title: "CHRIS",
     purpose:
       "One place for every document, organised so it can be found, and readable by the assistant so it can be used.",
     internal: [
@@ -175,7 +175,7 @@ module.exports = [
       "A document filed against an account still appears on the account card even if no balance entry references it, so nothing you file becomes invisible.",
     ],
     firm: [
-      "The Vault holds every document for a household, organised into folders.",
+      "CHRIS holds every document for a household, organised into folders.",
       "Each upload is read on arrival, including scans, so the assistant can answer questions from its contents rather than just listing a filename.",
       "Documents link to what they support — a property's insurance section, a valuables schedule, a portfolio account.",
       "Documents open through time-limited links, never permanent public ones, and every download is recorded against the person who opened it.",

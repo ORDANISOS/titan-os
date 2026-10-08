@@ -130,7 +130,7 @@ const SLIDES = [
       "Extraction proposes; the Expert accepts. Nothing is written straight into a live record.",
     ],
     say: "Documents are usually a graveyard. Here they're load-bearing.",
-    notes: "Keep this one brief — it is the plumbing slide. The single idea worth landing: the Vault is not a filing cabinet bolted on the side, it is the same store the balances, the property sections and the outbound attachments all reference.",
+    notes: "Keep this one brief — it is the plumbing slide. The single idea worth landing: CHRIS is not a filing cabinet bolted on the side, it is the same store the balances, the property sections and the outbound attachments all reference.",
   },
   {
     eyebrow: "Projection",

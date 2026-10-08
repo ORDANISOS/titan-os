@@ -1,4 +1,4 @@
-// Tests for Vault folder naming, counting and deletion.
+// Tests for CHRIS folder naming, counting and deletion.
 //
 // These call the real functions from src/vaultFolders.js. Written before the UI, because the
 // rules worth protecting are the ones a person will hit by accident: typing a name that
@@ -92,7 +92,7 @@ ok("case differences still match their folder",
 console.log("\nThe summary line");
 const sum = folderSummary(rows);
 ok("total counts every document", sum.total === 5);
-// The real problem with the current page: Other holding nearly half the vault, hidden inside
+// The real problem with the current page: Other holding nearly half of CHRIS, hidden inside
 // a total. It gets its own number.
 ok("unfiled is reported separately", sum.unfiled === 1);
 ok("empty folders are listed by name", sum.emptyFolders.includes("Legal"));

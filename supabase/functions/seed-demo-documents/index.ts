@@ -3,7 +3,7 @@
 // them to the `documents` storage bucket, and inserts the matching documents
 // rows with extracted_text populated.
 //
-// Why a real file and not just a metadata row: the Vault opens documents through
+// Why a real file and not just a metadata row: CHRIS opens documents through
 // storage.createSignedUrl(file_path), so a row without a stored object gives a
 // broken download. Writing to storage needs the service-role key, which only
 // exists server-side — hence an edge function rather than plain SQL.
@@ -50,7 +50,7 @@ type Spec = {
   description: string;
   expiry?: string;
   // documents.property_section. Set it and the file appears ON the property card against the
-  // figure it evidences, rather than only in the Vault list. One of:
+  // figure it evidences, rather than only in the CHRIS list. One of:
   //   mortgage · tax · insurance_dec · insurance_invoice · flood_dec · rental · valuables_schedule
   // valuables_schedule is looked up by family, not by property, and links from the Valuables tab.
   section?: string;

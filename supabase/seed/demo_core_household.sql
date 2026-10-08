@@ -22,10 +22,10 @@
 -- (child rows cascade)
 --
 -- NOT SEEDED: documents. Every document row in this project points at a real file in Storage, and
--- a row with an invented path is a broken download in front of a prospect. The Vault therefore
+-- a row with an invented path is a broken download in front of a prospect. CHRIS therefore
 -- shows an empty-folder state, which is defensible for a newly onboarded household — and is itself
--- the Vault redesign's summary line doing its job. Upload two or three files through the Vault UI
--- if the demo needs a populated Vault; that also demonstrates the upload flow.
+-- the CHRIS redesign's summary line doing its job. Upload two or three files through the CHRIS UI
+-- if the demo needs a populated CHRIS; that also demonstrates the upload flow.
 
 do $$
 declare

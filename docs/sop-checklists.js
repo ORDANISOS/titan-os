@@ -51,7 +51,7 @@ module.exports = [
     groups: [
       ["Per account", [
         "Statement obtained for the period.",
-        "Filed to the Vault against the account, with the period labelled the way the firm labels it.",
+        "Filed to CHRIS against the account, with the period labelled the way the firm labels it.",
         "Proposed closing balance checked against the statement, not accepted on sight.",
         "Proposed period end date checked — a wrong date attaches the figure to the wrong quarter.",
         "Difference against the previous figure reviewed, and explainable if someone asks.",
@@ -148,7 +148,7 @@ module.exports = [
         "Counterparty addresses are current, so sends are not stopped by unrecognised recipients.",
       ]],
       ["Quieter checks", [
-        "Documents sitting in the Vault's \"Other\" folder reviewed and recategorised.",
+        "Documents sitting in CHRIS's \"Other\" folder reviewed and recategorised.",
         "Valuables still showing \"Not scheduled\" are deliberately uninsured, and the client knows.",
         "Property sections with no document attached chased.",
         "Partner grants still appropriate — people change roles and firms.",

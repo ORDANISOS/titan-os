@@ -29,7 +29,7 @@ export const PLAN_LABEL = { basic: "Basic", core: "Core", premier: "Premier" };
 // Deliberately brand-neutral. "Titan Core" would be a white-label leak the moment a second firm
 // runs this codebase -- the same bug already shipped three times in the edge functions.
 export const PLAN_BLURB = {
-  basic: "Vault, household record and AI assistant. Self-directed, no workflows or Expert.",
+  basic: "CHRIS, household record and AI assistant. Self-directed, no workflows or Expert.",
   core: "Self-directed. Workflows, obligations, prompts and resources. No assigned Expert at any price.",
   premier: "Full platform with an assigned expert, workflows and bill pay.",
 };

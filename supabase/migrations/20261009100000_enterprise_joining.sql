@@ -13,7 +13,7 @@ alter table public.signup_disclosures add constraint signup_disclosures_kind_che
 -- published it (set is_draft = false). The functions refuse to run without a published notice.
 insert into public.signup_disclosures (kind, version, title, body_html, is_draft)
 select 'firm_data_sharing', 1, 'What your firm can see',
-  '<p>By entering a firm code you are joining that firm on ORDANIS. Joining lets the firm''s designated administrators <strong>view everything you can see in your household''s portal</strong> as the household owner: your household name and plan, the people on your account, your properties, portfolio and accounts, cash flow, valuables, tasks and workflows, notes, and the documents in your Vault.</p>'
+  '<p>By entering a firm code you are joining that firm on ORDANIS. Joining lets the firm''s designated administrators <strong>view everything you can see in your household''s portal</strong> as the household owner: your household name and plan, the people on your account, your properties, portfolio and accounts, cash flow, valuables, tasks and workflows, notes, and the documents in CHRIS.</p>'
   || '<p>They see nothing beyond what you can see yourself, and they have <strong>view access only</strong>. They cannot change, add or delete anything in your household.</p>'
   || '<p>Your plan, price and payment method do not change when you join. Your assigned ORDANIS Expert does not change unless an ORDANIS admin changes it. You can ask ORDANIS at any time to take your household out of the firm, and the firm''s access stops straight away.</p>',
   true

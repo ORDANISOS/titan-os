@@ -2,7 +2,7 @@
 //
 // Replaces the 5-page "Advisor User Guide" of 6 July 2026, which still used the
 // old "Advisor" label and predated obligations and workflow cycles, correspondence
-// approval and sending, statement provenance on balances, the Vault redesign,
+// approval and sending, statement provenance on balances, the CHRIS redesign,
 // scheduled reports, per-tenant branding and per-tenant document templates —
 // roughly half of what an Expert now does daily.
 //
