@@ -393,7 +393,7 @@ Rules for the JSON:
 - Every string must be valid JSON (escape quotes, no trailing commas).`;
 
 function roleLabelFor(ownerRole: string): string {
-  return ownerRole === "admin" ? "firm administrator" : ownerRole === "partner" ? "Partner" : "Titan Expert";
+  return ownerRole === "admin" ? "firm administrator" : ownerRole === "partner" ? "Partner" : "ORDANIS Expert";
 }
 
 function systemPromptFor(ownerRole: string): string {

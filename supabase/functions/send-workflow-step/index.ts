@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
       }
     }
     if (!fromEmail) {
-      return json({ error: `No usable sending address. This client's Titan Expert (${fam?.advisor_email || "none on file"}) is not on the verified domain ${wantDomain}, and no fallback firm address is set.` }, 409);
+      return json({ error: `No usable sending address. This client's ORDANIS Expert (${fam?.advisor_email || "none on file"}) is not on the verified domain ${wantDomain}, and no fallback firm address is set.` }, 409);
     }
     if (domainOf(fromEmail) !== wantDomain) {
       return json({ error: `Refusing to send: ${fromEmail} is not on the verified domain ${wantDomain}.` }, 409);
@@ -168,7 +168,7 @@ Deno.serve(async (req) => {
       }, 409);
     }
 
-    // ── Attachments, fetched from the Vault
+    // ── Attachments, fetched from CHRIS
     const attachIds: string[] = Array.isArray(step.attachment_ids) ? step.attachment_ids : [];
     const attachments: { filename: string; content: string }[] = [];
     let attachBytes = 0;
@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
         if (!d.file_path) continue;
         const { data: file, error: dlErr } = await admin.storage.from("documents").download(d.file_path);
         if (dlErr || !file) {
-          return json({ error: `Could not read the attachment "${d.name}" from the Vault, so nothing was sent.` }, 502);
+          return json({ error: `Could not read the attachment "${d.name}" from CHRIS, so nothing was sent.` }, 502);
         }
         const bytes = new Uint8Array(await file.arrayBuffer());
         attachBytes += bytes.length;

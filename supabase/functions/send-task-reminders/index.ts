@@ -1,7 +1,7 @@
 // Deployed on prod (unkirihxtruhdjeldfpm) v17 ONLY — the demo project (tkryueqzvgcigvxgjzsp) does not have this function, so there is nothing to compare against and no drift.
 // Supabase Edge Function: send-task-reminders
 // Runs daily at 8am via Supabase Cron
-// Sends reminder emails to Titan Experts for upcoming tasks
+// Sends reminder emails to ORDANIS Experts for upcoming tasks
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
     <div class="gold-line"></div>
     <div class="body">
       <p style="font-size:14px;color:#5a6e84;margin-bottom:20px;">
-        Hello ${family.advisor_name || "Titan Expert"},<br><br>
+        Hello ${family.advisor_name || "ORDANIS Expert"},<br><br>
         This is your ${task.reminder_days}-day reminder for an upcoming task assigned to the <strong>${family.name}</strong> family.
       </p>
 

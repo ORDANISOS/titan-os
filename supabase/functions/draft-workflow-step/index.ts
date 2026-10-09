@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
     const firmName = cleanFirmName(body?.brandName) || cleanFirmName(BRAND_NAME_ENV) || FIRM_PLACEHOLDER;
 
     // Read through the caller's own permissions. If RLS hides the step, they get
-    // nothing — a Titan Expert cannot draft against another Expert's client.
+    // nothing — a ORDANIS Expert cannot draft against another Expert's client.
     const { data: step } = await asUser.from("workflow_instance_steps").select("*").eq("id", stepId).maybeSingle();
     if (!step) return json({ error: "Step not found, or not yours to draft." }, 404);
 

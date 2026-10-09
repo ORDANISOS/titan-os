@@ -1,5 +1,5 @@
 // supabase/functions/send-advisor-email/index.ts
-// A client emails their designated Titan Expert (or anyone else they add)
+// A client emails their designated ORDANIS Expert (or anyone else they add)
 // through the platform.
 //
 // Why server-side: it lets us (1) force the primary Expert onto CC in a way the
@@ -155,7 +155,7 @@ Deno.serve(async (req) => {
     const { data: staffRows } = await admin.from("user_profiles").select("email").in("role", ["advisor", "admin"]).eq("active", true);
     const staffEmails = new Set((staffRows || []).map((r: { email: string }) => (r.email || "").trim().toLowerCase()).filter(Boolean));
     const blocked = toEmails.filter((e) => e !== primaryEmail && staffEmails.has(e));
-    if (blocked.length) return json({ error: "You can only email your designated Titan Expert from the firm — not other Titan Experts directly." }, 403);
+    if (blocked.length) return json({ error: "You can only email your designated ORDANIS Expert from the firm — not other ORDANIS Experts directly." }, 403);
 
     const cc = (primaryEmail && !toEmails.includes(primaryEmail)) ? [primaryEmail] : undefined;
 
