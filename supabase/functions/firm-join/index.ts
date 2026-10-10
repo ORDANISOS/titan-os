@@ -10,6 +10,10 @@
 //   { action: "join", code, notice_id }                               signed-in client: join with the code
 //   { action: "admin_move", family_id, enterprise_id, client_agreed: true, note }   ORDANIS admin only
 //   { action: "admin_remove", family_id, note? }                      ORDANIS admin only
+//   { action: "admin_enroll", enterprise_id, household_name, owner_full_name, owner_email, plan, start_date?,
+//     client_agreed: true, note, redirect_to? }                          ORDANIS admin only: creates the household and the owner's
+//                                                                        login (emailed invite), places it in the firm, makes the firm pay
+//                                                                        for it from start_date, and tells the firm
 //   { action: "notify", event_id }                                    service role only (called by stripe-webhook after a code signup)
 //
 // A wrong, expired or inactive code all produce the same answer. The email to the firm carries the
@@ -169,6 +173,7 @@ Deno.serve(async (req) => {
     let body: {
       action?: string; code?: string; notice_id?: string; family_id?: string; enterprise_id?: string;
       client_agreed?: boolean; note?: string; event_id?: string;
+      household_name?: string; owner_full_name?: string; owner_email?: string; plan?: string; start_date?: string; redirect_to?: string;
     };
     try { body = await req.json(); } catch { return json({ error: "Invalid JSON body" }, 400); }
     const action = String(body.action ?? "");
@@ -228,6 +233,102 @@ Deno.serve(async (req) => {
       let notified: unknown = null;
       if (r?.status === "joined" || r?.status === "moved") notified = await notifyFirm(String(r.event_id));
       return json({ success: true, status: r?.status, firm_name: r?.firm_name, notified });
+    }
+
+    if (action === "admin_enroll") {
+      const householdName = clean(body.household_name);
+      const ownerName = clean(body.owner_full_name);
+      const ownerEmail = clean(body.owner_email).toLowerCase();
+      const plan = clean(body.plan);
+      const note = clean(body.note);
+      if (!body.enterprise_id) return json({ error: "Choose a firm." }, 400);
+      if (householdName.length < 2 || ownerName.length < 2) return json({ error: "The household name and the owner's name are required." }, 400);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerEmail)) return json({ error: "Enter a valid email address for the owner." }, 400);
+      if (body.client_agreed !== true) return json({ error: "Confirm that the client has agreed first." }, 400);
+      if (note.length < 5) return json({ error: "Say how the client agreed (for example, who confirmed it and when)." }, 400);
+
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const startIso = clean(body.start_date) || todayIso;
+      const startMs = /^\d{4}-\d{2}-\d{2}$/.test(startIso) ? Date.parse(startIso + "T00:00:00Z") : NaN;
+      const todayMs = Date.parse(todayIso + "T00:00:00Z");
+      if (Number.isNaN(startMs)) return json({ error: "The start date is not a valid date." }, 400);
+      if (startMs < todayMs - 62 * 86400000 || startMs > todayMs + 92 * 86400000) {
+        return json({ error: "The start date must be within the last two months or the next three." }, 400);
+      }
+
+      const { data: pf } = await admin.from("plan_features").select("plan, label, monthly_price").eq("plan", plan).maybeSingle();
+      if (!pf) return json({ error: "Choose a plan." }, 400);
+      const { data: ent } = await admin.from("enterprises").select("id, name, active, domain").eq("id", body.enterprise_id).maybeSingle();
+      if (!ent || !ent.active) return json({ error: DB_ERRORS.firm_not_available.message, code: "firm_not_available" }, 404);
+      if (!(await currentNotice())) return json({ error: DB_ERRORS.notice_not_published.message, code: "notice_not_published" }, 409);
+
+      // The invite link lands on this address. Only the firm's own domain or an ordanisos.com address is accepted.
+      let redirectTo = "";
+      try {
+        const u = new URL(String(body.redirect_to ?? ""));
+        const h = u.hostname.toLowerCase();
+        if (u.protocol === "https:" && (h === String(ent.domain ?? "").toLowerCase() || h === "ordanisos.com" || h.endsWith(".ordanisos.com"))) redirectTo = u.origin;
+      } catch (_e) { /* fall through to the default below */ }
+      if (!redirectTo) redirectTo = ent.domain ? `https://${ent.domain}` : (await resolveSender()).appUrl;
+
+      // 1. The owner's login. An address that already has a login is refused here, before anything else is created.
+      const { data: inv, error: invErr } = await admin.auth.admin.inviteUserByEmail(ownerEmail, { redirectTo, data: { full_name: ownerName } });
+      if (invErr || !inv?.user) {
+        const m = invErr?.message ?? "";
+        if (/already|registered|exists/i.test(m)) {
+          return json({ error: "That email address already has a login. Use a different address, or move the existing household into the firm instead." }, 409);
+        }
+        return json({ error: `The invite could not be sent: ${m || "unknown error"}` }, 500);
+      }
+      const newUserId = inv.user.id;
+      let familyId: string | null = null;
+      const undo = async () => {
+        try {
+          if (familyId) {
+            await admin.from("user_profiles").delete().eq("id", newUserId);
+            await admin.from("families").delete().eq("id", familyId);
+          }
+        } catch (e) { console.error("admin_enroll undo (household) failed:", e instanceof Error ? e.message : e); }
+        try { await admin.auth.admin.deleteUser(newUserId); }
+        catch (e) { console.error("admin_enroll undo (login) failed:", e instanceof Error ? e.message : e); }
+      };
+
+      // 2. The household and its owner's profile.
+      const { data: fam, error: famErr } = await admin.from("families").insert({
+        name: householdName, plan, subscription_state: "active", acquisition_channel: "advisor",
+      }).select("id").single();
+      if (famErr || !fam) { await undo(); return json({ error: `The household could not be created: ${famErr?.message ?? "no row returned"}` }, 500); }
+      familyId = fam.id as string;
+      const { error: profErr } = await admin.from("user_profiles").upsert(
+        { id: newUserId, email: ownerEmail, full_name: ownerName, role: "client", family_id: familyId }, { onConflict: "id" });
+      if (profErr) { await undo(); return json({ error: `The owner's profile could not be created: ${profErr.message}` }, 500); }
+
+      // 3. Into the firm, with the admin's record of how the client agreed, and the firm's default Expert if it has one.
+      const { data: joined, error: joinErr } = await admin.rpc("enterprise_join_family", {
+        p_family_id: familyId, p_enterprise_id: ent.id, p_how: "admin_move", p_actor: user.id,
+        p_consent: true, p_consent_note: `Recorded by an ORDANIS admin when enrolling the client: ${note}`,
+        p_disclosure_id: null, p_apply_default_expert: true,
+      });
+      if (joinErr) { await undo(); return dbError(joinErr.message); }
+
+      // 4. The firm pays for the plan from the start date, at list price. From here on nothing is undone automatically.
+      const { error: payErr } = await admin.from("families").update({
+        paid_by: "enterprise", paid_by_since: startIso, paid_by_note: `Enrolled by ORDANIS: ${note}`.slice(0, 500),
+        discount_percent: 0, discount_code: null,
+      }).eq("id", familyId);
+      if (payErr) {
+        return json({
+          error: `The household was created and placed in ${ent.name}, but the firm could not be set as payer: ${payErr.message}. Open the household and set "paid by the firm" from its payer card.`,
+          code: "payer_not_set", family_id: familyId,
+        }, 500);
+      }
+
+      let notified: unknown = null;
+      if (joined?.event_id) notified = await notifyFirm(String(joined.event_id));
+      return json({
+        success: true, family_id: familyId, household_name: householdName, firm_name: ent.name, plan: pf.label || plan,
+        monthly_price: pf.monthly_price, start_date: startIso, invited: ownerEmail, default_expert: joined?.default_expert ?? null, notified,
+      });
     }
 
     if (action === "admin_remove") {

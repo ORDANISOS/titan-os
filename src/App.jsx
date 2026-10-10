@@ -13240,6 +13240,20 @@ function EntPeople({row,data,toast,onChanged}){
   const[agreed,setAgreed]=useState(false);
   const[note,setNote]=useState("");
   const[busy,setBusy]=useState(false);
+  const todayIso=new Date().toISOString().slice(0,10);
+  const blankEnroll={hh:"",owner:"",email:"",plan:"",start:todayIso,agreed:false,how:""};
+  const[en,setEn]=useState(blankEnroll);
+  const[enBusy,setEnBusy]=useState(false);
+  const enValid=en.hh.trim().length>1&&en.owner.trim().length>1&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(en.email.trim())&&en.plan&&en.start&&en.agreed&&AGREEMENT_METHODS.includes(en.how);
+  const enroll=async()=>{
+    setEnBusy(true);
+    try{
+      const r=await callFirmJoin({action:"admin_enroll",enterprise_id:row.id,household_name:en.hh.trim(),owner_full_name:en.owner.trim(),owner_email:en.email.trim(),plan:en.plan,start_date:en.start,client_agreed:true,note:en.how,redirect_to:window.location.origin});
+      toast(r.household_name+" enrolled. An invite was emailed to "+r.invited);
+      setEn(blankEnroll);await onChanged();
+    }catch(x){toast(x.message,"error");}
+    setEnBusy(false);
+  };
   const[removing,setRemoving]=useState(null);
   const[removeNote,setRemoveNote]=useState("");
   const others=data.fams.filter(f=>f.enterprise_id!==row.id&&f.paid_by!=="enterprise");
@@ -13272,6 +13286,23 @@ function EntPeople({row,data,toast,onChanged}){
           ?<Btn small variant="ghost" disabled={busy} onClick={()=>{setRemoving(f);setRemoveNote("");}}>Remove from firm</Btn>
           :<span style={{fontSize:11.5,color:B.textMute}}>Can't be removed while the firm pays</span>}
       </div>)}
+    </div>
+    <div style={entCard}>
+      <div style={entLab}>Enroll a new client in {row.name}</div>
+      <div style={{fontSize:12,color:B.textSoft,lineHeight:1.55,marginBottom:12}}>Creates the household and the owner's login, emails the owner an invite to set a password, places the household in {row.name}, and makes {row.name} pay for the plan at list price with no discount. It goes on the firm's monthly invoice, prorated from the start date. Only with the client's agreement.</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(220px,100%),1fr))",gap:12,maxWidth:760}}>
+        <Field label="Household name"><Inp value={en.hh} onChange={e=>setEn({...en,hh:e.target.value})} placeholder="e.g. The Smith Family"/></Field>
+        <Field label="Owner's full name"><Inp value={en.owner} onChange={e=>setEn({...en,owner:e.target.value})}/></Field>
+        <Field label="Owner's email"><Inp type="email" value={en.email} onChange={e=>setEn({...en,email:e.target.value})}/></Field>
+        <Field label="Plan"><Sel value={en.plan} onChange={e=>setEn({...en,plan:e.target.value})}>
+          <option value="">Choose a plan…</option>
+          {data.plans.map(p=><option key={p.plan} value={p.plan}>{p.label} - {money2(p.monthly_price)}/mo</option>)}
+        </Sel></Field>
+        <Field label="Start date (first month is prorated from here)"><Inp type="date" value={en.start} onChange={e=>setEn({...en,start:e.target.value})}/></Field>
+      </div>
+      <label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:12.5,color:B.text,cursor:"pointer"}}><input type="checkbox" checked={en.agreed} onChange={e=>setEn({...en,agreed:e.target.checked})} style={{marginTop:2}}/>The client has agreed to share this household's information with {row.name}.</label>
+      {agreementSelect(en.how,v=>setEn({...en,how:v}))}
+      <div style={{marginTop:10}}><Btn small disabled={enBusy||!enValid} onClick={enroll}>{enBusy?"Enrolling…":"Enroll client"}</Btn></div>
     </div>
     <div style={entCard}>
       <div style={entLab}>Move a household into {row.name}</div>

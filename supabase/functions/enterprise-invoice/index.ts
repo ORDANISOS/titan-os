@@ -215,10 +215,16 @@ Deno.serve(async (req) => {
       const meta = { kind: "enterprise_invoice", enterprise_id: enterpriseId, period_month: period };
       let stripeInvoiceId = "";
       try {
+        // Billed in advance and due on the 1st of the month it covers. If that day has already passed (a catch-up
+        // invoice for an earlier month), the firm's payment terms in days apply instead.
+        const dueOnFirst = Math.floor(Date.parse(period + "T12:00:00Z") / 1000);
+        const dueTerms = dueOnFirst > Math.floor(Date.now() / 1000) + 3600
+          ? { due_date: dueOnFirst }
+          : { days_until_due: billing.payment_terms_days ?? 30 };
         const inv = await stripe.invoices.create({
           customer: billing.stripe_customer_id,
           collection_method: "send_invoice",
-          days_until_due: billing.payment_terms_days ?? 30,
+          ...dueTerms,
           auto_advance: false,
           pending_invoice_items_behavior: "exclude",
           description: `${ent.name} - ORDANIS ${monthLabel}`,
