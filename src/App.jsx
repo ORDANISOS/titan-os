@@ -2665,6 +2665,8 @@ function FloatingAssistant({family,families,data,reload,toast,userProfile}){
 // server enforces it independently regardless of what's submitted.
 const EMAIL_RE=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // A task reminder of 0 means "no reminder". The old `x||7` turned 0 into 7, so it could never be saved.
+// Archived households are cancelled and login-disabled; counts and pickers show active families only.
+const isActiveFamily=f=>!(f&&(f.archived_at||f.archivedAt));
 const reminderDaysOr7=v=>{if(v===null||v===undefined||v==="")return 7;const n=Number(v);return Number.isFinite(n)&&n>=0?n:7;};
 function EmailAdvisorModal({family,userProfile,data,onClose}){
   const primaryName=(family.advisorName||"").trim();
@@ -5101,7 +5103,7 @@ function printAdvisorReport(adv,data){
   const fmtD=d=>{if(!d)return"—";const x=parseLocalDate(d);
     return isNaN(x.getTime())?"—":x.toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"});};
   const esc=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
-  const families=(data.families||[]).filter(f=>(f.advisorEmail||"")===email);
+  const families=(data.families||[]).filter(f=>(f.advisorEmail||"")===email&&isActiveFamily(f));
   const famIds=new Set(families.map(f=>f.id));
   const prospects=(data.contacts||[]).filter(c=>!c.familyId&&(c.advisorEmail||"")===email);
   const prospectIds=new Set(prospects.map(c=>c.id));
@@ -5225,6 +5227,7 @@ function FamiliesView({data,reload,toast,userProfile,navIntent,onNavConsumed}){
     };
     const groups={};
     families.forEach(f=>{
+      if(!isActiveFamily(f))return;
       const key=f.advisorEmail||"__unassigned__";
       if(!groups[key])groups[key]={email:f.advisorEmail||"",name:f.advisorName||"Unassigned",unassigned:!f.advisorEmail,families:0,value:0,openTasks:0,overdue:0};
       const st=statsFor(f);
@@ -5368,7 +5371,8 @@ function PortfolioAccountForm({initial,families=[],onSave,onClose}){
 // ── PORTFOLIO VIEW (global) ───────────────────────────────────────────────────
 function PortfolioView({data,reload,toast,userProfile}){
   const isMobile=useIsMobile();
-  const{families,portfolio_accounts=[]}=data;
+  const{portfolio_accounts=[]}=data;
+  const families=(data.families||[]).filter(isActiveFamily);
   const[modal,setModal]=useState(null);
   const[filterFamily,setFilterFamily]=useState("all");
   const[advScope,setAdvScope]=useState("");
@@ -6555,7 +6559,7 @@ function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
 
 // ── USER MANAGEMENT ───────────────────────────────────────────────────────────
 function UserManagementView({userProfile,data={},toast}){
-  const families=data.families||[];
+  const families=(data.families||[]).filter(isActiveFamily);
   const[users,setUsers]=useState([]);
   const[loading,setLoading]=useState(true);
   const[modal,setModal]=useState(null);
@@ -10748,7 +10752,7 @@ function ResourcesView({data,userProfile,toast}){
   const isMobile=useIsMobile();
   const[familyId,setFamilyId]=useState("");
   const[activeDoc,setActiveDoc]=useState(null);
-  const families=data.families||[];
+  const families=(data.families||[]).filter(isActiveFamily);
   const family=families.find(f=>f.id===familyId)||null;
   const contacts=(data.contacts||[]).filter(c=>c.familyId===familyId);
   const primaryContact=contacts.find(c=>!c.isAdvisor)||contacts[0]||null;
@@ -13748,7 +13752,7 @@ export default function App(){
   const _contactAdv=id=>{const c=data.contacts.find(x=>x.id===id);return (c?.advisorEmail||"").toLowerCase();};
   const _dealAdv=d=>(d.advisorEmail||"").toLowerCase();
   const _mine=e=>_isAdmin||(!!e&&e===_myEmail);
-  const cmStats={families:data.families.length,portfolio:(data.portfolio_accounts||[]).length,"cm-notes":data.notes.filter(n=>n.familyId).length,"cm-tasks":data.tasks.filter(t=>t.familyId&&!t.done).length};
+  const cmStats={families:data.families.filter(isActiveFamily).length,portfolio:(data.portfolio_accounts||[]).length,"cm-notes":data.notes.filter(n=>n.familyId).length,"cm-tasks":data.tasks.filter(t=>t.familyId&&!t.done).length};
   const pStats={"p-contacts":data.contacts.filter(c=>!c.familyId&&_mine((c.advisorEmail||"").toLowerCase())).length,"p-pipeline":data.deals.filter(d=>!d.familyId&&d.stage!=="Closed Lost"&&_mine(_dealAdv(d))).length,"p-notes":data.notes.filter(n=>!n.familyId&&_mine(_contactAdv(n.contactId))).length,"p-tasks":data.tasks.filter(t=>!t.familyId&&!t.done&&_mine(_contactAdv(t.contactId))).length};
   const allStats={...cmStats,...pStats,users:0};
   const overdue=data.tasks.filter(t=>t.familyId&&!t.done&&t.dueDate&&new Date(t.dueDate)<new Date()).length;
@@ -13818,7 +13822,7 @@ export default function App(){
       </nav>
       <div style={{padding:"10px 16px",borderTop:`1px solid ${B.borderLight}`}}>
         {userProfile&&<div style={{marginBottom:8}}><div style={{fontSize:11,color:B.navy,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{userProfile.fullName||userProfile.email}</div><div style={{fontSize:9,color:B.navyMid,letterSpacing:"0.1em",textTransform:"uppercase",marginTop:1}}>{roleLabel(userProfile.role)}</div></div>}
-        <div style={{fontSize:9,color:B.textMute,marginBottom:4}}>{data.families.length} families · {(data.portfolio_accounts||[]).length} accounts</div>
+        <div style={{fontSize:9,color:B.textMute,marginBottom:4}}>{data.families.filter(isActiveFamily).length} families · {(data.portfolio_accounts||[]).length} accounts</div>
         <div style={{display:"flex",justifyContent:"space-between"}}>
           <button onClick={()=>reload()} style={{background:"none",border:"none",color:B.navyMid,fontSize:9,cursor:"pointer",padding:0,fontFamily:"inherit"}}>↺ Refresh</button>
           <button onClick={logout} style={{background:"none",border:"none",color:B.textMute,fontSize:9,cursor:"pointer",padding:0,fontFamily:"inherit"}}>Sign Out</button>
