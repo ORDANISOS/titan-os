@@ -1759,8 +1759,8 @@ const annualise=(amount,frequency)=>{
 //
 // "How much do we pay monthly?" has two different answers and conflating them puts a
 // false statement in front of a client. Florida Power & Light is billed monthly, so
-// annual/12 IS the payment. Chubb's premium is annual: $14,200/12 = $1,183 is a smoothed
-// average and nobody pays Chubb $1,183 in any month.
+// annual/12 IS the payment. An insurer's premium is annual: $14,200/12 = $1,183 is a smoothed
+// average and nobody pays the carrier $1,183 in any month.
 //
 // So the field is called monthlyAverage rather than monthly, and `everyLineIsMonthly`
 // tells the caller which of the two situations it is in. A figure that is only an average
@@ -8647,7 +8647,7 @@ function AccountQuickForm({onSave,onCancel,saving}){
   const valid=f.institution.trim().length>0&&advisorPhoneOk&&advisorEmailOk;
   return <div>
     <Grid2>
-      <Field label="Institution"><Inp value={f.institution} onChange={e=>set("institution",e.target.value)} placeholder="Fidelity, Chase, Schwab…"/></Field>
+      <Field label="Institution"><Inp value={f.institution} onChange={e=>set("institution",e.target.value)} placeholder="Institution name"/></Field>
       <Field label="Account type"><Sel value={f.accountType} onChange={e=>set("accountType",e.target.value)}>{ACCT_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</Sel></Field>
       <Field label="Current balance"><MoneyInput value={f.currentBalance} onChange={v=>set("currentBalance",v)} placeholder="240,000"/></Field>
       <Field label="Starting balance (optional)"><MoneyInput value={f.startingBalance} onChange={v=>set("startingBalance",v)} placeholder="200,000"/></Field>
@@ -8660,7 +8660,7 @@ function AccountQuickForm({onSave,onCancel,saving}){
         {!advisorPhoneOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid phone number, or leave it blank.</div>}
       </Field>
       <Field label="Advisor email">
-        <Inp type="email" value={f.accountAdvisorEmail} onChange={e=>set("accountAdvisorEmail",e.target.value)} placeholder="jordan@fidelity.com"/>
+        <Inp type="email" value={f.accountAdvisorEmail} onChange={e=>set("accountAdvisorEmail",e.target.value)} placeholder="jordan@example.com"/>
         {!advisorEmailOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid email address, or leave it blank.</div>}
       </Field>
     </Grid2>

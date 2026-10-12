@@ -105,7 +105,7 @@ export function derivePropertyEvents(properties, { includeRental = true, forProj
     //
     // Without this distinction the platform would believe an annual insurance premium is
     // billed monthly — it is stored on the property as an annual figure and divided by 12
-    // here — and a spend answer would tell a client "you pay Chubb $1,183 a month" when
+    // here — and a spend answer would tell a client "you pay the carrier $1,183 a month" when
     // the carrier takes $14,200 once a year. The rollups read billedFrequency, so a
     // smoothed figure is always described as an average.
     const push = (label, category, monthly, field, vendor, billedFrequency = "monthly") => {

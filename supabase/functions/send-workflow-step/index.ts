@@ -36,7 +36,7 @@ const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
 
 // Pull real addresses out of a free-text line. Drafts often carry a description
-// ("First Republic Bank, Wire Operations") rather than an address, so the absence
+// ("Example Bank, Wire Operations") rather than an address, so the absence
 // of a match is a normal case that must be reported clearly, not a crash.
 const EMAIL_RE = /[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+/g;
 function extractEmails(s: unknown): string[] {
