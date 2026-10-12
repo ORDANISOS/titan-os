@@ -3950,8 +3950,16 @@ function nextRecurrence(dateStr,recurrence,interval,unit){
   const d=new Date(base);
   if(u==="day")d.setDate(d.getDate()+n);
   else if(u==="week")d.setDate(d.getDate()+7*n);
-  else if(u==="month")d.setMonth(d.getMonth()+n);
-  else if(u==="year")d.setFullYear(d.getFullYear()+n);
+  // Month and year steps keep the day of the month, clamped to the last day of the target month. Plain
+  // setMonth()/setFullYear() overflow instead (Jan 31 + 1 month became Mar 3, Feb 29 + 1 year became Mar 1),
+  // and every later repeat then kept the shifted day.
+  else if(u==="month"||u==="year"){
+    const day=base.getDate();
+    const months=u==="month"?n:12*n;
+    const target=new Date(base.getFullYear(),base.getMonth()+months,1);
+    const last=new Date(target.getFullYear(),target.getMonth()+1,0).getDate();
+    d.setTime(new Date(target.getFullYear(),target.getMonth(),Math.min(day,last)).getTime());
+  }
   const p=x=>String(x).padStart(2,"0");
   return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
 }
