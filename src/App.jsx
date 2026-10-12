@@ -2692,6 +2692,8 @@ function FloatingAssistant({family,families,data,reload,toast,userProfile}){
 // large. The primary advisor is ALWAYS cc'd (locked) unless they're already
 // the direct recipient — this cannot be turned off client-side, and the
 // server enforces it independently regardless of what's submitted.
+// A blank box saves as null, but a real zero (a paid-off loan, a $0 utility bill) stays zero. "value||null" turned both into null.
+const numOrNull=v=>(v===""||v==null)?null:v;
 const EMAIL_RE=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Shared check for the contact forms: an email, if given, must look like one, and a phone, if given, must have
 // enough digits to be dialled (10 for a US number; 8 to 15 when it starts with +, which means international).
@@ -3147,12 +3149,12 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
 
   // Add property
   const addProperty=async(f)=>{
-    const row={family_id:family.id,owner_name:f.ownerName||null,address:f.address,property_type:f.propertyType,purchase_price:f.purchasePrice||null,purchase_date:f.purchaseDate||null,current_value:f.currentValue||null,lender:f.lender||null,loan_balance:f.loanBalance||null,interest_rate:f.interestRate||null,loan_payment:f.loanPayment||null,loan_maturity_date:f.loanMaturityDate||null,loan_type:f.loanType,rental_income:f.rentalIncome||null,property_taxes:f.propertyTaxes||null,utilities:f.utilities||null,insurance_company:f.insuranceCompany||null,insurance_premium:f.insurancePremium||null,insurance_expiration:f.insuranceExpiration||null,flood_insurance:!!f.floodInsurance,flood_insurance_company:f.floodInsuranceCompany||null,flood_insurance_premium:f.floodInsurancePremium||null,flood_insurance_expiration:f.floodInsuranceExpiration||null,hoa_fee:Number(f.hoaFee)||0,property_management_fee_pct:Number(f.propertyManagementFeePct)||0,include_mortgage_in_cashflow:f.includeMortgageInCashflow!==false,second_mortgage_balance:f.secondMortgageBalance||null,second_mortgage_payment:f.secondMortgagePayment||null,notes:f.notes||null};
+    const row={family_id:family.id,owner_name:f.ownerName||null,address:f.address,property_type:f.propertyType,purchase_price:numOrNull(f.purchasePrice),purchase_date:f.purchaseDate||null,current_value:numOrNull(f.currentValue),lender:f.lender||null,loan_balance:numOrNull(f.loanBalance),interest_rate:numOrNull(f.interestRate),loan_payment:numOrNull(f.loanPayment),loan_maturity_date:f.loanMaturityDate||null,loan_type:f.loanType,rental_income:numOrNull(f.rentalIncome),property_taxes:numOrNull(f.propertyTaxes),utilities:numOrNull(f.utilities),insurance_company:f.insuranceCompany||null,insurance_premium:numOrNull(f.insurancePremium),insurance_expiration:f.insuranceExpiration||null,flood_insurance:!!f.floodInsurance,flood_insurance_company:f.floodInsurance?(f.floodInsuranceCompany||null):null,flood_insurance_premium:f.floodInsurance?numOrNull(f.floodInsurancePremium):null,flood_insurance_expiration:f.floodInsurance?(f.floodInsuranceExpiration||null):null,hoa_fee:Number(f.hoaFee)||0,property_management_fee_pct:Number(f.propertyManagementFeePct)||0,include_mortgage_in_cashflow:f.includeMortgageInCashflow!==false,second_mortgage_balance:numOrNull(f.secondMortgageBalance),second_mortgage_payment:numOrNull(f.secondMortgagePayment),notes:f.notes||null};
     const{error}=await sb.from("properties").insert(row);
     if(error){toast(error.message,"error");return false;}else{toast("Property added. Your record is looking more complete.");reload("properties");}
   };
   const editProperty=async(id,f)=>{
-    const row={owner_name:f.ownerName||null,address:f.address,property_type:f.propertyType,purchase_price:f.purchasePrice||null,purchase_date:f.purchaseDate||null,current_value:f.currentValue||null,lender:f.lender||null,loan_balance:f.loanBalance||null,interest_rate:f.interestRate||null,loan_payment:f.loanPayment||null,loan_maturity_date:f.loanMaturityDate||null,loan_type:f.loanType,rental_income:f.rentalIncome||null,property_taxes:f.propertyTaxes||null,utilities:f.utilities||null,insurance_company:f.insuranceCompany||null,insurance_premium:f.insurancePremium||null,insurance_expiration:f.insuranceExpiration||null,flood_insurance:!!f.floodInsurance,flood_insurance_company:f.floodInsuranceCompany||null,flood_insurance_premium:f.floodInsurancePremium||null,flood_insurance_expiration:f.floodInsuranceExpiration||null,hoa_fee:Number(f.hoaFee)||0,property_management_fee_pct:Number(f.propertyManagementFeePct)||0,include_mortgage_in_cashflow:f.includeMortgageInCashflow!==false,second_mortgage_balance:f.secondMortgageBalance||null,second_mortgage_payment:f.secondMortgagePayment||null,notes:f.notes||null};
+    const row={owner_name:f.ownerName||null,address:f.address,property_type:f.propertyType,purchase_price:numOrNull(f.purchasePrice),purchase_date:f.purchaseDate||null,current_value:numOrNull(f.currentValue),lender:f.lender||null,loan_balance:numOrNull(f.loanBalance),interest_rate:numOrNull(f.interestRate),loan_payment:numOrNull(f.loanPayment),loan_maturity_date:f.loanMaturityDate||null,loan_type:f.loanType,rental_income:numOrNull(f.rentalIncome),property_taxes:numOrNull(f.propertyTaxes),utilities:numOrNull(f.utilities),insurance_company:f.insuranceCompany||null,insurance_premium:numOrNull(f.insurancePremium),insurance_expiration:f.insuranceExpiration||null,flood_insurance:!!f.floodInsurance,flood_insurance_company:f.floodInsurance?(f.floodInsuranceCompany||null):null,flood_insurance_premium:f.floodInsurance?numOrNull(f.floodInsurancePremium):null,flood_insurance_expiration:f.floodInsurance?(f.floodInsuranceExpiration||null):null,hoa_fee:Number(f.hoaFee)||0,property_management_fee_pct:Number(f.propertyManagementFeePct)||0,include_mortgage_in_cashflow:f.includeMortgageInCashflow!==false,second_mortgage_balance:numOrNull(f.secondMortgageBalance),second_mortgage_payment:numOrNull(f.secondMortgagePayment),notes:f.notes||null};
     const{error}=await sb.from("properties").update(row).eq("id",id);
     if(error){toast(error.message,"error");return false;}else{toast("Property updated. All saved.");reload("properties");}
   };
@@ -3993,7 +3995,7 @@ function TaskForm({initial,contacts=[],onSave,onClose}){
   const save=async()=>{if(!f.title.trim()){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
     <Field label="Task" required><Inp placeholder="Follow up on loan maturity" value={f.title} onChange={set("title")}/></Field>
-    {contacts.length>0&&<Field label="Contact"><Sel value={f.contactId||""} onChange={set("contactId")}><option value="">— None —</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Sel></Field>}
+    {contacts.length>0&&<Field label="Contact" optional><Sel value={f.contactId||""} onChange={set("contactId")}><option value="">— None —</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Sel></Field>}
     <Grid2>
       <Field label="Due Date" optional><Inp type="date" value={f.dueDate||""} onChange={set("dueDate")}/></Field>
       <Field label="Priority"><Sel value={f.priority} onChange={set("priority")}><option>Low</option><option>Medium</option><option>High</option></Sel></Field>
@@ -4159,7 +4161,7 @@ function SimpleDealForm({contacts=[],onSave,onClose}){
   const save=async()=>{if(!f.title.trim()){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
     <Field label="Deal Title" required><Inp placeholder="Estate planning engagement" value={f.title} onChange={set("title")}/></Field>
-    {contacts.length>0&&<Field label="Contact"><Sel value={f.contactId||""} onChange={set("contactId")}><option value="">— None —</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Sel></Field>}
+    {contacts.length>0&&<Field label="Contact" optional><Sel value={f.contactId||""} onChange={set("contactId")}><option value="">— None —</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Sel></Field>}
     <Grid2><Field label="Value ($)" optional><MoneyInput value={f.value||""} onChange={set("value")}/></Field><Field label="Close Date" optional><Inp type="date" value={f.closeDate||""} onChange={set("closeDate")}/></Field></Grid2>
     <Field label="Stage"><Sel value={f.stage} onChange={set("stage")}>{STAGES.map(s=><option key={s}>{s}</option>)}</Sel></Field>
     {showReq&&<ReqHint/>}
@@ -5948,9 +5950,9 @@ function GlobalTaskForm({initial,families=[],contacts=[],onSave,onClose}){
   const[showReq,setShowReq]=useState(false);
   const save=async()=>{if(!f.title.trim()){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
-    <Grid2><Field label="Family"><Sel value={f.familyId||""} onChange={set("familyId")}><option value="">— None —</option>{families.map(fm=><option key={fm.id} value={fm.id}>{fm.name}</option>)}</Sel></Field>
-    <Field label="Contact"><Sel value={f.contactId||""} onChange={set("contactId")}><option value="">— None —</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Sel></Field></Grid2>
-    <Field label="Task" required><Inp placeholder="Follow up on loan maturity" value={f.title} onChange={set("title")}/></Field>
+    <Grid2><Field label="Family" optional><Sel value={f.familyId||""} onChange={set("familyId")}><option value="">— None —</option>{families.map(fm=><option key={fm.id} value={fm.id}>{fm.name}</option>)}</Sel></Field>
+    <Field label="Contact" optional><Sel value={f.contactId||""} onChange={set("contactId")}><option value="">— None —</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Sel></Field></Grid2>
+    <Field label="Task" required><Inp maxLength={200} placeholder="Follow up on loan maturity" value={f.title} onChange={set("title")}/></Field>
     <Grid2><Field label="Due Date" optional><Inp type="date" value={f.dueDate||""} onChange={set("dueDate")}/></Field><Field label="Priority"><Sel value={f.priority} onChange={set("priority")}><option>Low</option><option>Medium</option><option>High</option></Sel></Field></Grid2>
     <Field label="Email Reminder"><Sel value={reminderDaysOr7(f.reminderDays)} onChange={e=>setF(p=>({...p,reminderDays:Number(e.target.value)}))}><option value={0}>No reminder</option>{REMINDER_OPTIONS.map(r=><option key={r.days} value={r.days}>{r.label}</option>)}</Sel></Field>
     {Number(f.reminderDays)>0&&f.dueDate&&<div style={{background:"#e8f0f8",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:12,color:B.navyMid}}>🔔 ORDANIS Expert emailed on {new Date(new Date(f.dueDate).setDate(new Date(f.dueDate).getDate()-Number(f.reminderDays))).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</div>}
@@ -5969,11 +5971,12 @@ function ProspectContactForm({initial,onSave,onClose,userProfile,advisors=[]}){
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const pickAdvisor=e=>{const email=e.target.value;const adv=advisors.find(a=>a.email===email);setF(p=>({...p,advisorEmail:email,advisorName:adv?(adv.full_name||""):""}));};
   const[showReq,setShowReq]=useState(false);
-  const save=async()=>{if(!f.name.trim()){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
+  const[err,setErr]=useState("");
+  const save=async()=>{if(!f.name.trim()){setShowReq(true);return;}const pr=contactProblem(f);if(pr){setErr(pr);return;}setErr("");setSaving(true);const ok=await onSave({...f,email:String(f.email||"").trim().toLowerCase()});if(ok===false){setSaving(false);return;}onClose();};
   return <div>
-    <Grid2><Field label="Full Name"><Inp placeholder="Jane Smith" value={f.name} onChange={set("name")}/></Field><Field label="Company"><Inp value={f.company||""} onChange={set("company")}/></Field></Grid2>
-    <Grid2><Field label="Email"><Inp type="email" value={f.email||""} onChange={set("email")}/></Field><Field label="Phone"><Inp placeholder="(555) 000-0000" value={f.phone||""} onChange={e=>set("phone")({target:{value:formatPhoneInput(e.target.value)}})}/></Field></Grid2>
-    <Grid2><Field label="Type"><Sel value={f.type} onChange={set("type")}><option>Individual</option><option>Business</option></Sel></Field><Field label="Lead Source"><Inp placeholder="Referral, LinkedIn…" value={f.source||""} onChange={set("source")}/></Field></Grid2>
+    <Grid2><Field label="Full Name" required><Inp maxLength={120} placeholder="Jane Smith" value={f.name} onChange={set("name")}/></Field><Field label="Company" optional><Inp value={f.company||""} onChange={set("company")}/></Field></Grid2>
+    <Grid2><Field label="Email" optional><Inp type="email" value={f.email||""} onChange={set("email")}/></Field><Field label="Phone" optional><Inp placeholder="(555) 000-0000" value={f.phone||""} onChange={e=>set("phone")({target:{value:formatPhoneInput(e.target.value)}})}/></Field></Grid2>
+    <Grid2><Field label="Type"><Sel value={f.type} onChange={set("type")}><option>Individual</option><option>Business</option></Sel></Field><Field label="Lead Source" optional><Inp placeholder="Referral, LinkedIn…" value={f.source||""} onChange={set("source")}/></Field></Grid2>
     {isAdmin
       ? <Field label="Assign ORDANIS Expert">
           <select value={f.advisorEmail||""} onChange={pickAdvisor} style={{width:"100%",padding:"10px 12px",borderRadius:8,border:`1px solid ${B.border}`,fontSize:14,fontFamily:"'DM Sans',sans-serif",background:B.white,color:B.navy}}>
@@ -5983,8 +5986,9 @@ function ProspectContactForm({initial,onSave,onClose,userProfile,advisors=[]}){
         </Field>
       : <Field label="ORDANIS Expert"><Inp value={f.advisorName||f.advisorEmail||userProfile?.fullName||userProfile?.email||""} disabled/></Field>
     }
-    <Field label="Tags"><Inp placeholder="warm-lead, vip" value={f.tags||""} onChange={set("tags")}/></Field>
+    <Field label="Tags" optional><Inp placeholder="warm-lead, vip" value={f.tags||""} onChange={set("tags")}/></Field>
     {showReq&&<ReqHint/>}
+    {err&&<div style={{fontSize:12,color:"#8b1a1a",background:"#fff5f5",border:"1px solid #f3c2c2",borderRadius:8,padding:"8px 10px",marginTop:8}}>{err}</div>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save"}</Btn></div>
   </div>;
 }
@@ -6115,9 +6119,9 @@ function ProspectDealForm({initial,contacts=[],onSave,onClose,userProfile,adviso
   const[showReq,setShowReq]=useState(false);
   const save=async()=>{if(!f.title.trim()){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
-    <Field label="Opportunity Title"><Inp value={f.title} onChange={set("title")}/></Field>
-    <Field label="Contact"><Sel value={f.contactId||""} onChange={set("contactId")}><option value="">— None —</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Sel></Field>
-    <Grid2><Field label="Value ($)"><MoneyInput value={f.value||""} onChange={set("value")}/></Field><Field label="Close Date"><Inp type="date" value={f.closeDate||""} onChange={set("closeDate")}/></Field></Grid2>
+    <Field label="Opportunity Title" required><Inp maxLength={150} value={f.title} onChange={set("title")}/></Field>
+    <Field label="Contact" optional><Sel value={f.contactId||""} onChange={set("contactId")}><option value="">— None —</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Sel></Field>
+    <Grid2><Field label="Value ($)" optional><MoneyInput value={f.value||""} onChange={set("value")}/></Field><Field label="Close Date" optional><Inp type="date" value={f.closeDate||""} onChange={set("closeDate")}/></Field></Grid2>
     <Field label="Stage"><Sel value={f.stage} onChange={set("stage")}>{STAGES.map(s=><option key={s}>{s}</option>)}</Sel></Field>
     {isAdmin
       ? <Field label="Assign ORDANIS Expert">
