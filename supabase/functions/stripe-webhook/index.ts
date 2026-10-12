@@ -132,6 +132,8 @@ async function createFamilyFromSignup(session: Stripe.Checkout.Session, authUser
   const plan = session.metadata?.plan;
   const fullName = session.metadata?.full_name ?? null;
   const email = session.metadata?.email ?? "";
+  // Primary phone captured at sign-up (E.164). Only written when present, so older sessions still work.
+  const phone = session.metadata?.phone ?? null;
   // Default to past_due (not active) unless Stripe's own status clearly says otherwise -- a
   // household should never start "active" on an assumption. A later customer.subscription.updated
   // event corrects this if it turns out to matter.
@@ -162,6 +164,7 @@ async function createFamilyFromSignup(session: Stripe.Checkout.Session, authUser
     id: authUserId,
     email,
     full_name: fullName,
+    ...(phone ? { phone } : {}),
     role: "client",
     family_id: family.id,
   }, { onConflict: "id" });

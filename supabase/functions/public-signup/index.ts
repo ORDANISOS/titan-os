@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
 
   let body: {
     action?: string; code?: string; firm_code?: string; firm_notice_id?: string;
-    email?: string; password?: string; full_name?: string; household_name?: string;
+    email?: string; phone?: string; password?: string; full_name?: string; household_name?: string;
     plan?: string; success_url?: string; cancel_url?: string;
     disclosures_acknowledged?: { subscription_terms_disclosure_id?: string; sms_consent_disclosure_id?: string };
   };
@@ -129,6 +129,14 @@ Deno.serve(async (req) => {
       error: "email, password, full_name, household_name, plan, success_url and cancel_url are required",
     }, 400);
   }
+  // The primary phone number on the profile. Required, because sign-up also collects SMS consent. US
+  // numbers only, stored as E.164 (+15551234567) -- the same shape the user_profiles.phone check accepts.
+  const phoneDigits = String(body.phone ?? "").replace(/\D/g, "");
+  const phone10 = phoneDigits.length === 11 && phoneDigits.startsWith("1") ? phoneDigits.slice(1) : phoneDigits;
+  if (!/^[2-9]\d{2}[2-9]\d{6}$/.test(phone10)) {
+    return json({ error: "Enter a valid 10-digit US mobile number." }, 400);
+  }
+  const phone = `+1${phone10}`;
   // Matches the "At least 12 characters" copy shown on the Account page -- enforced here too since
   // a client-side check alone is just a suggestion to anyone calling this endpoint directly.
   if (password.length < 12) {
@@ -208,7 +216,7 @@ Deno.serve(async (req) => {
     email,
     password,
     email_confirm: true,
-    user_metadata: { full_name },
+    user_metadata: { full_name, phone },
   });
 
   if (created?.user && !createErr) {
@@ -311,7 +319,7 @@ Deno.serve(async (req) => {
       // No family_id yet -- these are what stripe-webhook's checkout.session.completed handler
       // reads to create the family and link this auth user to it once payment actually succeeds.
       metadata: {
-        auth_user_id: authUserId, household_name, plan: tier.plan, full_name, email,
+        auth_user_id: authUserId, household_name, plan: tier.plan, full_name, email, phone,
         ...(firmEnterpriseId ? { enterprise_id: firmEnterpriseId, firm_notice_id: String(firmNoticeId) } : {}),
       },
       subscription_data: { metadata: { auth_user_id: authUserId, household_name, plan: tier.plan } },

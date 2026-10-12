@@ -259,13 +259,29 @@ function PlansStep({ prices, onChoose }) {
   );
 }
 
-function Field({ label, type, ...props }) {
+// Mobile numbers: typed as (555) 123-4567, sent as +15551234567 (US numbers only -- the SMS consent
+// this sign-up collects is for US mobile numbers).
+function formatPhone(raw) {
+  let d = String(raw || "").replace(/\D/g, "");
+  if (d.length === 11 && d.startsWith("1")) d = d.slice(1);
+  d = d.slice(0, 10);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `(${d.slice(0, 3)}) ${d.slice(3)}`;
+  return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+}
+function toE164(raw) {
+  let d = String(raw || "").replace(/\D/g, "");
+  if (d.length === 11 && d.startsWith("1")) d = d.slice(1);
+  return d.length === 10 && /^[2-9]\d{2}[2-9]\d{6}$/.test(d) ? `+1${d}` : null;
+}
+
+function Field({ label, type, required, optional, ...props }) {
   // Password fields get a Show/Hide toggle so people can check what they typed before submitting.
   const [show, setShow] = useState(false);
   const isPw = type === "password";
   return (
     <div style={{ marginBottom: 18 }}>
-      <label style={{ display: "block", fontSize: ".78rem", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: C.navy, marginBottom: 7 }}>{label}</label>
+      <label style={{ display: "block", fontSize: ".78rem", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: C.navy, marginBottom: 7 }}>{label}{required && <span aria-hidden="true" title="Required" style={{ color: "#b42318", marginLeft: 4, fontWeight: 700 }}>*</span>}{optional && <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: C.muted, marginLeft: 6, fontSize: ".72rem" }}>(optional)</span>}</label>
       <div style={{ position: "relative" }}>
         <input
           {...props}
@@ -294,6 +310,7 @@ function AccountStep({ planKey, prices, onBack, onDone, onSkin }) {
   const price = prices[planKey] ?? plan.price;
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [householdName, setHouseholdName] = useState("");
   const [error, setError] = useState("");
@@ -375,6 +392,7 @@ function AccountStep({ planKey, prices, onBack, onDone, onSkin }) {
   const validate = () => {
     if (!fullName.trim()) return "Enter your name.";
     if (!EMAIL_RE.test(email.trim())) return "Enter a valid email address.";
+    if (!toE164(phone)) return "Enter a valid 10-digit US mobile number.";
     if (password.length < MIN_PASSWORD_LENGTH) return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
     if (!householdName.trim()) return "Tell us what to call the household.";
     if (firmCode.trim() && !firmInfo) return "Check your firm code first, or clear the box to sign up on your own.";
@@ -397,6 +415,7 @@ function AccountStep({ planKey, prices, onBack, onDone, onSkin }) {
         headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY },
         body: JSON.stringify({
           email: email.trim(),
+          phone: toE164(phone),
           password,
           full_name: fullName.trim(),
           household_name: householdName.trim(),
@@ -443,10 +462,12 @@ function AccountStep({ planKey, prices, onBack, onDone, onSkin }) {
         <p style={{ fontSize: "1.05rem", color: C.slate, marginTop: 12, maxWidth: 520 }}>So a declined card never costs you the work you have already done.</p>
 
         <div style={{ marginTop: 26, maxWidth: 520 }}>
-          <Field label="Your name" type="text" placeholder="James Harrington" value={fullName} onChange={(e) => setFullName(e.target.value)} autoComplete="name" />
-          <Field label="Email" type="email" placeholder="james@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
-          <Field label="Password" type="password" placeholder="At least 12 characters" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
-          <Field label="What should we call the household?" type="text" placeholder="The Harrington Family" value={householdName} onChange={(e) => setHouseholdName(e.target.value)} autoComplete="off" />
+          <Field label="Your name" required type="text" placeholder="Jordan Bennett" value={fullName} onChange={(e) => setFullName(e.target.value)} autoComplete="name" />
+          <Field label="Email" required type="email" placeholder="jordan@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+          <Field label="Mobile phone" required type="tel" inputMode="tel" placeholder="(813) 555-0142" value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))} autoComplete="tel-national" />
+          <p style={{ fontSize: ".8rem", color: C.slate, margin: "-10px 0 18px", lineHeight: 1.5 }}>This becomes the primary phone number on your profile. We use it for account security and, with your consent below, text messages.</p>
+          <Field label="Password" required type="password" placeholder="At least 12 characters" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+          <Field label="What should we call the household?" required type="text" placeholder="The Bennett Family" value={householdName} onChange={(e) => setHouseholdName(e.target.value)} autoComplete="off" />
 
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: "block", fontSize: ".72rem", fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: C.muted, marginBottom: 6 }}>
