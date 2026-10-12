@@ -8905,7 +8905,7 @@ function ProfessionalQuickForm({onSave,onCancel,saving,allowPortalGrant,partnerS
       <Field label="Name" required><Inp value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Dr. John Reyes"/></Field>
       <Field label="Role" optional><Inp value={f.role} onChange={e=>set("role",e.target.value)} placeholder="CPA, Attorney, Physician…"/></Field>
       <Field label="Company" required><Inp value={f.company} onChange={e=>set("company",e.target.value)} placeholder="Reyes Family Medicine"/></Field>
-      <Field label={f.grantPortalAccess?"Email (needed for portal access)":"Email"} required={!!f.grantPortalAccess} optional={!f.grantPortalAccess}><Inp type="email" value={f.email} onChange={e=>set("email",e.target.value)}/></Field>
+      <Field label="Email" required={!!f.grantPortalAccess} optional={!f.grantPortalAccess}><Inp type="email" value={f.email} onChange={e=>set("email",e.target.value)} placeholder={f.grantPortalAccess?"Needed for portal access":""}/></Field>
       <Field label="Phone" optional>
         <Inp value={f.phone} onChange={e=>set("phone",formatPhoneInput(e.target.value))} placeholder="(555) 123-4567"/>
         {!phoneOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid phone number, or leave it blank.</div>}
@@ -8938,11 +8938,12 @@ function BusinessPartnerQuickForm({onSave,onCancel,saving,seatFree}){
   return <div>
     <Grid2>
       <Field label="Name" required><Inp value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Jane Reyes"/></Field>
-      <Field label="Email (they will get the login link here)" required>
-        <Inp type="email" value={f.email} onChange={e=>set("email",e.target.value)}/>
+      <Field label="Email" required>
+        <Inp type="email" value={f.email} onChange={e=>set("email",e.target.value)} placeholder="jane@example.com"/>
         {f.email&&!emailOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid email address.</div>}
       </Field>
     </Grid2>
+    <div style={{fontSize:11.5,color:B.textMute,margin:"-6px 0 12px"}}>The login link is emailed to this address.</div>
     <div style={{background:B.bg,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"12px 14px",marginBottom:12,fontSize:12.5,color:B.text,lineHeight:1.5}}>
       <strong style={{color:B.navy}}>Business Partner portal login</strong> — a read-only account so they can see this household's dashboard on their own (properties, cash flow, documents, and more). We'll email them a secure link to set it up. {seatFree?<><strong style={{color:B.navy}}>Free</strong>, included with Premier.</>:<><strong style={{color:B.navy}}>$5.00/month</strong>, billed to this household until removed.</>}
     </div>
@@ -9311,17 +9312,27 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   // -- happens in manage-business-partner; this just calls it and reloads. See that function for
   // why an existing family_contacts row and a portal login are two separate things (one free, one
   // billed) rather than the same record.
+  // supabase-js hides the function's own error text behind a generic "non-2xx" message; the real reason is
+  // in the response body, so read it from there.
+  const fnErrorText=async(error,fallback)=>{
+    try{const j=await error.context?.json?.();if(j&&j.error)return j.error;}catch(_e){}
+    return error.message||fallback;
+  };
   const addBusinessPartner=async(email,fullName)=>{
     const{data:resp,error}=await sb.functions.invoke("manage-business-partner",{body:{family_id:family.id,action:"invite",email,full_name:fullName,redirect_to:window.location.origin}});
-    if(error){toast(error.message||"Could not send the invite.","error");return false;}
+    if(error){toast(await fnErrorText(error,"Could not send the invite."),"error");return false;}
     if(resp&&resp.error){toast(resp.error,"error");return false;}
-    toast(resp&&resp.already_linked?"Already has portal access":"Invite sent");
+    if(resp&&resp.email_sent===false){
+      toast(`Access was granted, but the email could not be sent (${resp.email_error||"unknown reason"}). Add the same person again to resend it.`,"error");
+    }else{
+      toast(resp&&resp.resent?"This person already had access. The invitation was sent again.":"Invite sent");
+    }
     await reload("family_partners");await reload("families");
     return true;
   };
   const removeBusinessPartner=async partnerUserId=>{
     const{data:resp,error}=await sb.functions.invoke("manage-business-partner",{body:{family_id:family.id,action:"remove",partner_user_id:partnerUserId}});
-    if(error){toast(error.message||"Could not remove portal access.","error");return;}
+    if(error){toast(await fnErrorText(error,"Could not remove portal access."),"error");return;}
     if(resp&&resp.error){toast(resp.error,"error");return;}
     toast("Portal access removed");
     await reload("family_partners");await reload("families");

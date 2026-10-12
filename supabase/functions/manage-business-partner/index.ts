@@ -109,6 +109,57 @@ async function sendMail(to: string, subject: string, html: string, text: string)
   }
 }
 
+// The one Stripe Product every seat line hangs off. Its name is what the billing ledger recognises
+// ("Business Partner Portal Seat"), so it must not change. Found by metadata, created once if missing.
+async function seatProductId(): Promise<string> {
+  try {
+    const found = await stripe.products.search({ query: "active:'true' AND metadata['kind']:'partner_seat'", limit: 1 });
+    if (found.data[0]) return found.data[0].id;
+  } catch (e) {
+    console.error("seat product search failed, creating one:", e instanceof Error ? e.message : e);
+  }
+  const created = await stripe.products.create({ name: SEAT_PRODUCT_NAME, metadata: { kind: "partner_seat" } });
+  return created.id;
+}
+
+// A person still has to choose a password if they have never signed in: a brand-new invitee, or a login
+// made by an earlier invite whose email never went out.
+async function needsPasswordSetup(userId: string): Promise<boolean> {
+  const { data } = await admin.auth.admin.getUserById(userId);
+  return !data?.user?.last_sign_in_at;
+}
+async function makeSetupLink(email: string, redirectTo?: string): Promise<string | null> {
+  const { data, error } = await admin.auth.admin.generateLink({
+    type: "recovery", email, options: redirectTo ? { redirectTo } : undefined,
+  });
+  if (error) throw new Error(error.message);
+  return data?.properties?.action_link || null;
+}
+
+async function sendInviteEmail(email: string, fullName: string, familyName: string, setupLink: string | null) {
+  const householdName = esc(familyName || "your household");
+  if (setupLink) {
+    await sendMail(
+      email,
+      `You've been invited to ${familyName || "a household"}'s portal`,
+      `<div style="font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;line-height:1.6">` +
+      `<p>Hi ${esc(fullName)},</p>` +
+      `<p>${householdName} has given you read-only access to their portal -- properties, cash flow, documents, and more, all in one place.</p>` +
+      `<p><a href="${setupLink}" style="display:inline-block;background:#0f2c4c;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">Set up your account</a></p>` +
+      `<p style="font-size:12px;color:#888">This link is single-use and will ask you to choose your own password. If you weren't expecting this, you can ignore this email.</p>` +
+      `</div>`,
+      `${householdName} has given you read-only access to their portal. Set up your account: ${setupLink}`,
+    );
+  } else {
+    await sendMail(
+      email,
+      `You've been given access to ${familyName || "a household"}'s portal`,
+      `<div style="font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;line-height:1.6"><p>Hi ${esc(fullName)},</p><p>${householdName} has given your existing account read-only access to their portal. Sign in as usual to see it.</p></div>`,
+      `${householdName} has given your existing account read-only access to their portal. Sign in as usual to see it.`,
+    );
+  }
+}
+
 async function countHouseholdSeats(familyId: string) {
   const { count } = await admin.from("family_partners").select("id", { count: "exact", head: true }).eq("family_id", familyId).eq("source", "household");
   return count ?? 0;
@@ -136,9 +187,13 @@ async function syncSeatBilling(familyId: string, stripeSubscriptionId: string | 
   if (!stripeSubscriptionId) throw new Error("This household has no active Stripe subscription to bill this seat to.");
 
   if (!existingItemId) {
+    // Stripe's subscription-item price_data takes an existing Product ID. It does not accept inline
+    // product_data (that is only allowed on Checkout and on subscription creation), so the earlier
+    // version of this call was rejected every time and no seat was ever billed.
+    const productId = await seatProductId();
     const item = await stripe.subscriptionItems.create({
       subscription: stripeSubscriptionId,
-      price_data: { currency: "usd", product_data: { name: SEAT_PRODUCT_NAME }, unit_amount: Math.round(SEAT_MONTHLY_PRICE * 100), recurring: { interval: "month" } },
+      price_data: { currency: "usd", product: productId, unit_amount: Math.round(SEAT_MONTHLY_PRICE * 100), recurring: { interval: "month" } },
       quantity: seatCount,
       proration_behavior: "always_invoice",
     });
@@ -204,6 +259,8 @@ Deno.serve(async (req) => {
 
       if (existingProfile) {
         userId = existingProfile.id;
+        // Someone whose earlier access was removed has their login switched off; granting access again turns it back on.
+        await admin.from("user_profiles").update({ active: true }).eq("id", userId).eq("role", "partner");
       } else {
         const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
           type: "invite",
@@ -221,42 +278,53 @@ Deno.serve(async (req) => {
         if (profErr) return json({ error: profErr.message }, 500);
       }
 
-      // Already linked to this family? Nothing new to bill or send.
+      // Already linked to this family: nothing new to bill, but the person may never have received the
+      // email (an earlier attempt could have failed after the link was made). So this sends it again.
       const { data: existingLink } = await admin.from("family_partners").select("id").eq("family_id", family_id).eq("user_id", userId).maybeSingle();
-      if (existingLink) return json({ success: true, message: "This person already has portal access to this household.", already_linked: true });
+      if (existingLink) {
+        try {
+          const link = (isNewUser || await needsPasswordSetup(userId)) ? await makeSetupLink(email, redirectTo) : null;
+          await sendInviteEmail(email, fullName, family.name || "", link);
+          return json({ success: true, already_linked: true, resent: true, email_sent: true });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error(`partner invite resend failed for ${email}:`, msg);
+          return json({ success: true, already_linked: true, resent: false, email_sent: false, email_error: msg });
+        }
+      }
 
       const { error: linkInsErr } = await admin.from("family_partners").insert({
         family_id, user_id: userId, source: "household", email, full_name: fullName,
       });
       if (linkInsErr) return json({ error: linkInsErr.message }, 500);
 
-      const seatCount = billable
-        ? await syncSeatBilling(family_id, family.stripe_subscription_id, family.business_partner_seats_stripe_item_id)
-        : await countHouseholdSeats(family_id);
-
-      const householdName = esc(family.name || "your household");
-      if (isNewUser && inviteLink) {
-        await sendMail(
-          email,
-          `You've been invited to ${family.name || "a household"}'s portal`,
-          `<div style="font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;line-height:1.6">` +
-          `<p>Hi ${esc(fullName)},</p>` +
-          `<p>${householdName} has given you read-only access to their portal -- properties, cash flow, documents, and more, all in one place.</p>` +
-          `<p><a href="${inviteLink}" style="display:inline-block;background:#0f2c4c;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">Set up your account</a></p>` +
-          `<p style="font-size:12px;color:#888">This link is single-use and will ask you to choose your own password. If you weren't expecting this, you can ignore this email.</p>` +
-          `</div>`,
-          `${householdName} has given you read-only access to their portal. Set up your account: ${inviteLink}`,
-        );
-      } else {
-        await sendMail(
-          email,
-          `You've been given access to ${family.name || "a household"}'s portal`,
-          `<div style="font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;line-height:1.6"><p>Hi ${esc(fullName)},</p><p>${householdName} has given your existing account read-only access to their portal. Sign in as usual to see it.</p></div>`,
-          `${householdName} has given your existing account read-only access to their portal. Sign in as usual to see it.`,
-        );
+      // Bill first. If the seat cannot be billed, take the link back out so the household is never left
+      // with a seat that was granted but not charged, and say plainly what went wrong.
+      let seatCount: number;
+      try {
+        seatCount = billable
+          ? await syncSeatBilling(family_id, family.stripe_subscription_id, family.business_partner_seats_stripe_item_id)
+          : await countHouseholdSeats(family_id);
+      } catch (e) {
+        await admin.from("family_partners").delete().eq("family_id", family_id).eq("user_id", userId);
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error(`partner seat billing failed for family ${family_id}:`, msg);
+        return json({ error: `The $5 seat could not be added to this household's bill, so no access was granted. ${msg}` }, 502);
       }
 
-      return json({ success: true, seat_count: seatCount, partner: { user_id: userId, email, full_name: fullName }, new_user: isNewUser });
+      // Access is granted and billed. A failed email must not undo that, but it must not pass silently either.
+      let emailSent = true;
+      let emailError: string | null = null;
+      try {
+        const link = isNewUser ? inviteLink : (await needsPasswordSetup(userId) ? await makeSetupLink(email, redirectTo) : null);
+        await sendInviteEmail(email, fullName, family.name || "", link);
+      } catch (e) {
+        emailSent = false;
+        emailError = e instanceof Error ? e.message : String(e);
+        console.error(`partner invite email failed for ${email}:`, emailError);
+      }
+
+      return json({ success: true, seat_count: seatCount, partner: { user_id: userId, email, full_name: fullName }, new_user: isNewUser, email_sent: emailSent, email_error: emailError });
     }
 
     // action === "remove"
