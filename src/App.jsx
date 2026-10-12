@@ -856,7 +856,9 @@ function PasswordField({show,onToggle,style,...props}){
   </div>;
 }
 // Formats numbers as US dollars with commas while user types. Stores the raw numeric value (no commas) on change.
-function MoneyInput({value,onChange,placeholder,style,disabled}){
+// Negative amounts are refused unless allowNegative is passed (account balances can be below zero; prices, fees and
+// values cannot). Cents are capped at two places, and a lone "-" or "." is cleared when the box loses focus.
+function MoneyInput({value,onChange,placeholder,style,disabled,allowNegative=false}){
   // Format number for display: 1234567.89 → "1,234,567.89"
   const fmt=(v)=>{
     if(v===""||v===null||v===undefined)return"";
@@ -878,19 +880,30 @@ function MoneyInput({value,onChange,placeholder,style,disabled}){
     raw=raw.replace(/,/g,"").replace(/[^0-9.\-]/g,"");
     // Only one minus, only at start
     if(raw.indexOf("-")>0)raw=raw.replace(/-/g,"");
+    if(!allowNegative)raw=raw.replace(/-/g,"");
     // Only one decimal
     const firstDot=raw.indexOf(".");
     if(firstDot!==-1){
       raw=raw.slice(0,firstDot+1)+raw.slice(firstDot+1).replace(/\./g,"");
     }
+    // At most two decimal places, and at most 12 digits before the point
+    const dot=raw.indexOf(".");
+    if(dot!==-1)raw=raw.slice(0,dot+1)+raw.slice(dot+1,dot+3);
+    {const neg=raw.startsWith("-");const body=neg?raw.slice(1):raw;const di=body.indexOf(".");
+     const whole=di===-1?body:body.slice(0,di);
+     if(whole.length>12)raw=(neg?"-":"")+whole.slice(0,12)+(di===-1?"":body.slice(di));}
     // Pass back the cleaned numeric string (or empty)
     onChange&&onChange({target:{value:raw}});
+  };
+  const handleBlur=()=>{
+    const v=String(value==null?"":value);
+    if(v==="-"||v==="."||v==="-.")onChange&&onChange({target:{value:""}});
   };
   // Docked "$" prefix so every money field in the app shows it automatically, rather than each
   // caller having to spell "($)" into its own label (a few still do, harmlessly, from before this).
   return <div style={{position:"relative"}}>
     <span aria-hidden="true" style={{position:"absolute",left:13,top:"50%",transform:"translateY(-50%)",color:B.textMute,fontSize:14,pointerEvents:"none"}}>$</span>
-    <input type="text" inputMode="decimal" style={{...(style||inp),paddingLeft:24}} disabled={disabled} value={fmt(value)} onChange={handleChange} placeholder={placeholder||"0"}/>
+    <input type="text" inputMode="decimal" style={{...(style||inp),paddingLeft:24}} disabled={disabled} value={fmt(value)} onChange={handleChange} onBlur={handleBlur} placeholder={placeholder||"0"}/>
   </div>;
 }
 const Sel=({children,...p})=><select {...p} style={{...inp,cursor:"pointer",...(p.style||{})}}>{children}</select>;
@@ -1084,6 +1097,7 @@ function AccountBalancesPanel({account,family,history,documents,reload,toast,can
 
   const save=async()=>{
     if(!form.asOf){toast("An as-of date is required — a balance without one cannot be placed in time","error");return;}
+    if(form.asOf>todayISO()){toast("The as-of date can't be in the future.","error");return;}
     const balText=String(form.balance==null?"":form.balance).replace(/[$,\s]/g,"");
     if(!/^-?\d+(\.\d{1,2})?$/.test(balText)){toast("Enter the balance as a number, like 125000.50","error");return;}
     const bal=Number(balText);
@@ -1150,10 +1164,10 @@ function AccountBalancesPanel({account,family,history,documents,reload,toast,can
         {!proposal.usable?<div style={{marginTop:4,color:"#8b1a1a"}}>Not everything could be read — complete the fields below.</div>:null}
       </div>}
       <Grid2>
-        <Field label="Balance"><Inp value={form.balance} onChange={e=>setForm(f=>({...f,balance:e.target.value}))} placeholder="0.00"/></Field>
-        <Field label="As at"><Inp type="date" value={form.asOf} onChange={e=>setForm(f=>({...f,asOf:e.target.value}))}/></Field>
+        <Field label="Balance" required><Inp inputMode="decimal" value={form.balance} onChange={e=>setForm(f=>({...f,balance:e.target.value}))} placeholder="0.00"/></Field>
+        <Field label="As at" required><Inp type="date" max={todayISO()} value={form.asOf} onChange={e=>setForm(f=>({...f,asOf:e.target.value}))}/></Field>
       </Grid2>
-      {form.documentId&&<Field label="Statement period as the firm labels it">
+      {form.documentId&&<Field label="Statement period as the firm labels it" optional>
         <Inp value={form.period||""} onChange={e=>setForm(f=>({...f,period:e.target.value}))} placeholder="2026-Q2"/>
       </Field>}
       <Field label="Note (optional)">
@@ -1390,8 +1404,8 @@ function SetPasswordGate({onDone}){
       <div style={{fontFamily:"\'Cormorant Garamond\',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:6}}>Set your password</div>
       <div style={{fontSize:13,color:B.textSoft,marginBottom:20,lineHeight:1.5}}>Choose a password for your new account. You&apos;ll use it to sign in from now on.</div>
       {error&&<div style={{background:"#fde8e8",border:"1px solid #f5c6c6",color:"#8b1a1a",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12.5}}>{error}</div>}
-      <Field label="New password"><PasswordField show={showPw} onToggle={()=>setShowPw(v=>!v)} autoFocus autoComplete="new-password" value={pw} onChange={e=>setPw(e.target.value)} placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}/></Field>
-      <Field label="Confirm password"><PasswordField show={showPw} onToggle={()=>setShowPw(v=>!v)} autoComplete="new-password" value={pw2} onChange={e=>setPw2(e.target.value)}/></Field>
+      <Field label="New password" required><PasswordField show={showPw} onToggle={()=>setShowPw(v=>!v)} autoFocus autoComplete="new-password" value={pw} onChange={e=>setPw(e.target.value)} placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}/></Field>
+      <Field label="Confirm password" required><PasswordField show={showPw} onToggle={()=>setShowPw(v=>!v)} autoComplete="new-password" value={pw2} onChange={e=>setPw2(e.target.value)}/></Field>
       <Btn onClick={submit} disabled={saving}>{saving?"Saving…":"Set password & continue"}</Btn>
     </form>
   </div>;
@@ -1526,16 +1540,21 @@ function LoginScreen(){
   },[introPhase]);
 
   const handleLogin=async()=>{
-    if(!email||!password)return setError("Please enter your email and password.");
+    if(loading)return;
+    const em=email.trim().toLowerCase();
+    if(!em||!password)return setError("Please enter your email and password.");
     setLoading(true);setError("");
-    const{error:e}=await sb.auth.signInWithPassword({email,password});
+    const{error:e}=await sb.auth.signInWithPassword({email:em,password});
     setLoading(false);
     if(e)setError(e.message);
   };
   const handleReset=async()=>{
-    if(!email)return setError("Please enter your email address.");
+    if(loading)return;
+    const em=email.trim().toLowerCase();
+    if(!em)return setError("Please enter your email address.");
+    if(!EMAIL_RE.test(em))return setError("Enter a valid email address, like name@example.com.");
     setLoading(true);setError("");
-    const{error:e}=await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin});
+    const{error:e}=await sb.auth.resetPasswordForEmail(em,{redirectTo:window.location.origin});
     setLoading(false);
     if(e)setError(e.message);else setResetSent(true);
   };
@@ -1566,8 +1585,8 @@ function LoginScreen(){
           </div>
         ):(
           <>
-            <Field label="Email"><input type="email" value={email} onChange={e=>{setEmail(e.target.value);setError("");}} onKeyDown={e=>e.key==="Enter"&&(mode==="login"?handleLogin():handleReset())} placeholder={"you@"+BRAND.emailDomain} autoFocus style={{...inp,fontSize:15,padding:"13px 16px"}}/></Field>
-            {mode==="login"&&<Field label="Password"><PasswordField autoComplete="current-password" value={password} onChange={e=>{setPassword(e.target.value);setError("");}} onKeyDown={e=>e.key==="Enter"&&handleLogin()} placeholder="••••••••" style={{fontSize:15,padding:"13px 16px"}}/></Field>}
+            <Field label="Email" required><input type="email" value={email} onChange={e=>{setEmail(e.target.value);setError("");}} onKeyDown={e=>e.key==="Enter"&&(mode==="login"?handleLogin():handleReset())} placeholder={"you@"+BRAND.emailDomain} autoFocus style={{...inp,fontSize:15,padding:"13px 16px"}}/></Field>
+            {mode==="login"&&<Field label="Password" required><PasswordField autoComplete="current-password" value={password} onChange={e=>{setPassword(e.target.value);setError("");}} onKeyDown={e=>e.key==="Enter"&&handleLogin()} placeholder="••••••••" style={{fontSize:15,padding:"13px 16px"}}/></Field>}
             {error&&<div style={{fontSize:12,color:"#d43030",marginBottom:12,fontWeight:600,padding:"8px 12px",background:"#fde8e8",borderRadius:8}}>{error}</div>}
             <button onClick={mode==="login"?handleLogin:handleReset} disabled={loading} style={{width:"100%",background:`linear-gradient(135deg,${B.navy},${B.navyMid})`,color:B.white,border:"none",borderRadius:10,padding:"13px",fontSize:14,fontWeight:700,cursor:loading?"not-allowed":"pointer",fontFamily:"inherit",letterSpacing:"0.06em",marginBottom:16,opacity:loading?.7:1}}>
               {loading?"Please wait…":mode==="login"?"SIGN IN":"SEND RESET LINK"}
@@ -2671,6 +2690,20 @@ function FloatingAssistant({family,families,data,reload,toast,userProfile}){
 // the direct recipient — this cannot be turned off client-side, and the
 // server enforces it independently regardless of what's submitted.
 const EMAIL_RE=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Shared check for the contact forms: an email, if given, must look like one, and a phone, if given, must have
+// enough digits to be dialled (10 for a US number; 8 to 15 when it starts with +, which means international).
+const contactProblem=f=>{
+  const em=String(f.email||"").trim();
+  if(em&&!EMAIL_RE.test(em))return "That email address doesn't look right. It should look like name@example.com.";
+  const ph=String(f.phone||"").trim();
+  if(ph){
+    const digits=ph.replace(/\D/g,"");
+    const intl=ph.startsWith("+")&&!/^\+1\b/.test(ph);
+    const nums=ph.split(/x|ext/i)[0].replace(/\D/g,"");
+    if(intl?(digits.length<8||digits.length>15):!(nums.length===10||(nums.length===11&&nums.startsWith("1"))))return "That phone number needs 10 digits, like (813) 555-0142. For an international number, start it with +.";
+  }
+  return null;
+};
 // A task reminder of 0 means "no reminder". The old `x||7` turned 0 into 7, so it could never be saved.
 // Archived households are cancelled and login-disabled; counts and pickers show active families only.
 const isActiveFamily=f=>!(f&&(f.archived_at||f.archivedAt));
@@ -2723,6 +2756,7 @@ function EmailAdvisorModal({family,userProfile,data,onClose}){
 
   const send=async()=>{
     if(!recipients.length||sending||!msg.trim())return;
+    if(customEmail.trim()||customName.trim()){setErr("You started adding someone else but did not press + Add. Press + Add to include them, or clear those two boxes.");return;}
     setSending(true);setErr(null);
     try{
       const{data:resp,error}=await sb.functions.invoke("send-advisor-email",{body:{toEmails:recipients.map(r=>r.email),subject,message:msg}});
@@ -2740,7 +2774,7 @@ function EmailAdvisorModal({family,userProfile,data,onClose}){
       <div style={{fontSize:13,color:B.textSoft,marginTop:6,lineHeight:1.5}}>Your message went to <strong>{recipients.map(r=>r.name).join(", ")}</strong>{ccPrimary?<>, with <strong>{ccPrimary.name}</strong> copied</>:null}. They can reply directly to your email.</div>
       <div style={{marginTop:18}}><Btn onClick={onClose}>Done</Btn></div>
     </div>:<>
-      <Field label="To">
+      <Field label="To" required>
         {options.length>0
           ? <Sel value={toEmail} onChange={e=>setToEmail(e.target.value)}>{options.map(o=><option key={o.email} value={o.email}>{o.name}{o.primary?" (primary ORDANIS Expert)":""} · {o.email}</option>)}</Sel>
           : <div style={{fontSize:13,color:B.textMute,padding:"9px 0"}}>No designated ORDANIS Expert is on file yet — add one under Team Member & Contacts, or add someone below.</div>}
@@ -2770,13 +2804,16 @@ function EmailAdvisorModal({family,userProfile,data,onClose}){
         {addErr&&<div style={{fontSize:11,color:"#8b1a1a",marginTop:5}}>{addErr}</div>}
       </Field>
       {!ccPrimary&&!primaryEmailRaw&&<div style={{fontSize:11,color:B.textMute,marginBottom:12}}>No primary ORDANIS Expert is on file for your account yet — this will go out without an automatic copy.</div>}
-      <Field label="Subject"><Inp value={subject} onChange={e=>setSubject(e.target.value)}/></Field>
-      <Field label="Message"><textarea value={msg} onChange={e=>setMsg(e.target.value)} rows={7} placeholder="Write your message…" style={{width:"100%",resize:"vertical",border:`1px solid ${B.border}`,borderRadius:8,padding:"11px 13px",fontSize:14,fontFamily:"inherit",color:B.text,background:B.white,outline:"none",lineHeight:1.5}}/></Field>
+      <Field label="Subject" required><Inp maxLength={200} value={subject} onChange={e=>setSubject(e.target.value)}/></Field>
+      <Field label="Message" required><textarea maxLength={10000} value={msg} onChange={e=>setMsg(e.target.value)} rows={7} placeholder="Write your message…" style={{width:"100%",resize:"vertical",border:`1px solid ${B.border}`,borderRadius:8,padding:"11px 13px",fontSize:14,fontFamily:"inherit",color:B.text,background:B.white,outline:"none",lineHeight:1.5}}/></Field>
       <div style={{fontSize:11,color:B.textMute,margin:"6px 0 14px"}}>{clientEmail?<>Sent from your address (<strong>{clientEmail}</strong>) — recipients can reply straight to you.</>:"Recipients can reply straight to you."}</div>
       {err&&<div style={{background:"#fde8e8",border:"1px solid #f5c6c6",color:"#8b1a1a",borderRadius:8,padding:"9px 12px",fontSize:12,marginBottom:12}}>⚠ {err}</div>}
       <div style={{display:"flex",justifyContent:"flex-end",gap:10}}>
         <button onClick={onClose} style={{background:"none",border:"none",color:B.textSoft,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
         <Btn onClick={send} disabled={sending||!recipients.length||!subject.trim()||!msg.trim()}>{sending?"Sending…":"✉ Send email"}</Btn>
+      </div>
+      <div style={{display:"flex",justifyContent:"flex-end"}}>
+        {!sending&&(!recipients.length||!subject.trim()||!msg.trim())&&<span style={{fontSize:11,color:B.textMute,marginTop:8}}>Fill in the fields marked * to send.</span>}
       </div>
     </>}
   </Modal>;
@@ -3809,9 +3846,10 @@ function PropertyContactForm({initial,onSave,onClose}){
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const[showReq,setShowReq]=useState(false);
-  const save=async()=>{if(!f.name.trim()){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
+  const[err,setErr]=useState("");
+  const save=async()=>{if(!f.name.trim()){setShowReq(true);return;}const pr=contactProblem(f);if(pr){setErr(pr);return;}setErr("");setSaving(true);const ok=await onSave({...f,email:String(f.email||"").trim().toLowerCase()});if(ok===false){setSaving(false);return;}onClose();};
   return <div>
-    <Field label="Name" required><Inp placeholder="ABC Landscaping" value={f.name} onChange={set("name")}/></Field>
+    <Field label="Name" required><Inp placeholder="ABC Landscaping" value={f.name} maxLength={120} onChange={set("name")}/></Field>
     <Grid2>
       <Field label="Service / Role" optional><Inp placeholder="Landscaper · Pool · Manager" value={f.role||""} onChange={set("role")}/></Field>
       <Field label="Company" optional><Inp placeholder="Company name" value={f.company||""} onChange={set("company")}/></Field>
@@ -3822,6 +3860,7 @@ function PropertyContactForm({initial,onSave,onClose}){
     </Grid2>
     <Field label="Notes" optional><Inp placeholder="Optional — schedule, gate code, account #…" value={f.notes||""} onChange={set("notes")}/></Field>
     {showReq&&<ReqHint/>}
+    {err&&<div style={{fontSize:12,color:"#8b1a1a",background:"#fff5f5",border:"1px solid #f3c2c2",borderRadius:8,padding:"8px 10px",marginTop:8}}>{err}</div>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}>
       <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
       <Btn onClick={save} disabled={saving}>{saving?"Saving…":initial?"Save Changes":"Add Provider"}</Btn>
@@ -3834,9 +3873,10 @@ function FamilyContactForm({initial,onSave,onClose,hideAdvisor=false,rolePlaceho
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const[showReq,setShowReq]=useState(false);
-  const save=async()=>{if(!f.name.trim()){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
+  const[err,setErr]=useState("");
+  const save=async()=>{if(!f.name.trim()){setShowReq(true);return;}const pr=contactProblem(f);if(pr){setErr(pr);return;}setErr("");setSaving(true);const ok=await onSave({...f,email:String(f.email||"").trim().toLowerCase()});if(ok===false){setSaving(false);return;}onClose();};
   return <div>
-    <Field label="Name" required><Inp placeholder="John Smith" value={f.name} onChange={set("name")}/></Field>
+    <Field label="Name" required><Inp placeholder="John Smith" value={f.name} maxLength={120} onChange={set("name")}/></Field>
     <Grid2>
       <Field label="Role / Title" optional><Inp placeholder={rolePlaceholder} value={f.role||""} onChange={set("role")}/></Field>
       <Field label="Company / Firm" optional><Inp placeholder="Smith & Co." value={f.company||""} onChange={set("company")}/></Field>
@@ -3852,6 +3892,7 @@ function FamilyContactForm({initial,onSave,onClose,hideAdvisor=false,rolePlaceho
       <span style={{fontSize:11,color:B.textMute}}>appears in the client's "Email my ORDANIS Expert"</span>
     </label>}
     {showReq&&<ReqHint/>}
+    {err&&<div style={{fontSize:12,color:"#8b1a1a",background:"#fff5f5",border:"1px solid #f3c2c2",borderRadius:8,padding:"8px 10px",marginTop:8}}>{err}</div>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}>
       <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
       <Btn onClick={save} disabled={saving}>{saving?"Saving…":initial?"Save Changes":"Add Contact"}</Btn>
@@ -3864,9 +3905,10 @@ function MemberForm({initial,onSave,onClose}){
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const[showReq,setShowReq]=useState(false);
-  const save=async()=>{if(!f.name.trim()){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
+  const[err,setErr]=useState("");
+  const save=async()=>{if(!f.name.trim()){setShowReq(true);return;}const pr=contactProblem(f);if(pr){setErr(pr);return;}setErr("");setSaving(true);const ok=await onSave({...f,email:String(f.email||"").trim().toLowerCase()});if(ok===false){setSaving(false);return;}onClose();};
   return <div>
-    <Field label="Full Name" required><Inp placeholder="Jane Smith" value={f.name} onChange={set("name")}/></Field>
+    <Field label="Full Name" required><Inp placeholder="Jane Smith" value={f.name} maxLength={120} onChange={set("name")}/></Field>
     <Grid2>
       <Field label="Email" optional><Inp type="email" placeholder="jane@email.com" value={f.email||""} onChange={set("email")}/></Field>
       <Field label="Phone" optional><Inp placeholder="(555) 000-0000" value={f.phone||""} onChange={e=>set("phone")({target:{value:formatPhoneInput(e.target.value)}})}/></Field>
@@ -3876,11 +3918,12 @@ function MemberForm({initial,onSave,onClose}){
       <Field label="Type"><Sel value={f.type} onChange={set("type")}><option>Individual</option><option>Business</option></Sel></Field>
     </Grid2>
     <Grid2>
-      <Field label="Date of Birth" optional><Inp type="date" value={f.dob||""} onChange={set("dob")}/></Field>
-      <Field label="Anniversary" optional><Inp type="date" value={f.anniversary||""} onChange={set("anniversary")}/></Field>
+      <Field label="Date of Birth" optional><Inp type="date" max={todayISO()} value={f.dob||""} onChange={set("dob")}/></Field>
+      <Field label="Anniversary" optional><Inp type="date" max={todayISO()} value={f.anniversary||""} onChange={set("anniversary")}/></Field>
       <Field label="Address" optional><Inp placeholder="123 Main St, Tampa, FL" value={f.address||""} onChange={set("address")}/></Field>
     </Grid2>
     {showReq&&<ReqHint/>}
+    {err&&<div style={{fontSize:12,color:"#8b1a1a",background:"#fff5f5",border:"1px solid #f3c2c2",borderRadius:8,padding:"8px 10px",marginTop:8}}>{err}</div>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}>
       <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
       <Btn onClick={save} disabled={saving}>{saving?"Saving…":initial?"Save Changes":"Add Member"}</Btn>
@@ -4116,7 +4159,7 @@ function AccountForm({initial,onSave,onClose}){
   return <div>
     <Grid2><Field label="Institution" required><Inp placeholder="Merrill Lynch" value={f.institution} onChange={set("institution")}/></Field><Field label="Banker Name" optional><Inp value={f.bankerName||""} onChange={set("bankerName")}/></Field></Grid2>
     <Field label="Account Type"><Sel value={f.accountType} onChange={set("accountType")}>{ACCT_TYPES.map(t=><option key={t}>{t}</option>)}</Sel></Field>
-    <Grid2><Field label="Starting Balance" optional><MoneyInput value={f.startingBalance||""} onChange={set("startingBalance")}/></Field><Field label="Current Balance" optional><MoneyInput value={f.currentBalance||""} onChange={set("currentBalance")}/></Field></Grid2>
+    <Grid2><Field label="Starting Balance" optional><MoneyInput allowNegative value={f.startingBalance||""} onChange={set("startingBalance")}/></Field><Field label="Current Balance" optional><MoneyInput allowNegative value={f.currentBalance||""} onChange={set("currentBalance")}/></Field></Grid2>
     {pct!==null&&<div style={{background:Number(pct)>=0?"#e0f5e9":"#fde8e8",border:`1px solid ${Number(pct)>=0?"#2e9e57":"#d43030"}`,borderRadius:8,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
       <span style={{fontSize:20}}>{Number(pct)>=0?"📈":"📉"}</span>
       <div style={{fontSize:18,fontFamily:"'Cormorant Garamond',serif",fontWeight:600,color:Number(pct)>=0?"#0d5c2b":"#8b1a1a"}}>{Number(pct)>=0?"+":""}{pct}% performance</div>
@@ -4145,7 +4188,7 @@ function AccountForm({initial,onSave,onClose}){
 // household, so a stale caller here is a cosmetic slip, whereas defaulting to false would hide
 // bill pay from a paying household and look like the feature had broken.
 function CashFlowEventForm({initial,onSave,onClose,properties=[],vendors=[],billPay=true}){
-  const blank={direction:"income",eventType:"Salary",description:"",amount:"",frequency:"once",startDate:new Date().toISOString().slice(0,10),endDate:"",taxTreatment:"ordinary",notes:"",pcmResponsible:false,category:"",propertyId:"",vendorKey:""};
+  const blank={direction:"income",eventType:"Salary",description:"",amount:"",frequency:"once",startDate:todayISO(),endDate:"",taxTreatment:"ordinary",notes:"",pcmResponsible:false,category:"",propertyId:"",vendorKey:""};
   const[f,setF]=useState(()=>{
     if(!initial)return blank;
     return{...blank,...initial,direction:initial.direction||"income",
@@ -5388,7 +5431,7 @@ function PortfolioAccountForm({initial,families=[],onSave,onClose}){
     {families.length>0&&<Field label="Family"><Sel value={f.familyId||""} onChange={set("familyId")}><option value="">— No family —</option>{families.map(fm=><option key={fm.id} value={fm.id}>{fm.name}</option>)}</Sel></Field>}
     <Grid2><Field label="Institution" required><Inp placeholder="Merrill Lynch" value={f.institution} onChange={set("institution")}/></Field><Field label="Banker Name" optional><Inp value={f.bankerName||""} onChange={set("bankerName")}/></Field></Grid2>
     <Field label="Account Type"><Sel value={f.accountType} onChange={set("accountType")}>{ACCT_TYPES.map(t=><option key={t}>{t}</option>)}</Sel></Field>
-    <Grid2><Field label="Starting Balance" optional><MoneyInput value={f.startingBalance||""} onChange={set("startingBalance")}/></Field><Field label="Current Balance" optional><MoneyInput value={f.currentBalance||""} onChange={set("currentBalance")}/></Field></Grid2>
+    <Grid2><Field label="Starting Balance" optional><MoneyInput allowNegative value={f.startingBalance||""} onChange={set("startingBalance")}/></Field><Field label="Current Balance" optional><MoneyInput allowNegative value={f.currentBalance||""} onChange={set("currentBalance")}/></Field></Grid2>
     {pct!==null&&<div style={{background:Number(pct)>=0?"#e0f5e9":"#fde8e8",border:`1px solid ${Number(pct)>=0?"#2e9e57":"#d43030"}`,borderRadius:8,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>{Number(pct)>=0?"📈":"📉"}</span><div style={{fontSize:18,fontFamily:"'Cormorant Garamond',serif",fontWeight:600,color:Number(pct)>=0?"#0d5c2b":"#8b1a1a"}}>{Number(pct)>=0?"+":""}{pct}% performance</div></div>}
     <Field label="Notes" optional><Tex value={f.notes||""} onChange={set("notes")}/></Field>
     {showReq&&<ReqHint/>}
@@ -5508,7 +5551,7 @@ function NotesView({data,reload,toast,userProfile,prospectMode=false}){
   },[notes,contacts,advisors]);
   const uploadAttachment=async(noteId,file,category,familyIdForPath)=>{
     const ext=file.name.split(".").pop();
-    const path=`note-attachments/${familyIdForPath||"general"}/${Date.now()}_${Math.random().toString(36).slice(2,8)}_${file.name.replace(/\s+/g,"_")}`;
+    const path=`note-attachments/${familyIdForPath||"general"}/${Date.now()}_${Math.random().toString(36).slice(2,8)}_${file.name.replace(/[^A-Za-z0-9._-]+/g,"_")}`;
     const{error:uploadError}=await sb.storage.from("documents").upload(path,file,{upsert:false});
     if(uploadError)throw new Error(uploadError.message);
     const{error:dbError}=await sb.from("note_attachments").insert({note_id:noteId,name:file.name,category:category||"General",file_path:path,file_size:file.size,file_type:file.type||ext});
@@ -5608,7 +5651,7 @@ function NotesView({data,reload,toast,userProfile,prospectMode=false}){
     <div style={{padding:isMobile?"14px 14px":"20px 28px",borderBottom:`1px solid ${B.borderLight}`,background:B.white}}>
       <div style={{maxWidth:800,margin:"0 auto"}}>
         <div style={{background:B.bg,border:`1px solid ${B.border}`,borderRadius:12,overflow:"hidden",boxShadow:B.shadow}}>
-          <textarea value={body} onChange={e=>setBody(e.target.value)} placeholder="Write a note or activity log entry…" style={{width:"100%",minHeight:88,background:"transparent",border:"none",padding:"14px 16px",color:B.text,fontSize:14,outline:"none",resize:"none",fontFamily:"inherit",lineHeight:1.65,boxSizing:"border-box"}}/>
+          <textarea maxLength={20000} value={body} onChange={e=>setBody(e.target.value)} placeholder="Write a note or activity log entry…" style={{width:"100%",minHeight:88,background:"transparent",border:"none",padding:"14px 16px",color:B.text,fontSize:14,outline:"none",resize:"none",fontFamily:"inherit",lineHeight:1.65,boxSizing:"border-box"}}/>
           {pendingFiles.length>0&&<div style={{padding:"8px 14px",borderTop:`1px solid ${B.borderLight}`,background:"#f9f7f3"}}>
             <div style={{fontSize:10,fontWeight:800,color:B.textMute,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:6}}>Attachments ({pendingFiles.length})</div>
             {pendingFiles.map((pf,idx)=><div key={idx} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:idx===pendingFiles.length-1?"none":`1px solid ${B.borderLight}`,flexWrap:"wrap"}}>
@@ -5625,10 +5668,12 @@ function NotesView({data,reload,toast,userProfile,prospectMode=false}){
             <select value={cid} onChange={e=>setCid(e.target.value)} style={{...inp,flex:1,minWidth:130,padding:"6px 10px",fontSize:13}}><option value="">👤 Contact</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select>
             <label style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 12px",background:B.bg,border:`1px solid ${B.border}`,borderRadius:6,cursor:"pointer",fontSize:12,color:B.navy,fontWeight:600,flexShrink:0}}>
               📎 Attach
-              <input type="file" multiple onChange={e=>{
-                const files=Array.from(e.target.files||[]);
-                if(files.length===0)return;
-                setPendingFiles([...pendingFiles,...files.map(f=>({file:f,category:"General"}))]);
+              <input type="file" multiple accept={DOC_UPLOAD_EXTS.map(x=>"."+x).join(",")} onChange={e=>{
+                const picked=Array.from(e.target.files||[]);
+                if(picked.length===0)return;
+                const files=[];
+                for(const f of picked){const pr=docFileProblem(f);if(pr)toast(`${f.name}: ${pr}`,"error");else files.push(f);}
+                if(files.length)setPendingFiles([...pendingFiles,...files.map(f=>({file:f,category:"General"}))]);
                 e.target.value="";
               }} style={{display:"none"}}/>
             </label>
@@ -5675,7 +5720,7 @@ function NotesView({data,reload,toast,userProfile,prospectMode=false}){
             <div style={{padding:"10px 13px"}}>
               {editId===n.id
                 ? <div>
-                    <textarea value={editBody} onChange={e=>setEditBody(e.target.value)}
+                    <textarea maxLength={20000} value={editBody} onChange={e=>setEditBody(e.target.value)}
                       onKeyDown={e=>{if(e.key==="Escape"){setEditId(null);setEditBody("");}if(e.key==="Enter"&&(e.metaKey||e.ctrlKey)){e.preventDefault();saveEdit(n.id);}}}
                       autoFocus rows={Math.min(14,Math.max(4,bodyText.split("\n").length+1))}
                       style={{width:"100%",boxSizing:"border-box",background:B.white,border:`1px solid ${B.gold}`,borderRadius:7,padding:"9px 11px",color:B.text,fontSize:13.5,lineHeight:1.6,fontFamily:"inherit",resize:"vertical",outline:"none"}}/>
@@ -8212,11 +8257,15 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
 
   const upload=async()=>{
     if(!file||!name.trim()||extracting)return;
+    const fileProblem=docFileProblem(file);
+    if(fileProblem){toast(fileProblem,"error");return;}
+    {const sec0=DOC_SECTIONS.find(s=>s.key===linkSection);
+     if(sec0&&sec0.scope==="property"&&!linkPropertyId){toast("Choose a property to complete the link, or set Section back to \"Not linked\".","error");return;}}
     setUploading(true);
     try{
       // Upload file to Supabase storage
       const ext=file.name.split(".").pop();
-      const path=`${familyId||"general"}/${Date.now()}_${file.name.replace(/\s+/g,"_")}`;
+      const path=`${familyId||"general"}/${Date.now()}_${file.name.replace(/[^A-Za-z0-9._-]+/g,"_")}`;
       setUploadPhase("Uploading…");
       const{error:uploadError}=await sb.storage.from("documents").upload(path,file,{upsert:false});
       if(uploadError)throw new Error(uploadError.message);
@@ -8255,12 +8304,12 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
   const download=async(doc)=>{
     try{
       if(!await firmDocGate(doc.filePath,doc.name,"download_document")){toast(FIRM_GATE_MSG,"error");return;}
-      const{data,error}=await sb.storage.from("documents").createSignedUrl(doc.filePath,300,{download:doc.name||true});
+      const{data,error}=await sb.storage.from("documents").createSignedUrl(doc.filePath,300,{download:docDownloadName(doc)});
       if(error||!data?.signedUrl){toast("Could not get download link","error");return;}
       // Use anchor element to bypass popup blockers
       const a=document.createElement("a");
       a.href=data.signedUrl;
-      a.download=doc.name||"document";
+      a.download=docDownloadName(doc);
       a.target="_blank";
       a.rel="noopener noreferrer";
       document.body.appendChild(a);
@@ -8284,6 +8333,8 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
   const openEdit=doc=>{setName(doc.name||"");setDescription(doc.description||"");setCategory(doc.category||"General");setLinkSection(doc.propertySection||"");setLinkPropertyId(doc.propertyId||"");setConflictDoc(null);setSuggestion(null);setExtractedText(null);setModal({edit:doc});};
   const saveEdit=async()=>{
     const doc=modal?.edit;if(!doc||!name.trim())return;
+    {const sec0=DOC_SECTIONS.find(s=>s.key===linkSection);
+     if(sec0&&sec0.scope==="property"&&!linkPropertyId){toast("Choose a property to complete the link, or set Section back to \"Not linked\".","error");return;}}
     setUploading(true);
     const section=linkSection||null;
     const propId=section&&DOC_SECTIONS.find(s=>s.key===section)?.scope==="property"?(linkPropertyId||null):null;
@@ -8562,7 +8613,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     </div>
 
     {modal==="folder"&&<Modal title="New folder" onClose={()=>setModal(null)}>
-      <Field label="Folder name">
+      <Field label="Folder name" required>
         <Inp placeholder="Aircraft" value={newFolderName} autoFocus
           onChange={e=>{setNewFolderName(e.target.value);setFolderErr("");}}
           onKeyDown={e=>{if(e.key==="Enter"&&!savingFolder)createFolder();}}/>
@@ -8580,14 +8631,14 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     </Modal>}
 
     {modal==="upload"&&<Modal title="Upload Document" onClose={()=>{setModal(null);resetForm();}}>
-      <Field label="Document Name"><Inp placeholder="Q4 2024 Statement" value={name} onChange={e=>setName(e.target.value)}/></Field>
+      <Field label="Document Name" required><Inp maxLength={150} placeholder="Q4 2024 Statement" value={name} onChange={e=>setName(e.target.value)}/></Field>
       <Field label="Category"><Sel value={category} onChange={e=>{setCategory(e.target.value);setSuggestion(null);}}>{[...DOC_CATEGORIES,...customFolders.map(f=>f.name)].map(c=><option key={c}>{c}</option>)}</Sel></Field>
       <SuggestionPanel/>
-      <Field label="Description"><Inp placeholder="Optional description" value={description} onChange={e=>setDescription(e.target.value)}/></Field>
+      <Field label="Description" optional><Inp maxLength={500} placeholder="Anything that will help you find it later" value={description} onChange={e=>setDescription(e.target.value)}/></Field>
       {linkFields()}
-      <Field label="File">
+      <Field label="File" required>
         <div style={{border:`2px dashed ${file?B.gold:B.border}`,borderRadius:10,padding:"20px",textAlign:"center",cursor:"pointer",background:file?"#fef9f0":B.bg,transition:"all .2s"}} onClick={()=>document.getElementById("file-upload").click()}>
-          <input id="file-upload" type="file" style={{display:"none"}} onChange={e=>pickFile(e.target.files[0])}/>
+          <input id="file-upload" type="file" accept={DOC_UPLOAD_EXTS.map(e=>"."+e).join(",")} style={{display:"none"}} onChange={e=>{const f=e.target.files&&e.target.files[0];const pr=f?docFileProblem(f):null;if(pr){toast(pr,"error");e.target.value="";return;}pickFile(f);}}/>
           {file?<><div style={{fontSize:24,marginBottom:6}}>✅</div><div style={{fontSize:13,color:B.navy,fontWeight:600}}>{file.name}</div><div style={{fontSize:11,color:B.textSoft}}>{(file.size/1024/1024).toFixed(2)} MB</div>{extracting&&<div style={{fontSize:11,color:B.gold,fontWeight:600,marginTop:6}}>{uploadPhase||"Reading document…"}</div>}</>:<><div style={{fontSize:32,marginBottom:6}}>📁</div><div style={{fontSize:13,color:B.textSoft}}>Click to select a file</div><div style={{fontSize:11,color:B.textMute,marginTop:4}}>PDF, Word, Excel, images supported</div></>}
         </div>
       </Field>
@@ -8598,10 +8649,10 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     </Modal>}
 
     {modal&&modal.edit&&<Modal title="Edit Document" onClose={()=>{setModal(null);resetForm();}}>
-      <Field label="Document Name"><Inp placeholder="Q4 2024 Statement" value={name} onChange={e=>setName(e.target.value)}/></Field>
+      <Field label="Document Name" required><Inp maxLength={150} placeholder="Q4 2024 Statement" value={name} onChange={e=>setName(e.target.value)}/></Field>
       <Field label="Category"><Sel value={category} onChange={e=>{setCategory(e.target.value);setSuggestion(null);}}>{[...DOC_CATEGORIES,...customFolders.map(f=>f.name)].map(c=><option key={c}>{c}</option>)}</Sel></Field>
       <SuggestionPanel/>
-      <Field label="Description"><Inp placeholder="Optional description" value={description} onChange={e=>setDescription(e.target.value)}/></Field>
+      <Field label="Description" optional><Inp maxLength={500} placeholder="Anything that will help you find it later" value={description} onChange={e=>setDescription(e.target.value)}/></Field>
       {linkFields(modal.edit.id)}
       <div style={{fontSize:11,color:B.textMute,marginBottom:14}}>Renaming changes the display title only; the stored file itself is unchanged.</div>
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
@@ -8700,8 +8751,8 @@ function AccountQuickForm({onSave,onCancel,saving}){
     <Grid2>
       <Field label="Institution" required><Inp value={f.institution} onChange={e=>set("institution",e.target.value)} placeholder="Institution name"/></Field>
       <Field label="Account type"><Sel value={f.accountType} onChange={e=>set("accountType",e.target.value)}>{ACCT_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</Sel></Field>
-      <Field label="Current balance" optional><MoneyInput value={f.currentBalance} onChange={e=>set("currentBalance",e.target.value)} placeholder="240,000"/></Field>
-      <Field label="Starting balance" optional><MoneyInput value={f.startingBalance} onChange={e=>set("startingBalance",e.target.value)} placeholder="200,000"/></Field>
+      <Field label="Current balance" optional><MoneyInput allowNegative value={f.currentBalance} onChange={e=>set("currentBalance",e.target.value)} placeholder="240,000"/></Field>
+      <Field label="Starting balance" optional><MoneyInput allowNegative value={f.startingBalance} onChange={e=>set("startingBalance",e.target.value)} placeholder="200,000"/></Field>
     </Grid2>
     <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",margin:"4px 0 8px"}}>Your advisor on this account (optional)</div>
     <Grid2>
@@ -10148,7 +10199,7 @@ const DOC_CONFIGS={
       // must keep working rather than having their tile disabled.
       {key:"onboarding_fee",label:"Onboarding Fee (one-time)", pdfField:"onboarding_fee", optionalPdfField:true,
         default:()=>feePlain(FIRM_DEFAULTS.onboardingFee)},
-      {key:"effective_date",label:"Effective Date",       pdfField:"effective_date", type:"date", default:()=>new Date().toISOString().slice(0,10)},
+      {key:"effective_date",label:"Effective Date",       pdfField:"effective_date", type:"date", default:()=>todayISO()},
       {key:"client_address",label:"Client Address",       pdfField:"client_address", default:(f,c)=>c?.address||""},
       {key:"governing_state",label:"Governing State",     pdfField:"governing_state",placeholder:"e.g. Florida", default:(f,c)=>guessState(c?.address)},
       {key:"svc_portfolio",   label:"Include: Portfolio oversight",     pdfField:null, type:"checkbox", default:()=>true},
@@ -10182,7 +10233,7 @@ const DOC_CONFIGS={
     fields:[
       {key:"family_client",label:"Family / Client Name", pdfField:"family_client", default:(f)=>f.name||""},
       {key:"advisor_name", label:"ORDANIS Expert",       pdfField:"advisor_name",  default:(f,c,u)=>f.advisorName||u?.fullName||u?.email||""},
-      {key:"date_reviewed",label:"Date Reviewed",         pdfField:"date_reviewed", type:"date", default:()=>new Date().toISOString().slice(0,10)},
+      {key:"date_reviewed",label:"Date Reviewed",         pdfField:"date_reviewed", type:"date", default:()=>todayISO()},
     ],
   },
   wire:{
@@ -10194,7 +10245,7 @@ const DOC_CONFIGS={
       {key:"sender_name",   label:"Sender Name",     pdfField:"sender_name_1",   default:(f,c)=>c?.name||f.name||""},
       {key:"sender_address",label:"Sender Address",  pdfField:"sender_address_2",default:(f,c)=>c?.address||""},
       {key:"sender_bank",   label:"Originating Bank",pdfField:"sender_bank_3",   default:(f,c,u,a)=>a?.institution||""},
-      {key:"wire_date",     label:"Wire Date",       pdfField:"wire_date_14",    type:"date", default:()=>new Date().toISOString().slice(0,10)},
+      {key:"wire_date",     label:"Wire Date",       pdfField:"wire_date_14",    type:"date", default:()=>todayISO()},
     ],
   },
   pfs:{
@@ -10203,7 +10254,7 @@ const DOC_CONFIGS={
     docKey:"pfs",
     fields:[
       {key:"prepared_for",label:"Prepared For",   pdfField:"Text1",              default:(f)=>f.name||""},
-      {key:"as_of",       label:"Statement Date", pdfField:"as of mmddyyyy1",    type:"date", default:()=>new Date().toISOString().slice(0,10)},
+      {key:"as_of",       label:"Statement Date", pdfField:"as of mmddyyyy1",    type:"date", default:()=>todayISO()},
     ],
   },
   lifestyle:{
@@ -10211,7 +10262,7 @@ const DOC_CONFIGS={
     desc:"Fillable monthly/annual expense worksheet for clients",
     docKey:"lifestyle",
     fields:[
-      {key:"as_of",label:"As Of Date", pdfField:"Date", type:"date", default:()=>new Date().toISOString().slice(0,10)},
+      {key:"as_of",label:"As Of Date", pdfField:"Date", type:"date", default:()=>todayISO()},
     ],
   },
 };
@@ -10920,7 +10971,30 @@ function ResourcesView({data,userProfile,toast}){
 
 // ── WORKFLOW ENGINE (shared) ─────────────────────────────────────────────────
 const addDays=(iso,n)=>{const d=new Date(iso+"T00:00:00Z");d.setUTCDate(d.getUTCDate()+(Number(n)||0));return d.toISOString().slice(0,10);};
-const todayISO=()=>new Date().toISOString().slice(0,10);
+// Files a household may upload. An allowlist rather than a blocklist, so programs and scripts never get in,
+// and a size cap so one huge file cannot fail halfway with an unhelpful storage error.
+const DOC_UPLOAD_EXTS=["pdf","png","jpg","jpeg","webp","gif","heic","doc","docx","xls","xlsx","csv","txt","rtf","ppt","pptx","odt","ods"];
+const DOC_UPLOAD_MAX_MB=25;
+const docFileProblem=f=>{
+  if(!f)return "Choose a file to upload.";
+  const ext=(String(f.name||"").split(".").pop()||"").toLowerCase();
+  if(!DOC_UPLOAD_EXTS.includes(ext))return `That file type (.${ext||"?"}) can't be uploaded. Allowed: ${DOC_UPLOAD_EXTS.map(e=>e.toUpperCase()).join(", ")}.`;
+  if(f.size>DOC_UPLOAD_MAX_MB*1024*1024)return `That file is ${(f.size/1024/1024).toFixed(1)} MB. The limit is ${DOC_UPLOAD_MAX_MB} MB.`;
+  if(f.size===0)return "That file is empty.";
+  return null;
+};
+// The name a downloaded copy is saved under: the display title, plus the stored file's extension when the
+// title does not already end with it (titles are usually typed without one, so downloads lost their type).
+const docDownloadName=doc=>{
+  const base=String(doc.name||"document").trim()||"document";
+  const m=/\.([A-Za-z0-9]{1,5})$/.exec(String(doc.filePath||""));
+  if(!m)return base;
+  const ext=m[1].toLowerCase();
+  return base.toLowerCase().endsWith("."+ext)?base:`${base}.${ext}`;
+};
+// Today's date in the person's own time zone (toISOString() is UTC, so after about 8pm US Eastern it
+// would already say tomorrow, and a form defaulting to it would be a day ahead).
+const todayISO=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
 
 // One definition of the timestamps a step carries when its status changes.
 //
@@ -11302,10 +11376,15 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
   const save=async()=>{
     const f=modal.row;
     if(!f.name.trim()||!f.due_date){toast("Name and due date are required","error");return;}
+    if(f.amount!==""&&f.amount!=null){
+      const amt=Number(String(f.amount).replace(/[$,\s]/g,""));
+      if(!Number.isFinite(amt)||amt<0){toast("Enter the amount as a number, like 48000 (no negatives).","error");return;}
+    }
+    if(f.grace_date&&f.grace_date<f.due_date){toast("The grace date can't be before the due date.","error");return;}
     setSaving(true);
     const payload={
       family_id:family.id,name:f.name.trim(),kind:f.kind,
-      amount:f.amount===""?null:Number(f.amount),
+      amount:(f.amount===""||f.amount==null)?null:Number(String(f.amount).replace(/[$,\s]/g,"")),
       due_date:f.due_date,recurrence:f.recurrence,
       reference_number:f.reference_number||null,counterparty:f.counterparty||null,
       grace_date:f.grace_date||null,template_key:f.template_key||null,
@@ -11528,25 +11607,25 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
 
     {modal&&<Modal wide title={modal.isNew?"New Obligation":`Edit — ${modal.row.name}`} onClose={()=>setModal(null)}>
       <Grid2>
-        <Field label="Name"><Inp value={modal.row.name} onChange={e=>setModal(m=>({...m,row:{...m.row,name:e.target.value}}))} placeholder="ILIT premium — Pacific Life"/></Field>
+        <Field label="Name" required><Inp maxLength={120} value={modal.row.name} onChange={e=>setModal(m=>({...m,row:{...m.row,name:e.target.value}}))} placeholder="ILIT premium — Pacific Life"/></Field>
         <Field label="Type"><Sel value={modal.row.kind} onChange={e=>setModal(m=>({...m,row:{...m.row,kind:e.target.value}}))}>{OBLIGATION_KINDS.map(k=><option key={k.v} value={k.v}>{k.label}</option>)}</Sel></Field>
-        <Field label="Amount"><MoneyInput value={modal.row.amount} onChange={e=>setModal(m=>({...m,row:{...m.row,amount:e.target.value}}))} placeholder="48,000"/></Field>
-        <Field label="Due date"><Inp type="date" value={modal.row.due_date||""} onChange={e=>setModal(m=>({...m,row:{...m.row,due_date:e.target.value}}))}/></Field>
+        <Field label="Amount" optional><MoneyInput value={modal.row.amount} onChange={e=>setModal(m=>({...m,row:{...m.row,amount:e.target.value}}))} placeholder="48,000"/></Field>
+        <Field label="Due date" required><Inp type="date" value={modal.row.due_date||""} onChange={e=>setModal(m=>({...m,row:{...m.row,due_date:e.target.value}}))}/></Field>
         <Field label="Recurrence"><Sel value={modal.row.recurrence} onChange={e=>setModal(m=>({...m,row:{...m.row,recurrence:e.target.value}}))}>{RECURRENCES.map(r=><option key={r.v} value={r.v}>{r.label}</option>)}</Sel></Field>
-        <Field label="Grace date (if later)"><Inp type="date" value={modal.row.grace_date||""} onChange={e=>setModal(m=>({...m,row:{...m.row,grace_date:e.target.value}}))}/></Field>
-        <Field label="Counterparty"><Inp value={modal.row.counterparty||""} onChange={e=>setModal(m=>({...m,row:{...m.row,counterparty:e.target.value}}))} placeholder="Pacific Life"/></Field>
-        <Field label="Reference (policy no., EIN, fund)"><Inp value={modal.row.reference_number||""} onChange={e=>setModal(m=>({...m,row:{...m.row,reference_number:e.target.value}}))}/></Field>
+        <Field label="Grace date (if later)" optional><Inp type="date" value={modal.row.grace_date||""} onChange={e=>setModal(m=>({...m,row:{...m.row,grace_date:e.target.value}}))}/></Field>
+        <Field label="Counterparty" optional><Inp maxLength={120} value={modal.row.counterparty||""} onChange={e=>setModal(m=>({...m,row:{...m.row,counterparty:e.target.value}}))} placeholder="Pacific Life"/></Field>
+        <Field label="Reference (policy no., EIN, fund)" optional><Inp maxLength={80} value={modal.row.reference_number||""} onChange={e=>setModal(m=>({...m,row:{...m.row,reference_number:e.target.value}}))}/></Field>
       </Grid2>
 
       <SectionLabel>Funding</SectionLabel>
       <Grid2>
-        <Field label="Money comes from">
+        <Field label="Money comes from" optional>
           <Sel value={modal.row.source_account_id||""} onChange={e=>setModal(m=>({...m,row:{...m.row,source_account_id:e.target.value}}))}>
             <option value="">— not tracked —</option>
             {accounts.map(a=><option key={a.id} value={a.id}>{a.institution} · {a.accountType}</option>)}
           </Sel>
         </Field>
-        <Field label="Money goes to">
+        <Field label="Money goes to" optional>
           <Sel value={modal.row.destination_account_id||""} onChange={e=>setModal(m=>({...m,row:{...m.row,destination_account_id:e.target.value}}))}>
             <option value="">— not tracked —</option>
             {accounts.map(a=><option key={a.id} value={a.id}>{a.institution} · {a.accountType}</option>)}
@@ -11555,7 +11634,7 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
       </Grid2>
 
       <SectionLabel>Playbook</SectionLabel>
-      <Field label="Which workflow carries this">
+      <Field label="Which workflow carries this" optional>
         <Sel value={modal.row.template_key||""} onChange={e=>setModal(m=>({...m,row:{...m.row,template_key:e.target.value}}))}>
           <option value="">— none, track the date only —</option>
           {templates.map(t=><option key={t.key} value={t.key}>{t.name}</option>)}
@@ -11576,7 +11655,7 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
           </span>
         </label>)}
 
-      <Field label="Notes"><textarea value={modal.row.notes||""} onChange={e=>setModal(m=>({...m,row:{...m.row,notes:e.target.value}}))} rows={2} style={{...inp,resize:"vertical",fontFamily:"inherit"}}/></Field>
+      <Field label="Notes" optional><textarea maxLength={2000} value={modal.row.notes||""} onChange={e=>setModal(m=>({...m,row:{...m.row,notes:e.target.value}}))} rows={2} style={{...inp,resize:"vertical",fontFamily:"inherit"}}/></Field>
 
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
         <Btn variant="ghost" onClick={()=>setModal(null)} disabled={saving}>Cancel</Btn>
