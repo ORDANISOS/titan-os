@@ -5199,10 +5199,15 @@ function FamiliesView({data,reload,toast,userProfile,navIntent,onNavConsumed}){
   const isAdmin=userProfile?.role==="admin";
   const[viewMode,setViewMode]=useState("families"); // admin only: "families" | "advisors"
   const[advisorFilter,setAdvisorFilter]=useState(""); // when set, families list is scoped to this advisor email
+  // Archived households are billing-cancelled and login-disabled; they stay in the data (purge is a
+  // separate, deliberate step) but are hidden from the working list unless the admin asks for them.
+  const[showArchived,setShowArchived]=useState(false);
+  const archivedCount=families.filter(f=>f.archived_at||f.archivedAt).length;
   const filtered=useMemo(()=>families.filter(f=>{
+    if(!showArchived&&(f.archived_at||f.archivedAt))return false;
     if(advisorFilter&&(f.advisorEmail||"")!==advisorFilter)return false;
     return [f.name,f.advisorName,f.advisorEmail].join(" ").toLowerCase().includes(search.toLowerCase());
-  }),[families,search,advisorFilter]);
+  }),[families,search,advisorFilter,showArchived]);
 
   // Per-advisor roll-up (admin only)
   const advisorSummary=useMemo(()=>{
@@ -5255,6 +5260,7 @@ function FamiliesView({data,reload,toast,userProfile,navIntent,onNavConsumed}){
       {viewMode==="families"&&<>
         <Inp value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search families…" style={{flex:1,minWidth:160}}/>
         {advisorFilter&&<button onClick={()=>setAdvisorFilter("")} style={{border:`1px solid ${B.gold}`,background:"#fbf6ec",color:B.navy,borderRadius:16,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>{(advisorSummary.find(a=>a.email===advisorFilter)?.name)||advisorFilter} ✕</button>}
+        {isAdmin&&archivedCount>0&&<button onClick={()=>setShowArchived(v=>!v)} style={{border:`1px solid ${B.borderLight}`,background:showArchived?"#fde8e8":"transparent",color:B.textSoft,borderRadius:16,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>{showArchived?"Hide":"Show"} archived ({archivedCount})</button>}
         <Btn onClick={()=>setModal("add")}>+ New Family</Btn>
       </>}
       {viewMode==="advisors"&&<div style={{flex:1,fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>ORDANIS Expert Summary</div>}
@@ -6372,11 +6378,12 @@ function ReviewQueue({families,toast,userProfile}){
 
 function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
   const isMobile=useIsMobile();
-  const{families:_families,contacts:_contacts,properties:_properties,deals:_deals,notes:_notes,tasks:_tasks,portfolio_accounts:_accts=[]}=data;
+  const{families:_allFamilies,contacts:_contacts,properties:_properties,deals:_deals,notes:_notes,tasks:_tasks,portfolio_accounts:_accts=[]}=data;
   const isAdmin=userProfile?.role==="admin";
   const myEmail=(userProfile?.email||"").toLowerCase();
   // Admins default to "All ORDANIS Experts" and can switch; non-admins are locked to their own scope so unscoped prospect records (family_id null) don't leak in.
   const[scope,setScope]=useState(isAdmin?"":myEmail);
+  const _families=(_allFamilies||[]).filter(f=>!(f.archived_at||f.archivedAt));
   const _famIds=new Set(_families.filter(f=>!scope||(f.advisorEmail||"").toLowerCase()===scope).map(f=>f.id));
   const _cAdv=id=>{const c=_contacts.find(x=>x.id===id);return (c?.advisorEmail||"").toLowerCase();};
   const families=scope?_families.filter(f=>(f.advisorEmail||"").toLowerCase()===scope):_families;
@@ -7086,7 +7093,7 @@ const UTIL_SCHEME={
 };
 function SignupsRevenueView({data,toast,userProfile,reload}){
   const isMobile=useIsMobile();
-  const families=data.families||[];
+  const families=(data.families||[]).filter(f=>!(f.archived_at||f.archivedAt));
   const[planFeatures,setPlanFeatures]=useState([]);
   const[contacts,setContacts]=useState({}); // family_id -> {id, email, fullName}
   const[workflowByFamily,setWorkflowByFamily]=useState({}); // family_id -> {total, completed}
