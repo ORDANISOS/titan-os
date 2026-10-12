@@ -9215,6 +9215,11 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   };
   const cancelPendingChange=()=>requestPlanChange(clientPlan);
   const planSelfServe=planIsSelfServe(clientPlan);
+  // Premier is set up by people, not by a button that calls Stripe, so its card looks like the others
+  // but the button opens an email to the ORDANIS team (or the household's own Expert once it has one).
+  const premierMailto=`mailto:${BRAND.contactEmail}?subject=${encodeURIComponent("Interested in Premier — "+family.name)}`;
+  const premierPriceText=billingPriceOf("premier")>0?`${fmtMoney(billingPriceOf("premier"))}/mo`:"Custom pricing";
+  const planCardStyle={background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:12,padding:"16px 18px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"};
   const upgradeTargets=planSelfServe?SIGNUP_PLAN_ORDER.filter(p=>p!==clientPlan&&planIsSelfServe(p)&&SIGNUP_PLAN_ORDER.indexOf(p)>SIGNUP_PLAN_ORDER.indexOf(clientPlan)):[];
   const downgradeTargets=planSelfServe?SIGNUP_PLAN_ORDER.filter(p=>p!==clientPlan&&planIsSelfServe(p)&&SIGNUP_PLAN_ORDER.indexOf(p)<SIGNUP_PLAN_ORDER.indexOf(clientPlan)):[];
 
@@ -9872,37 +9877,55 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
 
         {/* Self-serve upgrade / downgrade -- Basic <-> Core only; Premier is always Expert-led. */}
         {planSelfServe&&!fam.pending_plan&&!firmPaid&&<>
-          {upgradeTargets.length>0&&<div style={{marginBottom:16}}>
+          {(upgradeTargets.length>0||clientPlan!=="premier")&&<div style={{marginBottom:16}}>
             <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>Upgrade</div>
-            {upgradeTargets.map(p=><div key={p} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:12,padding:"16px 18px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+            {upgradeTargets.map(p=><div key={p} style={planCardStyle}>
               <div>
                 <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{billingLabelOf(p)} — {fmtMoney(billingPriceOf(p))}/mo</div>
                 <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>{PLAN_BLURB[p]}</div>
-                <div style={{fontSize:11,color:B.textMute,marginTop:4}}>Takes effect immediately, prorated for the rest of this billing period.</div>
+                <div style={{fontSize:11,color:B.textMute,marginTop:4}}>Takes effect immediately. You're charged the prorated difference for the rest of this billing period, then the full rate at renewal.</div>
               </div>
               <Btn small onClick={()=>requestPlanChange(p)} disabled={billingBusy}>{billingBusy?"Working…":`Upgrade to ${billingLabelOf(p)}`}</Btn>
             </div>)}
+            <div style={planCardStyle}>
+              <div>
+                <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{billingLabelOf("premier")} — {premierPriceText}</div>
+                <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>{PLAN_BLURB.premier}</div>
+                <div style={{fontSize:11,color:B.textMute,marginTop:4}}>Set up with your ORDANIS team. Once it's active you're charged the prorated difference for the rest of this billing period, then the full rate at renewal.</div>
+              </div>
+              <Btn small onClick={()=>{window.location.href=premierMailto;}}>{`Request ${billingLabelOf("premier")}`}</Btn>
+            </div>
           </div>}
           {downgradeTargets.length>0&&<div style={{marginBottom:16}}>
             <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>Downgrade</div>
-            {downgradeTargets.map(p=><div key={p} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:12,padding:"16px 18px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+            {downgradeTargets.map(p=><div key={p} style={planCardStyle}>
               <div>
                 <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{billingLabelOf(p)} — {fmtMoney(billingPriceOf(p))}/mo</div>
                 <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>{PLAN_BLURB[p]}</div>
-                <div style={{fontSize:11,color:B.textMute,marginTop:4}}>Takes effect at the end of your current billing period. No refund for the difference.</div>
+                <div style={{fontSize:11,color:B.textMute,marginTop:4}}>Takes effect at the end of your current billing period. You keep your current plan until then and are not charged the new rate early. No proration or refund for the difference this period.</div>
               </div>
               <Btn small variant="ghost" onClick={()=>requestDowngrade(p)} disabled={billingBusy}>{billingBusy?"Working…":`Move to ${billingLabelOf(p)}`}</Btn>
             </div>)}
           </div>}
-          <div style={{fontSize:12,color:B.textSoft,padding:"10px 0"}}>
-            Want a dedicated ORDANIS Expert, priority workflows, and bill pay? <a href={`mailto:${BRAND.contactEmail}?subject=${encodeURIComponent("Interested in Premier — "+family.name)}`} style={{color:B.navy,fontWeight:600}}>Ask us about Premier</a>.
-          </div>
         </>}
 
         {/* Premier — advisor-led, no self-serve plan change */}
-        {!planSelfServe&&!firmPaid&&<div style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:12,padding:"18px 20px",fontSize:13,color:B.textSoft,lineHeight:1.6}}>
-          Premier is managed by your ORDANIS Expert. {clientHasExpert&&<>To change your plan, <button onClick={()=>setEmailAdvisorOpen(true)} style={{background:"none",border:"none",color:B.navy,fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,fontSize:13,textDecoration:"underline"}}>email your ORDANIS Expert</button>.</>}
-        </div>}
+        {!planSelfServe&&!firmPaid&&<>
+          <div style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:12,padding:"18px 20px",fontSize:13,color:B.textSoft,lineHeight:1.6,marginBottom:16}}>
+            Premier is managed by your ORDANIS Expert. {clientHasExpert&&<>To change your plan, <button onClick={()=>setEmailAdvisorOpen(true)} style={{background:"none",border:"none",color:B.navy,fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,fontSize:13,textDecoration:"underline"}}>email your ORDANIS Expert</button>.</>}
+          </div>
+          {<div style={{marginBottom:16}}>
+            <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>Downgrade</div>
+            {SIGNUP_PLAN_ORDER.filter(p=>p!==clientPlan&&planIsSelfServe(p)).map(p=><div key={p} style={planCardStyle}>
+              <div>
+                <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{billingLabelOf(p)} — {fmtMoney(billingPriceOf(p))}/mo</div>
+                <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>{PLAN_BLURB[p]}</div>
+                <div style={{fontSize:11,color:B.textMute,marginTop:4}}>Arranged with your ORDANIS Expert, who confirms the timing and any proration for the difference before anything changes.</div>
+              </div>
+              <Btn small variant="ghost" onClick={()=>{if(clientHasExpert)setEmailAdvisorOpen(true);else window.location.href=`mailto:${BRAND.contactEmail}?subject=${encodeURIComponent("Plan change to "+billingLabelOf(p)+" — "+family.name)}`;}}>{`Request ${billingLabelOf(p)}`}</Btn>
+            </div>)}
+          </div>}
+        </>}
 
         {confirmDowngrade&&<Modal title="Confirm downgrade" onClose={()=>setConfirmDowngrade(null)}>
           <div style={{fontSize:14,color:B.text,lineHeight:1.6,marginBottom:18}}>
