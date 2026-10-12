@@ -620,6 +620,9 @@ function parseLocalDate(s){
   if(typeof s==="string"){const m=s.slice(0,10).match(/^(\d{4})-(\d{2})-(\d{2})$/);if(m)return new Date(Number(m[1]),Number(m[2])-1,Number(m[3]));}
   return new Date(s);
 }
+// The last moment of a due date in the person's own time zone. A task is overdue once its due day has ended,
+// not at UTC midnight (which, in the US, is the evening before it is due).
+function dueEnd(s){const d=parseLocalDate(s);d.setHours(23,59,59,999);return d;}
 function expandEvent(event,projectionStart,monthsOut){
   const occurrences=[];
   const start=parseLocalDate(event.startDate);
@@ -2903,8 +2906,8 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   const totalAccounts=accounts.filter(a=>a.accountType!=="Line of Credit").reduce((s,a)=>s+(Number(a.currentBalance)||0),0);
   const totalValuables=valuables.reduce((s,v)=>s+(Number(v.estimatedValue)||0),0);
   const netWorth=totalRE-totalDebt+totalAccounts+totalValuables;
-  const overdueTasks=pendingTasks.filter(t=>t.dueDate&&new Date(t.dueDate)<new Date());
-  const soonTasks=pendingTasks.filter(t=>t.dueDate&&!overdueTasks.includes(t)&&(new Date(t.dueDate)-new Date())/(86400000)<=30);
+  const overdueTasks=pendingTasks.filter(t=>t.dueDate&&dueEnd(t.dueDate)<new Date());
+  const soonTasks=pendingTasks.filter(t=>t.dueDate&&!overdueTasks.includes(t)&&(dueEnd(t.dueDate)-new Date())/(86400000)<=30);
 
   // Scheduled Prompts is visible to every ORDANIS Expert/Admin, and to a Partner
   // only when an admin has flipped their can_run_scheduled_prompts toggle on.
@@ -3409,8 +3412,8 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
               </div>
               <GoldLine/>
               {pendingTasks.length===0?<Empty text="You're all caught up. Nothing pending right now."/>:[...pendingTasks].sort((a,b)=>a.dueDate>b.dueDate?1:-1).slice(0,5).map(t=>{
-                const isOD=t.dueDate&&new Date(t.dueDate)<new Date();
-                const isSoon=!isOD&&t.dueDate&&(new Date(t.dueDate)-new Date())/(86400000)<=30;
+                const isOD=t.dueDate&&dueEnd(t.dueDate)<new Date();
+                const isSoon=!isOD&&t.dueDate&&(dueEnd(t.dueDate)-new Date())/(86400000)<=30;
                 return <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:`1px solid ${B.borderLight}`}}>
                   <input type="checkbox" checked={!!t.done} disabled={!canEdit} onChange={()=>toggleTask(t)} style={{accentColor:B.navy,cursor:canEdit?"pointer":"default",flexShrink:0}}/>
                   <div style={{flex:1,minWidth:0}}>
@@ -3787,8 +3790,8 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
             {canEdit&&<Btn onClick={()=>setModal("task")}>+ New Task</Btn>}
           </div>
           {famTasks.length===0?<Empty text="No tasks yet. Add one to keep something on track."/>:famTasks.map(t=>{
-            const isOD=!t.done&&t.dueDate&&new Date(t.dueDate)<new Date();
-            const isSoon=!t.done&&!isOD&&t.dueDate&&(new Date(t.dueDate)-new Date())/(86400000)<=30;
+            const isOD=!t.done&&t.dueDate&&dueEnd(t.dueDate)<new Date();
+            const isSoon=!t.done&&!isOD&&t.dueDate&&(dueEnd(t.dueDate)-new Date())/(86400000)<=30;
             return <div key={t.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",marginBottom:8,background:B.white,border:`1px solid ${isOD?"#f5c6c6":B.borderLight}`,borderLeft:`3px solid ${isOD?"#d43030":isSoon?"#d4900a":PRIORITY_COLORS[t.priority]?.dot||B.gold}`,borderRadius:10,opacity:t.done?.55:1,boxShadow:B.shadow}}>
               <input type="checkbox" checked={!!t.done} onChange={()=>toggleTask(t)} disabled={!canEdit} style={{width:16,height:16,accentColor:B.navy,cursor:"pointer",flexShrink:0}}/>
               <div style={{flex:1,minWidth:0}}>
@@ -4016,7 +4019,12 @@ function PropertyForm({initial,onSave,onClose,canExtract=false}){
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const setChk=k=>e=>setF(p=>({...p,[k]:e.target.checked}));
   const[showReq,setShowReq]=useState(false);
-  const save=async()=>{if(!f.address.trim()){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
+  const[err,setErr]=useState("");
+  const pctBad=v=>v!==""&&v!=null&&!(Number(v)>=0&&Number(v)<=100);
+  const save=async()=>{if(!f.address.trim()){setShowReq(true);return;}
+    if(pctBad(f.interestRate)){setErr("Interest rate must be between 0 and 100.");return;}
+    if(pctBad(f.propertyManagementFeePct)){setErr("Property management fee must be between 0 and 100 percent.");return;}
+    setErr("");setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   const[extracting,setExtracting]=useState(false);
   const[extractMsg,setExtractMsg]=useState(null); // {type:"success"|"error", text}
   const fileRef=useRef(null);
@@ -4065,7 +4073,7 @@ function PropertyForm({initial,onSave,onClose,canExtract=false}){
     <Grid2><Field label="Purchase Price" optional><MoneyInput value={f.purchasePrice||""} onChange={set("purchasePrice")}/></Field><Field label="Current Value" optional><MoneyInput value={f.currentValue||""} onChange={set("currentValue")}/></Field></Grid2>
     <Grid2><Field label="Purchase Date" optional><Inp type="date" value={f.purchaseDate||""} onChange={set("purchaseDate")}/></Field><Field label="Loan Type"><Sel value={f.loanType} onChange={set("loanType")}>{LOAN_TYPES.map(t=><option key={t}>{t}</option>)}</Sel></Field></Grid2>
     <Grid2><Field label="Lender" optional><Inp value={f.lender||""} onChange={set("lender")}/></Field><Field label="Loan Balance" optional><MoneyInput value={f.loanBalance||""} onChange={set("loanBalance")}/></Field></Grid2>
-    <Grid2><Field label="Interest Rate (%)" optional><Inp type="number" step="0.01" value={f.interestRate||""} onChange={set("interestRate")}/></Field><Field label="Monthly Payment" optional><MoneyInput value={f.loanPayment||""} onChange={set("loanPayment")}/></Field></Grid2>
+    <Grid2><Field label="Interest Rate (%)" optional><Inp type="number" min="0" max="100" step="0.01" value={f.interestRate||""} onChange={set("interestRate")}/></Field><Field label="Monthly Payment" optional><MoneyInput value={f.loanPayment||""} onChange={set("loanPayment")}/></Field></Grid2>
     <Grid2><Field label="Second Mortgage Balance" optional><MoneyInput value={f.secondMortgageBalance||""} onChange={set("secondMortgageBalance")}/></Field><Field label="Second Mortgage Payment/mo" optional><MoneyInput value={f.secondMortgagePayment||""} onChange={set("secondMortgagePayment")}/></Field></Grid2>
     <Grid2><Field label="Loan Maturity Date" optional><Inp type="date" value={f.loanMaturityDate||""} onChange={set("loanMaturityDate")}/></Field><Field label="Rental Income/mo" optional><MoneyInput value={f.rentalIncome||""} onChange={set("rentalIncome")}/></Field></Grid2>
     <Grid2><Field label="Property Taxes/yr" optional><MoneyInput value={f.propertyTaxes||""} onChange={set("propertyTaxes")}/></Field><Field label="Utilities/mo" optional><MoneyInput value={f.utilities||""} onChange={set("utilities")}/></Field></Grid2>
@@ -4081,7 +4089,7 @@ function PropertyForm({initial,onSave,onClose,canExtract=false}){
     </div>
     <Grid2>
       <Field label="HOA / Monthly Fee ($)" optional><MoneyInput placeholder="350" value={f.hoaFee||""} onChange={set("hoaFee")}/></Field>
-      <Field label="Property Management Fee (%)" optional><Inp type="number" step="0.1" placeholder="e.g., 8" value={f.propertyManagementFeePct||""} onChange={set("propertyManagementFeePct")}/></Field>
+      <Field label="Property Management Fee (%)" optional><Inp type="number" min="0" max="100" step="0.1" placeholder="e.g., 8" value={f.propertyManagementFeePct||""} onChange={set("propertyManagementFeePct")}/></Field>
     </Grid2>
     <div style={{marginBottom:14}}>
       <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"10px 14px",background:f.includeMortgageInCashflow?"#e8f0f8":B.bg,borderRadius:8,border:`1px solid ${f.includeMortgageInCashflow?B.navyMid:B.border}`}}>
@@ -4106,6 +4114,7 @@ function PropertyForm({initial,onSave,onClose,canExtract=false}){
 
     <Field label="Notes" optional><Tex value={f.notes||""} onChange={set("notes")}/></Field>
     {showReq&&<ReqHint/>}
+    {err&&<div style={{fontSize:12,color:"#8b1a1a",background:"#fff5f5",border:"1px solid #f3c2c2",borderRadius:8,padding:"8px 10px",marginTop:8}}>{err}</div>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save Property"}</Btn></div>
   </div>;
 }
@@ -4116,15 +4125,19 @@ function ValuableForm({initial,onSave,onClose}){
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const[showReq,setShowReq]=useState(false);
-  const save=async()=>{if(!f.description.trim()){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
+  const[err,setErr]=useState("");
+  const save=async()=>{if(!f.description.trim()){setShowReq(true);return;}
+    if(f.year!==""&&f.year!=null){const y=Number(f.year);if(!Number.isInteger(y)||y<1800||y>new Date().getFullYear()+1){setErr(`Year must be a four-digit year between 1800 and ${new Date().getFullYear()+1}.`);return;}}
+    setErr("");setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
-    <Grid2><Field label="Category"><Sel value={f.category} onChange={set("category")}>{VALUABLE_CATS.map(c=><option key={c}>{c}</option>)}</Sel></Field><Field label="Year" optional><Inp type="number" placeholder="2023" value={f.year||""} onChange={set("year")}/></Field></Grid2>
+    <Grid2><Field label="Category"><Sel value={f.category} onChange={set("category")}>{VALUABLE_CATS.map(c=><option key={c}>{c}</option>)}</Sel></Field><Field label="Year" optional><Inp type="number" min="1800" max={new Date().getFullYear()+1} placeholder="2023" value={f.year||""} onChange={set("year")}/></Field></Grid2>
     <Field label="Description" required><Inp placeholder="2023 Ferrari Roma" value={f.description} onChange={set("description")}/></Field>
     <Grid2><Field label="Make / Model" optional><Inp value={f.makeModel||""} onChange={set("makeModel")}/></Field><Field label="Estimated Value" optional><MoneyInput value={f.estimatedValue||""} onChange={set("estimatedValue")}/></Field></Grid2>
     <div style={{marginBottom:14}}><label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"10px 14px",background:f.insured?"#e8f0f8":B.bg,borderRadius:8,border:`1px solid ${f.insured?B.navyMid:B.border}`}}><input type="checkbox" checked={!!f.insured} onChange={e=>setF(p=>({...p,insured:e.target.checked}))} style={{width:16,height:16,accentColor:B.navy}}/><span style={{fontSize:13,color:B.navy,fontWeight:600}}>Insured</span></label></div>
     {f.insured&&<Field label="Insurance Company" optional><Inp value={f.insuranceCompany||""} onChange={set("insuranceCompany")}/></Field>}
     <Field label="Notes" optional><Tex value={f.notes||""} onChange={set("notes")}/></Field>
     {showReq&&<ReqHint/>}
+    {err&&<div style={{fontSize:12,color:"#8b1a1a",background:"#fff5f5",border:"1px solid #f3c2c2",borderRadius:8,padding:"8px 10px",marginTop:8}}>{err}</div>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save"}</Btn></div>
   </div>;
 }
@@ -4803,7 +4816,7 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
           </Sel>
         </Field>
         <Field label="Local / City Tax (%)">
-          <Inp type="number" step="0.01" disabled={readOnly} value={settings.localTaxRate||""} onChange={e=>updateSetting("localTaxRate",Number(e.target.value)||0)} placeholder="e.g., NYC 3.876"/>
+          <Inp type="number" min="0" max="20" step="0.01" disabled={readOnly} value={settings.localTaxRate||""} onChange={e=>updateSetting("localTaxRate",Number(e.target.value)||0)} placeholder="e.g., NYC 3.876"/>
         </Field>
       </div>
       <div style={{marginTop:12,display:"flex",gap:14,flexWrap:"wrap",alignItems:"center"}}>
@@ -4832,7 +4845,7 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
           </Sel>
         </Field>
         {compareActive&&<Field label="Compare Local / City Tax (%)">
-          <Inp type="number" step="0.01" disabled={readOnly} value={settings.compareLocalTaxRate||""} onChange={e=>updateSetting("compareLocalTaxRate",Number(e.target.value)||0)} placeholder="0 (no city tax)"/>
+          <Inp type="number" min="0" max="20" step="0.01" disabled={readOnly} value={settings.compareLocalTaxRate||""} onChange={e=>updateSetting("compareLocalTaxRate",Number(e.target.value)||0)} placeholder="0 (no city tax)"/>
         </Field>}
         {compareActive&&<div style={{fontSize:11,color:B.textSoft}}>Models the identical inputs as if the client were taxed in {compareState.name}{compareLocalRate>0?` + ${compareLocalRate}% local`:" with no city tax"}.</div>}
       </div>
@@ -5195,7 +5208,7 @@ function printAdvisorReport(adv,data){
   const wonDeals=deals.filter(d=>d.stage==="Closed Won");
   const pipelineVal=openDeals.reduce((s,d)=>s+(Number(d.value)||0),0);
   const openTasks=tasks.filter(t=>!t.done);
-  const overdue=openTasks.filter(t=>t.dueDate&&new Date(t.dueDate)<now);
+  const overdue=openTasks.filter(t=>t.dueDate&&dueEnd(t.dueDate)<now);
   const relOf=rec=>rec.familyId?(fById(rec.familyId)?.name||"—"):(cById(rec.contactId)?.name||"—");
   const stat=(l,v)=>`<div class="stat"><div class="stat-l">${l}</div><div class="stat-v">${v}</div></div>`;
   const w=window.open("","_blank");
@@ -5240,7 +5253,7 @@ function printAdvisorReport(adv,data){
   </tbody></table>
   <h2>Open Tasks (${openTasks.length})</h2>
   <table><thead><tr><th>Task</th><th>Related To</th><th>Priority</th><th>Due Date</th></tr></thead><tbody>
-  ${openTasks.sort((a,b)=>(a.dueDate||"")>(b.dueDate||"")?1:-1).map(t=>{const od=t.dueDate&&new Date(t.dueDate)<now;return`<tr><td>${esc(t.title)}</td><td>${esc(relOf(t))}</td><td>${esc(t.priority)||"—"}</td><td style="${od?"color:#8b1a1a;font-weight:700":""}">${fmtD(t.dueDate)}${od?" (overdue)":""}</td></tr>`;}).join("")||"<tr><td colspan='4' style='color:#8fa0b2'>No open tasks</td></tr>"}
+  ${openTasks.sort((a,b)=>(a.dueDate||"")>(b.dueDate||"")?1:-1).map(t=>{const od=t.dueDate&&dueEnd(t.dueDate)<now;return`<tr><td>${esc(t.title)}</td><td>${esc(relOf(t))}</td><td>${esc(t.priority)||"—"}</td><td style="${od?"color:#8b1a1a;font-weight:700":""}">${fmtD(t.dueDate)}${od?" (overdue)":""}</td></tr>`;}).join("")||"<tr><td colspan='4' style='color:#8fa0b2'>No open tasks</td></tr>"}
   </tbody></table>
   <h2>Recent Notes (${Math.min(notes.length,15)} of ${notes.length})</h2>
   ${notes.slice(0,15).map(n=>`<div class="note"><div>${esc(n.body)}</div><div class="note-meta">${esc(relOf(n))} · ${fmtD(n.createdAt)}</div></div>`).join("")||"<p style='color:#8fa0b2'>No notes</p>"}
@@ -5289,7 +5302,7 @@ function FamiliesView({data,reload,toast,userProfile,navIntent,onNavConsumed}){
       const props=(data.properties||[]).filter(p=>p.familyId===f.id);
       const accts=(data.portfolio_accounts||[]).filter(a=>a.familyId===f.id);
       const openTasks=(data.tasks||[]).filter(t=>t.familyId===f.id&&!t.done);
-      const overdue=openTasks.filter(t=>t.dueDate&&new Date(t.dueDate)<new Date());
+      const overdue=openTasks.filter(t=>t.dueDate&&dueEnd(t.dueDate)<new Date());
       const value=props.reduce((s,p)=>s+(Number(p.currentValue)||Number(p.purchasePrice)||0),0)+
                   accts.reduce((s,a)=>s+(Number(a.currentBalance)||0),0);
       return{value,openTasks:openTasks.length,overdue:overdue.length};
@@ -5373,7 +5386,7 @@ function FamiliesView({data,reload,toast,userProfile,navIntent,onNavConsumed}){
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(300px,100%),1fr))",gap:16}}>
         {filtered.map(f=>{
           const s=getStats(f);
-          const overdue=(data.tasks||[]).filter(t=>t.familyId===f.id&&!t.done&&t.dueDate&&new Date(t.dueDate)<new Date()).length;
+          const overdue=(data.tasks||[]).filter(t=>t.familyId===f.id&&!t.done&&t.dueDate&&dueEnd(t.dueDate)<new Date()).length;
           return <div key={f.id} onClick={()=>setSelected(f)} style={{background:B.white,borderRadius:12,border:`1px solid ${B.borderLight}`,borderTop:`3px solid ${B.gold}`,padding:20,cursor:"pointer",boxShadow:B.shadow,transition:"box-shadow .15s"}}
             onMouseEnter={e=>e.currentTarget.style.boxShadow=B.shadowMd}
             onMouseLeave={e=>e.currentTarget.style.boxShadow=B.shadow}>
@@ -5806,8 +5819,8 @@ function TasksView({data,reload,toast,userProfile,prospectMode=false}){
   const gc=id=>contacts.find(c=>c.id===id);const gf=id=>families.find(f=>f.id===id);
   const[cmAdvScope,setCmAdvScope]=useState("");
   const list=tasks.filter(t=>(filter==="All"||(filter==="Pending"?!t.done:t.done))&&(filterFamily==="all"||t.familyId===filterFamily)&&(!advisorFilter||(advisorOfTask(t)?.email||"")===advisorFilter)&&(prospectMode||!cmAdvScope||(gf(t.familyId)?.advisorEmail||"").toLowerCase()===cmAdvScope)&&(!prospectMode||userProfile?.role==="admin"||(advisorOfTask(t)?.email||"").toLowerCase()===(userProfile?.email||"").toLowerCase()));
-  const oc=tasks.filter(t=>!t.done&&t.dueDate&&new Date(t.dueDate)<new Date()).length;
-  const soon=tasks.filter(t=>!t.done&&t.dueDate&&(new Date(t.dueDate)-new Date())/(86400000)<=30&&new Date(t.dueDate)>=new Date()).length;
+  const oc=tasks.filter(t=>!t.done&&t.dueDate&&dueEnd(t.dueDate)<new Date()).length;
+  const soon=tasks.filter(t=>!t.done&&t.dueDate&&(dueEnd(t.dueDate)-new Date())/(86400000)<=30&&dueEnd(t.dueDate)>=new Date()).length;
   const advisorSummary=useMemo(()=>{
     const groups={};const now=new Date();
     tasks.forEach(t=>{
@@ -5816,7 +5829,7 @@ function TasksView({data,reload,toast,userProfile,prospectMode=false}){
       const key=adv?adv.email:"__unassigned__";
       if(!groups[key])groups[key]={email:adv?adv.email:"",name:adv?adv.name:"Unassigned",unassigned:!adv,open:0,overdue:0,done:0};
       if(t.done)groups[key].done+=1;
-      else{groups[key].open+=1;if(t.dueDate&&new Date(t.dueDate)<now)groups[key].overdue+=1;}
+      else{groups[key].open+=1;if(t.dueDate&&dueEnd(t.dueDate)<now)groups[key].overdue+=1;}
     });
     advisors.forEach(a=>{if(!groups[a.email])groups[a.email]={email:a.email,name:a.full_name||a.email,unassigned:false,open:0,overdue:0,done:0};});
     return Object.values(groups).sort((a,b)=>(b.open-a.open)||(b.overdue-a.overdue));
@@ -5883,8 +5896,8 @@ function TasksView({data,reload,toast,userProfile,prospectMode=false}){
       {list.length===0&&<div style={{padding:"60px 0",textAlign:"center",color:B.textMute,fontSize:14}}>No tasks here.</div>}
       {(filter==="Done"?[...list].sort((a,b)=>new Date(b.completedAt||0)-new Date(a.completedAt||0)):list).flatMap((t,idx,arr)=>{
         const contact=gc(t.contactId);const fam=gf(t.familyId);
-        const isOD=!t.done&&t.dueDate&&new Date(t.dueDate)<new Date();
-        const isSoon=!t.done&&!isOD&&t.dueDate&&(new Date(t.dueDate)-new Date())/(86400000)<=30;
+        const isOD=!t.done&&t.dueDate&&dueEnd(t.dueDate)<new Date();
+        const isSoon=!t.done&&!isOD&&t.dueDate&&(dueEnd(t.dueDate)-new Date())/(86400000)<=30;
         const yr=t.completedAt?new Date(t.completedAt).getFullYear():null;
         const showYear=filter==="Done"&&yr&&(idx===0||new Date(arr[idx-1].completedAt||0).getFullYear()!==yr);
         const nodes=[];
@@ -6354,7 +6367,7 @@ function collectDeadlines({tasks=[],properties=[],deals=[],contacts=[],families=
   };
   // Tasks are their own completion model (done + completed_by/at); show pending only.
   (tasks||[]).filter(t=>!t.done&&t.dueDate).forEach(t=>{
-    const dt=new Date(t.dueDate); if(isNaN(dt.getTime()))return;
+    const dt=parseLocalDate(t.dueDate); if(isNaN(dt.getTime()))return;
     const t0=new Date(dt.getFullYear(),dt.getMonth(),dt.getDate());
     const days=Math.round((t0-today)/86400000);
     if(days>windowDays)return;
@@ -6485,8 +6498,8 @@ function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
   const totalDebt=properties.reduce((s,p)=>s+(Number(p.loanBalance)||0)+(Number(p.secondMortgageBalance)||0),0)+portfolio_accounts.filter(a=>a.accountType==="Line of Credit").reduce((s,a)=>s+(Number(a.currentBalance)||0),0);
   const totalPortfolio=portfolio_accounts.filter(a=>a.accountType!=="Line of Credit").reduce((s,a)=>s+(Number(a.currentBalance)||0),0);
   const pending=tasks.filter(t=>!t.done);
-  const overdue=pending.filter(t=>t.dueDate&&new Date(t.dueDate)<new Date());
-  const dueSoon=pending.filter(t=>t.dueDate&&!overdue.includes(t)&&(new Date(t.dueDate)-new Date())/(86400000)<=30);
+  const overdue=pending.filter(t=>t.dueDate&&dueEnd(t.dueDate)<new Date());
+  const dueSoon=pending.filter(t=>t.dueDate&&!overdue.includes(t)&&(dueEnd(t.dueDate)-new Date())/(86400000)<=30);
   const _famIdSet=new Set(families.map(f=>f.id));
   const deadlineContacts=(_contacts||[]).filter(c=>!scope||_famIdSet.has(c.familyId)||(c.advisorEmail||"").toLowerCase()===scope);
   const _acks=data.deadline_acks||[];
@@ -9327,8 +9340,8 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const totalAccounts=accounts.filter(a=>a.accountType!=="Line of Credit").reduce((s,a)=>s+(Number(a.currentBalance)||0),0);
   const totalValuables=valuables.reduce((s,v)=>s+(Number(v.estimatedValue)||0),0);
   const netWorth=totalRE-totalDebt+totalAccounts+totalValuables;
-  const overdue=tasks.filter(t=>t.dueDate&&new Date(t.dueDate)<new Date());
-  const soon=tasks.filter(t=>!overdue.includes(t)&&t.dueDate&&(new Date(t.dueDate)-new Date())/(86400000)<=30);
+  const overdue=tasks.filter(t=>t.dueDate&&dueEnd(t.dueDate)<new Date());
+  const soon=tasks.filter(t=>!overdue.includes(t)&&t.dueDate&&(dueEnd(t.dueDate)-new Date())/(86400000)<=30);
 
   const TABS=[
     {id:"summary",   label:"Summary",    icon:"◈"},
@@ -9717,8 +9730,8 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
       {activeTab==="tasks"&&<div>
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:20}}>Tasks & Deadlines</div>
         {tasks.length===0?<div style={{textAlign:"center",padding:"60px 0",color:B.textMute}}><div style={{fontSize:40,marginBottom:12}}>✅</div>All caught up — no pending tasks.</div>:[...tasks].sort((a,b)=>a.dueDate>b.dueDate?1:-1).map(t=>{
-          const isOD=t.dueDate&&new Date(t.dueDate)<new Date();
-          const isSoon=!isOD&&t.dueDate&&(new Date(t.dueDate)-new Date())/(86400000)<=30;
+          const isOD=t.dueDate&&dueEnd(t.dueDate)<new Date();
+          const isSoon=!isOD&&t.dueDate&&(dueEnd(t.dueDate)-new Date())/(86400000)<=30;
           return <div key={t.id} style={{background:B.white,border:`1px solid ${isOD?"#f5c6c6":B.borderLight}`,borderLeft:`4px solid ${isOD?"#d43030":isSoon?"#d4900a":PRIORITY_COLORS[t.priority]?.dot||B.gold}`,borderRadius:10,padding:"16px 20px",marginBottom:10,boxShadow:B.shadow}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
               <div>
@@ -13874,7 +13887,7 @@ export default function App(){
   const cmStats={families:data.families.filter(isActiveFamily).length,portfolio:(data.portfolio_accounts||[]).length,"cm-notes":data.notes.filter(n=>n.familyId).length,"cm-tasks":data.tasks.filter(t=>t.familyId&&!t.done).length};
   const pStats={"p-contacts":data.contacts.filter(c=>!c.familyId&&_mine((c.advisorEmail||"").toLowerCase())).length,"p-pipeline":data.deals.filter(d=>!d.familyId&&d.stage!=="Closed Lost"&&_mine(_dealAdv(d))).length,"p-notes":data.notes.filter(n=>!n.familyId&&_mine(_contactAdv(n.contactId))).length,"p-tasks":data.tasks.filter(t=>!t.familyId&&!t.done&&_mine(_contactAdv(t.contactId))).length};
   const allStats={...cmStats,...pStats,users:0};
-  const overdue=data.tasks.filter(t=>t.familyId&&!t.done&&t.dueDate&&new Date(t.dueDate)<new Date()).length;
+  const overdue=data.tasks.filter(t=>t.familyId&&!t.done&&t.dueDate&&dueEnd(t.dueDate)<new Date()).length;
   const currentLabel=ALL_NAV.find(n=>n.id===tab)?.label||"";
   const currentSection=NAV_SECTIONS.find(s=>s.items.some(i=>i.id===tab))?.section||"";
 
