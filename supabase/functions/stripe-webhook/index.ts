@@ -601,7 +601,8 @@ Deno.serve(async (req) => {
         const sub = invoice.subscription
           ? await stripe.subscriptions.retrieve(String(invoice.subscription))
           : null;
-        const familyId = sub?.metadata?.family_id;
+        // One-off invoices with no subscription (the Expert-assist fee) carry the household in their own metadata.
+        const familyId = sub?.metadata?.family_id || invoice.metadata?.family_id;
         // Only clears a household that was overdue -- does not touch one already active,
         // final_notice or archived, since a routine renewal invoice should not silently undo a
         // firm decision like archiving.

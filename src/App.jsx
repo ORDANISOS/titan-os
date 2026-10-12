@@ -9156,6 +9156,14 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   // disagree), plus the household's workflow_purchases rows (what was bought, when, at what price,
   // who approved it). The purchases table's read policy lets a client read only its own family's rows.
   const[billingWorkflowUsage,setBillingWorkflowUsage]=useState(null);
+  const[expertPriceBilling,setExpertPriceBilling]=useState(0);
+  useEffect(()=>{
+    let stopped=false;
+    sb.from("plan_features").select("expert_assist_price").eq("plan",clientPlan).maybeSingle().then(({data:r,error})=>{
+      if(!stopped&&!error)setExpertPriceBilling(Number(r&&r.expert_assist_price)||0);
+    });
+    return()=>{stopped=true;};
+  },[clientPlan]);
   const[workflowPurchases,setWorkflowPurchases]=useState([]);
   const[slotBusy,setSlotBusy]=useState(false);
   const loadBillingWorkflows=async()=>{
@@ -9836,6 +9844,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
             {firmPaid
               ? `Extra workflows are $${Number(billingWorkflowUsage.unit_price||0).toFixed(2)}/month each for as long as they stay active, billed to ${firmLabel}. You approve each one when you start it.`
               : `Extra workflows are $${Number(billingWorkflowUsage.unit_price||0).toFixed(2)}/month each for as long as they stay active. You approve each one when you start it. Completing or cancelling a workflow stops its charge from your next renewal.`}
+            {!firmPaid&&expertPriceBilling>0&&` You can also have an ORDANIS Expert work any single workflow for $${expertPriceBilling.toFixed(2)}, one time. It's an option when you start a workflow, and it's charged once to your card with no monthly repeat.`}
           </div>
           {workflowPurchases.length>0&&<div style={{borderTop:`1px solid ${B.borderLight}`,paddingTop:12}}>
             <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:8}}>Extra workflows you've added</div>
@@ -11134,6 +11143,19 @@ async function callPurchaseWorkflow(body){
   return data;
 }
 
+// Calls request-expert-assist: one-time fee for an ORDANIS Expert on a single workflow. Same
+// plain-language error handling as callPurchaseWorkflow.
+async function callExpertAssist(body){
+  const{data,error}=await sb.functions.invoke("request-expert-assist",{body});
+  if(error){
+    let msg=error.message;
+    try{const b=await error.context.json();if(b&&b.error)msg=b.error;}catch(_e){}
+    throw new Error(msg);
+  }
+  if(data&&data.error)throw new Error(data.error);
+  return data;
+}
+
 // Builds one cycle from a playbook. Conditional steps whose flag isn't set are
 // written as 'skipped' rather than omitted, so the record shows they were
 // considered. If the cycle is being started too late for its own lead times, it
@@ -11405,6 +11427,21 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
   const[buyPrompt,setBuyPrompt]=useState(null);
   const[buying,setBuying]=useState(false);
   useEffect(()=>{loadUsage();},[family.id]);
+  // One-time fee to have an ORDANIS Expert work a single workflow (plan_features.expert_assist_price;
+  // null = not offered on this plan). Charged by the request-expert-assist function, never by the browser.
+  const[expertPrice,setExpertPrice]=useState(0);
+  // The `family` prop is a snapshot from when the household was selected; the live row has the current plan.
+  const livePlan=((data.families||[]).find(f=>f.id===family.id)||family).plan;
+  const[wantExpert,setWantExpert]=useState(false);
+  const[startPrompt,setStartPrompt]=useState(null); // {ob}
+  const[expertBusyId,setExpertBusyId]=useState(null);
+  useEffect(()=>{
+    let stopped=false;
+    sb.from("plan_features").select("expert_assist_price").eq("plan",livePlan).maybeSingle().then(({data:r,error})=>{
+      if(!stopped&&!error)setExpertPrice(Number(r&&r.expert_assist_price)||0);
+    });
+    return()=>{stopped=true;};
+  },[livePlan]);
   // When the household's firm pays, buying an extra workflow charges no card: it is billed to the firm.
   const[payer,setPayer]=useState(null);
   useEffect(()=>{
@@ -11414,6 +11451,8 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
   },[family.id]);
   const firmPays=payer?.paid_by==="enterprise";
   const firmName=payer?.firm_name||"your firm";
+  const expertOffered=expertPrice>0&&!firmPays;
+  const expertFeeText=`$${expertPrice.toFixed(2)}`;
 
   const load=async()=>{
     const[o,t,i]=await Promise.all([
@@ -11471,12 +11510,37 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
   // unused slot (see the workflow_purchases migration). So the flow is: read a FRESH count; if the
   // household is at its limit, ask the person to approve the monthly cost; the purchase-workflow
   // function charges the card and creates the slot; only then is the cycle created, which uses it.
-  const createCycle=async(ob,paid)=>{
+  // Asks for an Expert on an existing cycle. The card is charged once, server-side. Returns the
+  // plain-language outcome so the caller can fold it into one message.
+  const addExpert=async instId=>{
+    try{
+      const r=await callExpertAssist({family_id:family.id,instance_id:instId});
+      if(r&&r.already)return{ok:true,text:"An ORDANIS Expert was already added to this workflow."};
+      return{ok:true,text:r&&r.email_sent===false
+        ?`An ORDANIS Expert was added (${expertFeeText} charged), but we could not notify the team automatically. Please email us so someone is assigned.`
+        :`An ORDANIS Expert was added (${expertFeeText} charged once). Our team will assign someone and be in touch.`};
+    }catch(e){return{ok:false,text:e.message||"Could not add an ORDANIS Expert."};}
+  };
+  const addExpertToCycle=async instId=>{
+    setExpertBusyId(instId);
+    const r=await addExpert(instId);
+    toast(r.text,r.ok?"success":"error");
+    setExpertBusyId(null);
+    load();
+  };
+  const createCycle=async(ob,paid,withExpert)=>{
     const t=tplFor(ob.template_key);
     try{
       const inst=await generateWorkflowCycle({template:t,obligation:ob,dueDate:ob.due_date,familyId:family.id});
       const base=inst.status==="at_risk"?"Cycle started — flagged at risk.":"Cycle started.";
-      toast(base+(paid?(firmPays?` This is a paid workflow: it is billed to ${firmName} for as long as it stays active.`:" This is a paid workflow: it is billed monthly for as long as it stays active."):""));
+      let msg=base+(paid?(firmPays?` This is a paid workflow: it is billed to ${firmName} for as long as it stays active.`:" This is a paid workflow: it is billed monthly for as long as it stays active."):"");
+      let expertFailed=false;
+      if(withExpert){
+        const r=await addExpert(inst.id);
+        msg+=" "+(r.ok?r.text:`The cycle started, but the Expert could not be added: ${r.text} You can add one from the cycle below.`);
+        expertFailed=!r.ok;
+      }
+      toast(msg,expertFailed?"error":undefined);
       setOpenInst(inst.id);load();loadUsage();
       return true;
     }catch(e){
@@ -11500,11 +11564,28 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
         toast(`This household has used all ${u.included} included workflows. Only the household owner can add more ($${Number(u.unit_price||0).toFixed(2)}/month each, up to their monthly limit) — ask them to approve it.`,"error");
         return;
       }
+      setWantExpert(false);
       setBuyPrompt({ob,u});
       return;
     }
-    await createCycle(ob,false);
+    if(expertOffered){setWantExpert(false);setStartPrompt({ob});return;}
+    await createCycle(ob,false,false);
   };
+  const confirmStart=async()=>{
+    const{ob}=startPrompt;
+    setBuying(true);
+    await createCycle(ob,false,wantExpert);
+    setStartPrompt(null);
+    setBuying(false);
+  };
+  // The checkbox shared by both start prompts.
+  const expertOption=expertOffered&&<label style={{display:"flex",gap:10,alignItems:"flex-start",marginTop:14,padding:"12px 14px",border:`1px solid ${wantExpert?B.gold:B.borderLight}`,background:wantExpert?"rgba(206,182,132,0.14)":B.white,borderRadius:10,cursor:"pointer"}}>
+    <input type="checkbox" checked={wantExpert} disabled={buying} onChange={e=>setWantExpert(e.target.checked)} style={{marginTop:3}}/>
+    <span style={{fontSize:13,color:B.text,lineHeight:1.55}}>
+      <strong>Have an ORDANIS Expert work this workflow — {expertFeeText}, one time.</strong><br/>
+      <span style={{color:B.textSoft,fontSize:12.5}}>An Expert is assigned to this one workflow only and does the work with you. It is charged once to your card on file, separate from your plan and from any extra-workflow charge, with no monthly repeat.</span>
+    </span>
+  </label>;
   const confirmBuy=async()=>{
     const{ob}=buyPrompt;
     setBuying(true);
@@ -11512,7 +11593,7 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
     try{bought=await callPurchaseWorkflow({action:"buy",family_id:family.id});}
     catch(e){toast(e.message,"error");setBuying(false);return;}
     setBuyPrompt(null);
-    const ok=await createCycle(ob,true);
+    const ok=await createCycle(ob,true,wantExpert);
     if(!ok)toast("Your extra workflow was added and is ready to use, but the cycle did not start. Press Start cycle again — you won't be charged twice.","error");
     loadUsage();
     setBuying(false);
@@ -11564,6 +11645,7 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
           ? `${usage.slots_available} paid workflow${usage.slots_available===1?"":"s"} ready to start.`
           : `You are at your included limit. Another workflow is $${Number(usage.unit_price||0).toFixed(2)}/month for as long as it stays active${firmPays?`, billed to ${firmName}`:""} — you'll be asked to approve it when you start one.`}
       {usage.slots_in_use>0&&` ${usage.slots_in_use} paid workflow${usage.slots_in_use===1?"":"s"} running ($${Number(usage.slots_monthly_cost||0).toFixed(2)}/month).`}
+      {expertOffered&&` Want help? An ORDANIS Expert can work any single workflow for ${expertFeeText}, one time.`}
     </div>;})()}
 
     {buyPrompt&&<Modal title="Add another workflow?" onClose={()=>!buying&&setBuyPrompt(null)}>
@@ -11580,9 +11662,21 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
             You'll be charged a prorated amount now on your card on file, then ${Number(buyPrompt.u.unit_price).toFixed(2)} with each monthly renewal.
             Completing or cancelling the workflow stops the charge from your next renewal. This approval is recorded with your name and the date.
           </div>}
+      {expertOption}
       <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:20,flexWrap:"wrap"}}>
         <Btn variant="ghost" disabled={buying} onClick={()=>setBuyPrompt(null)}>Cancel</Btn>
-        <Btn variant="gold" disabled={buying} onClick={confirmBuy}>{buying?"Adding…":`Add for $${Number(buyPrompt.u.unit_price).toFixed(2)}/month`}</Btn>
+        <Btn variant="gold" disabled={buying} onClick={confirmBuy}>{buying?"Adding…":`Add for $${Number(buyPrompt.u.unit_price).toFixed(2)}/month${wantExpert?` + ${expertFeeText} Expert`:""}`}</Btn>
+      </div>
+    </Modal>}
+
+    {startPrompt&&<Modal title="Start this workflow?" onClose={()=>!buying&&setStartPrompt(null)}>
+      <div style={{fontSize:14,color:B.text,lineHeight:1.6,marginTop:6}}>
+        This lays out every step for <strong>{startPrompt.ob.name}</strong>. It counts toward your included workflows, so there is no extra charge to start it.
+      </div>
+      {expertOption}
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:20,flexWrap:"wrap"}}>
+        <Btn variant="ghost" disabled={buying} onClick={()=>setStartPrompt(null)}>Cancel</Btn>
+        <Btn variant="gold" disabled={buying} onClick={confirmStart}>{buying?"Starting…":wantExpert?`Start + add Expert (${expertFeeText})`:"Start cycle"}</Btn>
       </div>
     </Modal>}
 
@@ -11635,8 +11729,12 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
                     {inst.status==="at_risk"?"At risk":inst.status==="completed"?"Complete":inst.status==="paused"?"Paused — plan change":"In progress"}
                   </span>
                   <span style={{marginLeft:8,fontSize:11,color:B.textMute}}>{doneCount}/{mine.length} steps</span>
+                  {inst.expert_assisted&&<span style={{marginLeft:8,fontSize:10.5,fontWeight:600,borderRadius:20,padding:"2px 9px",background:"rgba(206,182,132,0.22)",color:"#7a5a19"}}>ORDANIS Expert</span>}
                 </div>
-                <Btn small variant="ghost" onClick={()=>setOpenInst(open?null:inst.id)}>{open?"Hide":"View timeline"}</Btn>
+                <span style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+                  {canEdit&&expertOffered&&!inst.expert_assisted&&inst.status!=="completed"&&<Btn small variant="ghost" disabled={expertBusyId===inst.id} onClick={()=>addExpertToCycle(inst.id)}>{expertBusyId===inst.id?"Adding…":`Add ORDANIS Expert — ${expertFeeText}`}</Btn>}
+                  <Btn small variant="ghost" onClick={()=>setOpenInst(open?null:inst.id)}>{open?"Hide":"View timeline"}</Btn>
+                </span>
               </div>
               {inst.risk_note&&<div style={{fontSize:11.5,color:"#8b1a1a",marginTop:5}}>{inst.risk_note}</div>}
 
