@@ -1081,9 +1081,10 @@ function AccountBalancesPanel({account,family,history,documents,reload,toast,can
   };
 
   const save=async()=>{
-    const bal=Number(String(form.balance).replace(/[^0-9.\-]/g,""));
     if(!form.asOf){toast("An as-of date is required — a balance without one cannot be placed in time","error");return;}
-    if(!Number.isFinite(bal)){toast("Enter a balance","error");return;}
+    const balText=String(form.balance==null?"":form.balance).replace(/[$,\s]/g,"");
+    if(!/^-?\d+(\.\d{1,2})?$/.test(balText)){toast("Enter the balance as a number, like 125000.50","error");return;}
+    const bal=Number(balText);
     setBusy(true);
     try{
       // Upsert on (account_id, as_of): a corrected statement for a period replaces
@@ -2663,6 +2664,8 @@ function FloatingAssistant({family,families,data,reload,toast,userProfile}){
 // the direct recipient — this cannot be turned off client-side, and the
 // server enforces it independently regardless of what's submitted.
 const EMAIL_RE=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// A task reminder of 0 means "no reminder". The old `x||7` turned 0 into 7, so it could never be saved.
+const reminderDaysOr7=v=>{if(v===null||v===undefined||v==="")return 7;const n=Number(v);return Number.isFinite(n)&&n>=0?n:7;};
 function EmailAdvisorModal({family,userProfile,data,onClose}){
   const primaryName=(family.advisorName||"").trim();
   const primaryEmailRaw=(family.advisorEmail||"").trim();
@@ -2972,8 +2975,8 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
 
   // Quick add task
   const addTask=async(f)=>{
-    const{error}=await sb.from("tasks").insert({family_id:family.id,contact_id:f.contactId||null,title:f.title,due_date:f.dueDate||null,priority:f.priority,reminder_days:f.reminderDays||7,done:false,recurrence:f.recurrence||null,recurrence_interval:f.recurrence==="Custom"?(Number(f.recurrenceInterval)||1):null,recurrence_unit:f.recurrence==="Custom"?(f.recurrenceUnit||"week"):null});
-    if(error)toast(error.message,"error");else{toast("Task added. You're all set.");reload("tasks");}
+    const{error}=await sb.from("tasks").insert({family_id:family.id,contact_id:f.contactId||null,title:f.title,due_date:f.dueDate||null,priority:f.priority,reminder_days:reminderDaysOr7(f.reminderDays),done:false,recurrence:f.recurrence||null,recurrence_interval:f.recurrence==="Custom"?(Number(f.recurrenceInterval)||1):null,recurrence_unit:f.recurrence==="Custom"?(f.recurrenceUnit||"week"):null});
+    if(error){toast(error.message,"error");return false;}else{toast("Task added. You're all set.");reload("tasks");}
   };
   const toggleTask=async(t)=>{
     const marking=!t.done;
@@ -2981,7 +2984,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
     if(error){toast(error.message,"error");return;}
     if(marking&&t.recurrence){
       const nd=nextRecurrence(t.dueDate,t.recurrence,t.recurrenceInterval,t.recurrenceUnit);
-      if(nd){await sb.from("tasks").insert({family_id:t.familyId||family.id,contact_id:t.contactId||null,title:t.title,due_date:nd,priority:t.priority,reminder_days:t.reminderDays||7,done:false,recurrence:t.recurrence,recurrence_interval:t.recurrence==="Custom"?(t.recurrenceInterval||1):null,recurrence_unit:t.recurrence==="Custom"?(t.recurrenceUnit||"week"):null});toast("Next occurrence: "+fmt(nd));}
+      if(nd){await sb.from("tasks").insert({family_id:t.familyId||family.id,contact_id:t.contactId||null,title:t.title,due_date:nd,priority:t.priority,reminder_days:reminderDaysOr7(t.reminderDays),done:false,recurrence:t.recurrence,recurrence_interval:t.recurrence==="Custom"?(t.recurrenceInterval||1):null,recurrence_unit:t.recurrence==="Custom"?(t.recurrenceUnit||"week"):null});toast("Next occurrence: "+fmt(nd));}
     }
     reload("tasks");
   };
@@ -2997,7 +3000,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   // Add/remove members
   const addMember=async(f)=>{
     const{error}=await sb.from("contacts").insert({family_id:family.id,name:f.name,email:f.email||null,phone:f.phone||null,company:f.company||null,type:f.type||"Individual",dob:f.dob||null,anniversary:f.anniversary||null,address:f.address||null,is_advisor:!!f.isAdvisor,tags:null});
-    if(error)toast(error.message,"error");else{toast("Member added. Welcome to the household record.");reload("contacts");}
+    if(error){toast(error.message,"error");return false;}else{toast("Member added. Welcome to the household record.");reload("contacts");}
   };
   const delMember=async(id)=>{
     const{error}=await sb.from("contacts").delete().eq("id",id);
@@ -3005,7 +3008,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   };
   const editMember=async(f)=>{
     const{error}=await sb.from("contacts").update({name:f.name,email:f.email||null,phone:f.phone||null,company:f.company||null,type:f.type||"Individual",dob:f.dob||null,anniversary:f.anniversary||null,address:f.address||null,is_advisor:!!f.isAdvisor}).eq("id",editM.id);
-    if(error)toast(error.message,"error");else{toast("Member updated. All saved.");reload("contacts");}
+    if(error){toast(error.message,"error");return false;}else{toast("Member updated. All saved.");reload("contacts");}
   };
   const toggleMemberAdvisor=async(c)=>{
     if(!c.email){toast("Add an email to this contact first — the client emails them here.","error");return;}
@@ -3078,8 +3081,8 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
     }
     return _byName(a,b);
   });
-  const addFamilyContact=async(f)=>{const{error}=await sb.from("family_contacts").insert({family_id:family.id,name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,is_advisor:!!f.isAdvisor,notes:f.notes||null});if(error)toast(error.message,"error");else{toast("Contact added. Your team is easy to find now.");reload("family_contacts");}};
-  const editFamilyContact=async(f)=>{const{error}=await sb.from("family_contacts").update({name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,is_advisor:!!f.isAdvisor,notes:f.notes||null}).eq("id",editFC.id);if(error)toast(error.message,"error");else{toast("Contact updated. All saved.");reload("family_contacts");}};
+  const addFamilyContact=async(f)=>{const{error}=await sb.from("family_contacts").insert({family_id:family.id,name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,is_advisor:!!f.isAdvisor,notes:f.notes||null});if(error){toast(error.message,"error");return false;}else{toast("Contact added. Your team is easy to find now.");reload("family_contacts");}};
+  const editFamilyContact=async(f)=>{const{error}=await sb.from("family_contacts").update({name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,is_advisor:!!f.isAdvisor,notes:f.notes||null}).eq("id",editFC.id);if(error){toast(error.message,"error");return false;}else{toast("Contact updated. All saved.");reload("family_contacts");}};
   const delFamilyContact=async(id)=>{const{error}=await sb.from("family_contacts").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Contact removed");reload("family_contacts");}};
   const toggleFCAdvisor=async(c)=>{if(!c.email){toast("Add an email to this contact first — the client emails them here.","error");return;}const{error}=await sb.from("family_contacts").update({is_advisor:!c.isAdvisor}).eq("id",c.id);if(error)toast(error.message,"error");else{toast(!c.isAdvisor?"Marked as an emailable ORDANIS Expert":"Removed as ORDANIS Expert option");reload("family_contacts");}};
 
@@ -3089,20 +3092,20 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   const docForSection=(pid,section)=>(data.documents||[]).find(d=>d.propertyId===pid&&d.propertySection===section);
   // The family's scheduled-personal-property endorsement, linked from Valuables.
   const valuablesPolicyDoc=()=>(data.documents||[]).find(d=>d.familyId===family.id&&d.propertySection==="valuables_schedule");
-  const addPropertyContact=async(pid,f)=>{const{error}=await sb.from("property_contacts").insert({property_id:pid,family_id:family.id,name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,notes:f.notes||null});if(error)toast(error.message,"error");else{toast("Contact added. Your team is easy to find now.");reload("property_contacts");}};
-  const editPropertyContact=async(id,f)=>{const{error}=await sb.from("property_contacts").update({name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,notes:f.notes||null}).eq("id",id);if(error)toast(error.message,"error");else{toast("Contact updated. All saved.");reload("property_contacts");}};
+  const addPropertyContact=async(pid,f)=>{const{error}=await sb.from("property_contacts").insert({property_id:pid,family_id:family.id,name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,notes:f.notes||null});if(error){toast(error.message,"error");return false;}else{toast("Contact added. Your team is easy to find now.");reload("property_contacts");}};
+  const editPropertyContact=async(id,f)=>{const{error}=await sb.from("property_contacts").update({name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,notes:f.notes||null}).eq("id",id);if(error){toast(error.message,"error");return false;}else{toast("Contact updated. All saved.");reload("property_contacts");}};
   const delPropertyContact=async(id)=>{const{error}=await sb.from("property_contacts").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Contact removed");reload("property_contacts");}};
 
   // Add property
   const addProperty=async(f)=>{
     const row={family_id:family.id,owner_name:f.ownerName||null,address:f.address,property_type:f.propertyType,purchase_price:f.purchasePrice||null,purchase_date:f.purchaseDate||null,current_value:f.currentValue||null,lender:f.lender||null,loan_balance:f.loanBalance||null,interest_rate:f.interestRate||null,loan_payment:f.loanPayment||null,loan_maturity_date:f.loanMaturityDate||null,loan_type:f.loanType,rental_income:f.rentalIncome||null,property_taxes:f.propertyTaxes||null,utilities:f.utilities||null,insurance_company:f.insuranceCompany||null,insurance_premium:f.insurancePremium||null,insurance_expiration:f.insuranceExpiration||null,flood_insurance:!!f.floodInsurance,flood_insurance_company:f.floodInsuranceCompany||null,flood_insurance_premium:f.floodInsurancePremium||null,flood_insurance_expiration:f.floodInsuranceExpiration||null,hoa_fee:Number(f.hoaFee)||0,property_management_fee_pct:Number(f.propertyManagementFeePct)||0,include_mortgage_in_cashflow:f.includeMortgageInCashflow!==false,second_mortgage_balance:f.secondMortgageBalance||null,second_mortgage_payment:f.secondMortgagePayment||null,notes:f.notes||null};
     const{error}=await sb.from("properties").insert(row);
-    if(error)toast(error.message,"error");else{toast("Property added. Your record is looking more complete.");reload("properties");}
+    if(error){toast(error.message,"error");return false;}else{toast("Property added. Your record is looking more complete.");reload("properties");}
   };
   const editProperty=async(id,f)=>{
     const row={owner_name:f.ownerName||null,address:f.address,property_type:f.propertyType,purchase_price:f.purchasePrice||null,purchase_date:f.purchaseDate||null,current_value:f.currentValue||null,lender:f.lender||null,loan_balance:f.loanBalance||null,interest_rate:f.interestRate||null,loan_payment:f.loanPayment||null,loan_maturity_date:f.loanMaturityDate||null,loan_type:f.loanType,rental_income:f.rentalIncome||null,property_taxes:f.propertyTaxes||null,utilities:f.utilities||null,insurance_company:f.insuranceCompany||null,insurance_premium:f.insurancePremium||null,insurance_expiration:f.insuranceExpiration||null,flood_insurance:!!f.floodInsurance,flood_insurance_company:f.floodInsuranceCompany||null,flood_insurance_premium:f.floodInsurancePremium||null,flood_insurance_expiration:f.floodInsuranceExpiration||null,hoa_fee:Number(f.hoaFee)||0,property_management_fee_pct:Number(f.propertyManagementFeePct)||0,include_mortgage_in_cashflow:f.includeMortgageInCashflow!==false,second_mortgage_balance:f.secondMortgageBalance||null,second_mortgage_payment:f.secondMortgagePayment||null,notes:f.notes||null};
     const{error}=await sb.from("properties").update(row).eq("id",id);
-    if(error)toast(error.message,"error");else{toast("Property updated. All saved.");reload("properties");}
+    if(error){toast(error.message,"error");return false;}else{toast("Property updated. All saved.");reload("properties");}
   };
   const delProperty=async(id)=>{
     const{error}=await sb.from("properties").delete().eq("id",id);
@@ -3124,11 +3127,11 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   // Add valuable
   const addValuable=async(f)=>{
     const{error}=await sb.from("valuables").insert({family_id:family.id,category:f.category,description:f.description,make_model:f.makeModel||null,year:f.year||null,estimated_value:f.estimatedValue||null,insured:!!f.insured,insurance_company:f.insuranceCompany||null,notes:f.notes||null});
-    if(error)toast(error.message,"error");else{toast("Valuable added. One more thing safely on file.");reload("valuables");}
+    if(error){toast(error.message,"error");return false;}else{toast("Valuable added. One more thing safely on file.");reload("valuables");}
   };
   const editValuable=async(id,f)=>{
     const{error}=await sb.from("valuables").update({category:f.category,description:f.description,make_model:f.makeModel||null,year:f.year||null,estimated_value:f.estimatedValue||null,insured:!!f.insured,insurance_company:f.insuranceCompany||null,notes:f.notes||null}).eq("id",id);
-    if(error)toast(error.message,"error");else{toast("Valuable updated. All saved.");reload("valuables");}
+    if(error){toast(error.message,"error");return false;}else{toast("Valuable updated. All saved.");reload("valuables");}
   };
   const delValuable=async(id)=>{
     const{error}=await sb.from("valuables").delete().eq("id",id);
@@ -3138,7 +3141,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   // Add deal
   const addDeal=async(f)=>{
     const{error}=await sb.from("deals").insert({family_id:family.id,contact_id:f.contactId||null,title:f.title,value:f.value||null,stage:f.stage,close_date:f.closeDate||null});
-    if(error)toast(error.message,"error");else{toast("Deal added");reload("deals");}
+    if(error){toast(error.message,"error");return false;}else{toast("Deal added");reload("deals");}
   };
   const moveDeal=async(deal,dir)=>{
     const idx=STAGES.indexOf(deal.stage);const next=STAGES[idx+dir];if(!next)return;
@@ -3153,11 +3156,11 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   // Add portfolio account
   const addAccount=async(f)=>{
     const{error}=await sb.from("portfolio_accounts").insert({family_id:family.id,institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,account_advisor_name:f.accountAdvisorName||null,account_advisor_phone:f.accountAdvisorPhone||null,account_advisor_email:f.accountAdvisorEmail||null,notes:f.notes||null});
-    if(error)toast(error.message,"error");else{toast("Account added. Your record is looking more complete.");reload("portfolio_accounts");}
+    if(error){toast(error.message,"error");return false;}else{toast("Account added. Your record is looking more complete.");reload("portfolio_accounts");}
   };
   const editAccount=async(id,f)=>{
     const{error}=await sb.from("portfolio_accounts").update({institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,account_advisor_name:f.accountAdvisorName||null,account_advisor_phone:f.accountAdvisorPhone||null,account_advisor_email:f.accountAdvisorEmail||null,notes:f.notes||null}).eq("id",id);
-    if(error)toast(error.message,"error");else{toast("Account updated. All saved.");reload("portfolio_accounts");}
+    if(error){toast(error.message,"error");return false;}else{toast("Account updated. All saved.");reload("portfolio_accounts");}
   };
   const delAccount=async(id)=>{
     const{error}=await sb.from("portfolio_accounts").delete().eq("id",id);
@@ -3746,7 +3749,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
                 <div style={{fontWeight:700,color:B.navy,textDecoration:t.done?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
                 <div style={{fontSize:12,color:B.textSoft,marginTop:2,display:"flex",gap:10}}>
                   {t.dueDate&&<span style={{color:isOD?"#d43030":isSoon?"#d4900a":B.textSoft}}>{isOD?"⚠ Overdue · ":isSoon?"⏰ · ":""}{fmt(t.dueDate)}</span>}
-                  {t.reminderDays&&<span style={{color:B.textMute}}>🔔 {t.reminderDays}d reminder</span>}
+                  {t.reminderDays>0&&<span style={{color:B.textMute}}>🔔 {t.reminderDays}d reminder</span>}
                 </div>
               </div>
               <Badge scheme={PRIORITY_COLORS[t.priority]}>{t.priority}</Badge>
@@ -3777,15 +3780,15 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
       {modal==="member"&&<Modal title={editM?"Edit Member":"Add Member"} onClose={()=>{setModal(null);setEditM(null);}}>
         <MemberForm initial={editM?{name:editM.name||"",email:editM.email||"",phone:editM.phone||"",company:editM.company||"",type:editM.type||"Individual",dob:editM.dob||"",anniversary:editM.anniversary||"",address:editM.address||"",isAdvisor:!!editM.isAdvisor}:null} onSave={async f=>{editM?await editMember(f):await addMember(f);setModal(null);setEditM(null);}} onClose={()=>{setModal(null);setEditM(null);}}/>
       </Modal>}
-      {modal==="task"&&<Modal title="New Task" onClose={()=>setModal(null)}><TaskForm contacts={contacts} onSave={async f=>{await addTask(f);setModal(null);}} onClose={()=>setModal(null)}/></Modal>}
-      {modal==="property"&&<Modal title="Add Property" onClose={()=>setModal(null)} wide><PropertyForm canExtract={true} onSave={async f=>{await addProperty(f);setModal(null);}} onClose={()=>setModal(null)}/></Modal>}
-      {modal&&modal.type==="editProperty"&&<Modal title="Edit Property" onClose={()=>setModal(null)} wide><PropertyForm initial={modal.property} canExtract={true} onSave={async f=>{await editProperty(modal.property.id,f);setModal(null);}} onClose={()=>setModal(null)}/></Modal>}
-      {modal==="valuable"&&<Modal title="Add Valuable" onClose={()=>setModal(null)}><ValuableForm onSave={async f=>{await addValuable(f);setModal(null);}} onClose={()=>setModal(null)}/></Modal>}
+      {modal==="task"&&<Modal title="New Task" onClose={()=>setModal(null)}><TaskForm contacts={contacts} onSave={async f=>{const r=await addTask(f);if(r!==false)setModal(null);return r;}} onClose={()=>setModal(null)}/></Modal>}
+      {modal==="property"&&<Modal title="Add Property" onClose={()=>setModal(null)} wide><PropertyForm canExtract={true} onSave={async f=>{const r=await addProperty(f);if(r!==false)setModal(null);return r;}} onClose={()=>setModal(null)}/></Modal>}
+      {modal&&modal.type==="editProperty"&&<Modal title="Edit Property" onClose={()=>setModal(null)} wide><PropertyForm initial={modal.property} canExtract={true} onSave={async f=>{const r=await editProperty(modal.property.id,f);if(r!==false)setModal(null);return r;}} onClose={()=>setModal(null)}/></Modal>}
+      {modal==="valuable"&&<Modal title="Add Valuable" onClose={()=>setModal(null)}><ValuableForm onSave={async f=>{const r=await addValuable(f);if(r!==false)setModal(null);return r;}} onClose={()=>setModal(null)}/></Modal>}
       {modal&&modal.type==="propertyContact"&&<Modal title={modal.contact?"Edit Service Provider":"Add Service Provider"} onClose={()=>setModal(null)}><PropertyContactForm initial={modal.contact?{name:modal.contact.name||"",role:modal.contact.role||"",company:modal.contact.company||"",email:modal.contact.email||"",phone:modal.contact.phone||"",notes:modal.contact.notes||""}:null} onSave={async f=>{modal.contact?await editPropertyContact(modal.contact.id,f):await addPropertyContact(modal.propertyId,f);setModal(null);}} onClose={()=>setModal(null)}/></Modal>}
-      {modal&&modal.type==="editValuable"&&<Modal title="Edit Valuable" onClose={()=>setModal(null)}><ValuableForm initial={modal.valuable} onSave={async f=>{await editValuable(modal.valuable.id,f);setModal(null);}} onClose={()=>setModal(null)}/></Modal>}
-      {modal==="deal"&&<Modal title="Add Deal" onClose={()=>setModal(null)}><SimpleDealForm contacts={contacts} onSave={async f=>{await addDeal(f);setModal(null);}} onClose={()=>setModal(null)}/></Modal>}
-      {modal==="account"&&<Modal title="Add Portfolio Account" onClose={()=>setModal(null)}><AccountForm onSave={async f=>{await addAccount(f);setModal(null);}} onClose={()=>setModal(null)}/></Modal>}
-      {modal&&modal.type==="editAccount"&&<Modal title="Edit Portfolio Account" onClose={()=>setModal(null)}><AccountForm initial={modal.account} onSave={async f=>{await editAccount(modal.account.id,f);setModal(null);}} onClose={()=>setModal(null)}/></Modal>}
+      {modal&&modal.type==="editValuable"&&<Modal title="Edit Valuable" onClose={()=>setModal(null)}><ValuableForm initial={modal.valuable} onSave={async f=>{const r=await editValuable(modal.valuable.id,f);if(r!==false)setModal(null);return r;}} onClose={()=>setModal(null)}/></Modal>}
+      {modal==="deal"&&<Modal title="Add Deal" onClose={()=>setModal(null)}><SimpleDealForm contacts={contacts} onSave={async f=>{const r=await addDeal(f);if(r!==false)setModal(null);return r;}} onClose={()=>setModal(null)}/></Modal>}
+      {modal==="account"&&<Modal title="Add Portfolio Account" onClose={()=>setModal(null)}><AccountForm onSave={async f=>{const r=await addAccount(f);if(r!==false)setModal(null);return r;}} onClose={()=>setModal(null)}/></Modal>}
+      {modal&&modal.type==="editAccount"&&<Modal title="Edit Portfolio Account" onClose={()=>setModal(null)}><AccountForm initial={modal.account} onSave={async f=>{const r=await editAccount(modal.account.id,f);if(r!==false)setModal(null);return r;}} onClose={()=>setModal(null)}/></Modal>}
       {reportOpen&&<FamilyReport family={family} data={data} onClose={()=>setReportOpen(false)}/>}
     </div>
   );
@@ -3796,7 +3799,7 @@ function PropertyContactForm({initial,onSave,onClose}){
   const[f,setF]=useState(initial||{name:"",role:"",company:"",email:"",phone:"",notes:""});
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-  const save=async()=>{if(!f.name.trim())return;setSaving(true);await onSave(f);onClose();};
+  const save=async()=>{if(!f.name.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
     <Field label="Name"><Inp placeholder="ABC Landscaping" value={f.name} onChange={set("name")}/></Field>
     <Grid2>
@@ -3819,7 +3822,7 @@ function FamilyContactForm({initial,onSave,onClose,hideAdvisor=false,rolePlaceho
   const[f,setF]=useState(initial||{name:"",role:"",company:"",email:"",phone:"",isAdvisor:false,notes:""});
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-  const save=async()=>{if(!f.name.trim())return;setSaving(true);await onSave(f);onClose();};
+  const save=async()=>{if(!f.name.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
     <Field label="Name"><Inp placeholder="John Smith" value={f.name} onChange={set("name")}/></Field>
     <Grid2>
@@ -3847,7 +3850,7 @@ function MemberForm({initial,onSave,onClose}){
   const[f,setF]=useState(initial||{name:"",email:"",phone:"",company:"",type:"Individual",dob:"",anniversary:"",address:"",isAdvisor:false});
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-  const save=async()=>{if(!f.name.trim())return;setSaving(true);await onSave(f);onClose();};
+  const save=async()=>{if(!f.name.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
     <Field label="Full Name"><Inp placeholder="Jane Smith" value={f.name} onChange={set("name")}/></Field>
     <Grid2>
@@ -3917,7 +3920,7 @@ function TaskForm({initial,contacts=[],onSave,onClose}){
   const[f,setF]=useState(initial||{title:"",contactId:"",dueDate:"",priority:"Medium",reminderDays:7,done:false,recurrence:"",recurrenceInterval:1,recurrenceUnit:"week"});
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-  const save=async()=>{if(!f.title.trim())return;setSaving(true);await onSave(f);onClose();};
+  const save=async()=>{if(!f.title.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
     <Field label="Task"><Inp placeholder="Follow up on loan maturity" value={f.title} onChange={set("title")}/></Field>
     {contacts.length>0&&<Field label="Contact"><Sel value={f.contactId||""} onChange={set("contactId")}><option value="">— None —</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Sel></Field>}
@@ -3926,7 +3929,7 @@ function TaskForm({initial,contacts=[],onSave,onClose}){
       <Field label="Priority"><Sel value={f.priority} onChange={set("priority")}><option>Low</option><option>Medium</option><option>High</option></Sel></Field>
     </Grid2>
     <Field label="Email Reminder">
-      <Sel value={f.reminderDays||7} onChange={e=>setF(p=>({...p,reminderDays:Number(e.target.value)}))}>
+      <Sel value={reminderDaysOr7(f.reminderDays)} onChange={e=>setF(p=>({...p,reminderDays:Number(e.target.value)}))}>
         <option value={0}>No reminder</option>
         {REMINDER_OPTIONS.map(r=><option key={r.days} value={r.days}>{r.label}</option>)}
       </Sel>
@@ -3952,7 +3955,7 @@ function PropertyForm({initial,onSave,onClose,canExtract=false}){
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const setChk=k=>e=>setF(p=>({...p,[k]:e.target.checked}));
-  const save=async()=>{if(!f.address.trim())return;setSaving(true);await onSave(f);onClose();};
+  const save=async()=>{if(!f.address.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   const[extracting,setExtracting]=useState(false);
   const[extractMsg,setExtractMsg]=useState(null); // {type:"success"|"error", text}
   const fileRef=useRef(null);
@@ -4050,7 +4053,7 @@ function ValuableForm({initial,onSave,onClose}){
   const[f,setF]=useState(initial||{category:"Car / Vehicle",description:"",makeModel:"",year:"",estimatedValue:"",insured:false,insuranceCompany:"",notes:""});
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-  const save=async()=>{if(!f.description.trim())return;setSaving(true);await onSave(f);onClose();};
+  const save=async()=>{if(!f.description.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
     <Grid2><Field label="Category"><Sel value={f.category} onChange={set("category")}>{VALUABLE_CATS.map(c=><option key={c}>{c}</option>)}</Sel></Field><Field label="Year"><Inp type="number" placeholder="2023" value={f.year||""} onChange={set("year")}/></Field></Grid2>
     <Field label="Description"><Inp placeholder="2023 Ferrari Roma" value={f.description} onChange={set("description")}/></Field>
@@ -4067,7 +4070,7 @@ function SimpleDealForm({contacts=[],onSave,onClose}){
   const[f,setF]=useState({contactId:"",title:"",value:"",stage:"Lead",closeDate:""});
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-  const save=async()=>{if(!f.title.trim())return;setSaving(true);await onSave(f);onClose();};
+  const save=async()=>{if(!f.title.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
     <Field label="Deal Title"><Inp placeholder="Estate planning engagement" value={f.title} onChange={set("title")}/></Field>
     {contacts.length>0&&<Field label="Contact"><Sel value={f.contactId||""} onChange={set("contactId")}><option value="">— None —</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Sel></Field>}
@@ -4084,7 +4087,7 @@ function AccountForm({initial,onSave,onClose}){
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const advisorPhoneOk=isValidPhone(f.accountAdvisorPhone||"");
   const advisorEmailOk=!(f.accountAdvisorEmail||"").trim()||EMAIL_RE.test((f.accountAdvisorEmail||"").trim());
-  const save=async()=>{if(!f.institution.trim()||!advisorPhoneOk||!advisorEmailOk)return;setSaving(true);await onSave(f);onClose();};
+  const save=async()=>{if(!f.institution.trim()||!advisorPhoneOk||!advisorEmailOk)return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   const pct=pctChange(f.startingBalance,f.currentBalance);
   return <div>
     <Grid2><Field label="Institution"><Inp placeholder="Merrill Lynch" value={f.institution} onChange={set("institution")}/></Field><Field label="Banker Name"><Inp value={f.bankerName||""} onChange={set("bankerName")}/></Field></Grid2>
@@ -4142,7 +4145,7 @@ function CashFlowEventForm({initial,onSave,onClose,properties=[],vendors=[],bill
       return next;
     });
   };
-  const save=async()=>{if(!f.amount||!f.startDate)return;setSaving(true);await onSave(f);onClose();};
+  const save=async()=>{if(!f.amount||!f.startDate)return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   const isExpense=f.direction==="expense";
   const typeOptions=isExpense?CF_EXPENSE_CATEGORIES:CF_EVENT_TYPES;
   return <div>
@@ -4665,11 +4668,11 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
     // New events go to the end of the list
     const maxSort=Math.max(0,...events.map(e=>Number(e.sortOrder)||0));
     const{error}=await sb.from("cash_flow_events").insert({family_id:family.id,direction:f.direction||"income",event_type:f.eventType,description:f.description||null,amount:Number(f.amount)||0,frequency:f.frequency,start_date:f.startDate,end_date:f.endDate||null,tax_treatment:f.taxTreatment||"ordinary",notes:f.notes||null,sort_order:maxSort+10,pcm_responsible:f.direction==="expense"?!!f.pcmResponsible:false,category:f.direction==="expense"?(f.category||null):null,property_id:f.propertyId||null,...(f.direction==="expense"?splitVendorKey(f.vendorKey):{vendor_family_contact_id:null,vendor_property_contact_id:null})});
-    if(error)toast(error.message,"error");else{toast("Event added. Your cash flow just got clearer.");reload("cash_flow_events");}
+    if(error){toast(error.message,"error");return false;}else{toast("Event added. Your cash flow just got clearer.");reload("cash_flow_events");}
   };
   const editEvent=async(id,f)=>{
     const{error}=await sb.from("cash_flow_events").update({direction:f.direction||"income",event_type:f.eventType,description:f.description||null,amount:Number(f.amount)||0,frequency:f.frequency,start_date:f.startDate,end_date:f.endDate||null,tax_treatment:f.taxTreatment||"ordinary",notes:f.notes||null,pcm_responsible:f.direction==="expense"?!!f.pcmResponsible:false,category:f.direction==="expense"?(f.category||null):null,property_id:f.propertyId||null,...(f.direction==="expense"?splitVendorKey(f.vendorKey):{vendor_family_contact_id:null,vendor_property_contact_id:null})}).eq("id",id);
-    if(error)toast(error.message,"error");else{toast("Event updated. All saved.");reload("cash_flow_events");}
+    if(error){toast(error.message,"error");return false;}else{toast("Event updated. All saved.");reload("cash_flow_events");}
   };
   const delEvent=async(id)=>{
     const{error}=await sb.from("cash_flow_events").delete().eq("id",id);
@@ -5018,8 +5021,8 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
     </div>
 
     {/* Modals */}
-    {modal&&modal.type==="add"&&<Modal title="New Cash Flow Event" onClose={()=>setModal(null)} wide><CashFlowEventForm properties={properties} vendors={vendors} billPay={billPay} onSave={async f=>{await addEvent(f);setModal(null);}} onClose={()=>setModal(null)}/></Modal>}
-    {modal&&modal.type==="edit"&&<Modal title={modal.event.direction==="expense"?"Edit Expense":"Edit Income Event"} onClose={()=>setModal(null)} wide><CashFlowEventForm initial={modal.event} properties={properties} vendors={vendors} billPay={billPay} onSave={async f=>{await editEvent(modal.event.id,f);setModal(null);}} onClose={()=>setModal(null)}/></Modal>}
+    {modal&&modal.type==="add"&&<Modal title="New Cash Flow Event" onClose={()=>setModal(null)} wide><CashFlowEventForm properties={properties} vendors={vendors} billPay={billPay} onSave={async f=>{const r=await addEvent(f);if(r!==false)setModal(null);return r;}} onClose={()=>setModal(null)}/></Modal>}
+    {modal&&modal.type==="edit"&&<Modal title={modal.event.direction==="expense"?"Edit Expense":"Edit Income Event"} onClose={()=>setModal(null)} wide><CashFlowEventForm initial={modal.event} properties={properties} vendors={vendors} billPay={billPay} onSave={async f=>{const r=await editEvent(modal.event.id,f);if(r!==false)setModal(null);return r;}} onClose={()=>setModal(null)}/></Modal>}
     {reportOpen&&<CashFlowReport family={family} projectionMonths={settings.projectionMonths} projectionMode={settings.projectionMode} filingStatus={settings.filingStatus} baseIncome={settings.baseIncome} stateRate={settings.stateTaxRate} stateName={STATE_TAX_RATES.find(s=>s.code===settings.stateCode)?.name||settings.stateCode} localRate={settings.localTaxRate} monthlyData={monthlyData} events={enrichedEvents} onClose={()=>setReportOpen(false)}/>}
   </div>;
 }
@@ -5045,7 +5048,7 @@ function FamilyForm({initial,onSave,onClose,userProfile,advisors=[]}){
     setF(p=>({...p,advisorEmail:email,advisorName:adv?(adv.full_name||""):""}));
   };
   const canSave=!!f.name.trim()&&PLANS.includes(f.plan);
-  const save=async()=>{if(!canSave)return;setSaving(true);await onSave(f);onClose();};
+  const save=async()=>{if(!canSave)return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
     <Field label="Family Name"><Inp placeholder="The Smith Family" value={f.name} onChange={set("name")}/></Field>
     <Field label="Plan">
@@ -5236,8 +5239,8 @@ function FamiliesView({data,reload,toast,userProfile,navIntent,onNavConsumed}){
   // to open the household: fetchTable scopes an advisor's families by advisor_email, so a null
   // there would make every Core family invisible to everyone but an admin the moment it was
   // created. Expert of record for access, not a service level.
-  const add=async f=>{const{error}=await sb.from("families").insert({name:f.name,plan:f.plan,advisor_name:f.advisorName||null,advisor_email:f.advisorEmail||null,notes:f.notes||null});if(error)toast(error.message,"error");else{toast("Family added");reload("families");}};
-  const edit=async f=>{const{error}=await sb.from("families").update({name:f.name,plan:f.plan,advisor_name:f.advisorName||null,advisor_email:f.advisorEmail||null,notes:f.notes||null}).eq("id",modal.id);if(error)toast(error.message,"error");else{toast("Updated");reload("families");}};
+  const add=async f=>{const{error}=await sb.from("families").insert({name:f.name,plan:f.plan,advisor_name:f.advisorName||null,advisor_email:f.advisorEmail||null,notes:f.notes||null});if(error){toast(error.message,"error");return false;}else{toast("Family added");reload("families");}};
+  const edit=async f=>{const{error}=await sb.from("families").update({name:f.name,plan:f.plan,advisor_name:f.advisorName||null,advisor_email:f.advisorEmail||null,notes:f.notes||null}).eq("id",modal.id);if(error){toast(error.message,"error");return false;}else{toast("Updated");reload("families");}};
 
   // If a family is selected, show its dashboard
   if(selected) return <ViewErrorBoundary label="the family dashboard" onBack={()=>setSelected(null)}>
@@ -5349,7 +5352,7 @@ function PortfolioAccountForm({initial,families=[],onSave,onClose}){
   const[f,setF]=useState(initial||{familyId:"",institution:"",bankerName:"",accountType:"Investment",startingBalance:"",currentBalance:"",notes:""});
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-  const save=async()=>{if(!f.institution.trim())return;setSaving(true);await onSave(f);onClose();};
+  const save=async()=>{if(!f.institution.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   const pct=pctChange(f.startingBalance,f.currentBalance);
   return <div>
     {families.length>0&&<Field label="Family"><Sel value={f.familyId||""} onChange={set("familyId")}><option value="">— No family —</option>{families.map(fm=><option key={fm.id} value={fm.id}>{fm.name}</option>)}</Sel></Field>}
@@ -5376,8 +5379,8 @@ function PortfolioView({data,reload,toast,userProfile}){
   const totalStart=accounts.reduce((s,a)=>s+(Number(a.startingBalance)||0),0);
   const totalPct=totalStart>0?(((totalValue-totalStart)/totalStart)*100).toFixed(2):null;
 
-  const add=async f=>{const{error}=await sb.from("portfolio_accounts").insert({family_id:f.familyId||null,institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,notes:f.notes||null});if(error)toast(error.message,"error");else{toast("Account added. Your record is looking more complete.");reload("portfolio_accounts");}};
-  const edit=async f=>{const{error}=await sb.from("portfolio_accounts").update({family_id:f.familyId||null,institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,notes:f.notes||null}).eq("id",modal.id);if(error)toast(error.message,"error");else{toast("Updated");reload("portfolio_accounts");setSelected({...selected,...f});}};
+  const add=async f=>{const{error}=await sb.from("portfolio_accounts").insert({family_id:f.familyId||null,institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,notes:f.notes||null});if(error){toast(error.message,"error");return false;}else{toast("Account added. Your record is looking more complete.");reload("portfolio_accounts");}};
+  const edit=async f=>{const{error}=await sb.from("portfolio_accounts").update({family_id:f.familyId||null,institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,notes:f.notes||null}).eq("id",modal.id);if(error){toast(error.message,"error");return false;}else{toast("Updated");reload("portfolio_accounts");setSelected({...selected,...f});}};
   const del=async id=>{const{error}=await sb.from("portfolio_accounts").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Deleted");reload("portfolio_accounts");if(selected?.id===id)setSelected(null);}};
 
   return <div style={{display:"flex",height:"100%",minHeight:0}}>
@@ -5742,8 +5745,8 @@ function TasksView({data,reload,toast,userProfile,prospectMode=false}){
     return Object.values(groups).sort((a,b)=>(b.open-a.open)||(b.overdue-a.overdue));
   },[tasks,contacts,advisors]);
 
-  const add=async f=>{const{error}=await sb.from("tasks").insert({family_id:f.familyId||null,contact_id:f.contactId||null,title:f.title,due_date:f.dueDate||null,priority:f.priority,reminder_days:Number(f.reminderDays)||7,done:false,recurrence:f.recurrence||null,recurrence_interval:f.recurrence==="Custom"?(Number(f.recurrenceInterval)||1):null,recurrence_unit:f.recurrence==="Custom"?(f.recurrenceUnit||"week"):null});if(error)toast(error.message,"error");else{toast("Task added. You're all set.");reload("tasks");}};
-  const tog=async t=>{const marking=!t.done;const{error}=await sb.from("tasks").update(marking?{done:true,completed_at:new Date().toISOString(),completed_by:CURRENT_USER_LABEL||null}:{done:false,completed_at:null,completed_by:null}).eq("id",t.id);if(error){toast(error.message,"error");return;}if(marking&&t.recurrence){const nd=nextRecurrence(t.dueDate,t.recurrence,t.recurrenceInterval,t.recurrenceUnit);if(nd){await sb.from("tasks").insert({family_id:t.familyId||null,contact_id:t.contactId||null,title:t.title,due_date:nd,priority:t.priority,reminder_days:t.reminderDays||7,done:false,recurrence:t.recurrence,recurrence_interval:t.recurrence==="Custom"?(t.recurrenceInterval||1):null,recurrence_unit:t.recurrence==="Custom"?(t.recurrenceUnit||"week"):null});toast("Next occurrence: "+fmt(nd));}}reload("tasks");};
+  const add=async f=>{const{error}=await sb.from("tasks").insert({family_id:f.familyId||null,contact_id:f.contactId||null,title:f.title,due_date:f.dueDate||null,priority:f.priority,reminder_days:reminderDaysOr7(f.reminderDays),done:false,recurrence:f.recurrence||null,recurrence_interval:f.recurrence==="Custom"?(Number(f.recurrenceInterval)||1):null,recurrence_unit:f.recurrence==="Custom"?(f.recurrenceUnit||"week"):null});if(error){toast(error.message,"error");return false;}else{toast("Task added. You're all set.");reload("tasks");}};
+  const tog=async t=>{const marking=!t.done;const{error}=await sb.from("tasks").update(marking?{done:true,completed_at:new Date().toISOString(),completed_by:CURRENT_USER_LABEL||null}:{done:false,completed_at:null,completed_by:null}).eq("id",t.id);if(error){toast(error.message,"error");return;}if(marking&&t.recurrence){const nd=nextRecurrence(t.dueDate,t.recurrence,t.recurrenceInterval,t.recurrenceUnit);if(nd){await sb.from("tasks").insert({family_id:t.familyId||null,contact_id:t.contactId||null,title:t.title,due_date:nd,priority:t.priority,reminder_days:reminderDaysOr7(t.reminderDays),done:false,recurrence:t.recurrence,recurrence_interval:t.recurrence==="Custom"?(t.recurrenceInterval||1):null,recurrence_unit:t.recurrence==="Custom"?(t.recurrenceUnit||"week"):null});toast("Next occurrence: "+fmt(nd));}}reload("tasks");};
   const del=async id=>{const{error}=await sb.from("tasks").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Deleted");reload("tasks");}};
 
 
@@ -5837,13 +5840,13 @@ function GlobalTaskForm({initial,families=[],contacts=[],onSave,onClose}){
   const[f,setF]=useState(initial||{familyId:"",contactId:"",title:"",dueDate:"",priority:"Medium",reminderDays:7,done:false,recurrence:"",recurrenceInterval:1,recurrenceUnit:"week"});
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-  const save=async()=>{if(!f.title.trim())return;setSaving(true);await onSave(f);onClose();};
+  const save=async()=>{if(!f.title.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
     <Grid2><Field label="Family"><Sel value={f.familyId||""} onChange={set("familyId")}><option value="">— None —</option>{families.map(fm=><option key={fm.id} value={fm.id}>{fm.name}</option>)}</Sel></Field>
     <Field label="Contact"><Sel value={f.contactId||""} onChange={set("contactId")}><option value="">— None —</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Sel></Field></Grid2>
     <Field label="Task"><Inp placeholder="Follow up on loan maturity" value={f.title} onChange={set("title")}/></Field>
     <Grid2><Field label="Due Date"><Inp type="date" value={f.dueDate||""} onChange={set("dueDate")}/></Field><Field label="Priority"><Sel value={f.priority} onChange={set("priority")}><option>Low</option><option>Medium</option><option>High</option></Sel></Field></Grid2>
-    <Field label="Email Reminder"><Sel value={f.reminderDays||7} onChange={e=>setF(p=>({...p,reminderDays:Number(e.target.value)}))}><option value={0}>No reminder</option>{REMINDER_OPTIONS.map(r=><option key={r.days} value={r.days}>{r.label}</option>)}</Sel></Field>
+    <Field label="Email Reminder"><Sel value={reminderDaysOr7(f.reminderDays)} onChange={e=>setF(p=>({...p,reminderDays:Number(e.target.value)}))}><option value={0}>No reminder</option>{REMINDER_OPTIONS.map(r=><option key={r.days} value={r.days}>{r.label}</option>)}</Sel></Field>
     {Number(f.reminderDays)>0&&f.dueDate&&<div style={{background:"#e8f0f8",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:12,color:B.navyMid}}>🔔 ORDANIS Expert emailed on {new Date(new Date(f.dueDate).setDate(new Date(f.dueDate).getDate()-Number(f.reminderDays))).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</div>}
     <RecurrenceField f={f} setF={setF}/>
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save Task"}</Btn></div>
@@ -5858,7 +5861,7 @@ function ProspectContactForm({initial,onSave,onClose,userProfile,advisors=[]}){
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const pickAdvisor=e=>{const email=e.target.value;const adv=advisors.find(a=>a.email===email);setF(p=>({...p,advisorEmail:email,advisorName:adv?(adv.full_name||""):""}));};
-  const save=async()=>{if(!f.name.trim())return;setSaving(true);await onSave(f);onClose();};
+  const save=async()=>{if(!f.name.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
     <Grid2><Field label="Full Name"><Inp placeholder="Jane Smith" value={f.name} onChange={set("name")}/></Field><Field label="Company"><Inp value={f.company||""} onChange={set("company")}/></Field></Grid2>
     <Grid2><Field label="Email"><Inp type="email" value={f.email||""} onChange={set("email")}/></Field><Field label="Phone"><Inp placeholder="(555) 000-0000" value={f.phone||""} onChange={e=>set("phone")({target:{value:formatPhoneInput(e.target.value)}})}/></Field></Grid2>
@@ -5909,8 +5912,8 @@ function ProspectContactsView({data,reload,toast,userProfile}){
     advisors.forEach(a=>{if(!groups[a.email])groups[a.email]={email:a.email,name:a.full_name||a.email,unassigned:false,prospects:0,openDeals:0,pipeline:0,won:0};});
     return Object.values(groups).sort((a,b)=>(b.pipeline-a.pipeline)||(b.prospects-a.prospects));
   },[prospects,data.deals,advisors]);
-  const add=async f=>{const{error}=await sb.from("contacts").insert({family_id:null,name:f.name,company:f.company||null,email:f.email||null,phone:f.phone||null,type:f.type,tags:f.tags||null,advisor_email:f.advisorEmail||null,advisor_name:f.advisorName||null});if(error)toast(error.message,"error");else{toast("Contact added. Your team is easy to find now.");reload("contacts");}};
-  const edit=async f=>{const{error}=await sb.from("contacts").update({name:f.name,company:f.company||null,email:f.email||null,phone:f.phone||null,type:f.type,tags:f.tags||null,advisor_email:f.advisorEmail||null,advisor_name:f.advisorName||null}).eq("id",modal.id);if(error)toast(error.message,"error");else{toast("Updated");reload("contacts");setSelected({...selected,...f});}};
+  const add=async f=>{const{error}=await sb.from("contacts").insert({family_id:null,name:f.name,company:f.company||null,email:f.email||null,phone:f.phone||null,type:f.type,tags:f.tags||null,advisor_email:f.advisorEmail||null,advisor_name:f.advisorName||null});if(error){toast(error.message,"error");return false;}else{toast("Contact added. Your team is easy to find now.");reload("contacts");}};
+  const edit=async f=>{const{error}=await sb.from("contacts").update({name:f.name,company:f.company||null,email:f.email||null,phone:f.phone||null,type:f.type,tags:f.tags||null,advisor_email:f.advisorEmail||null,advisor_name:f.advisorName||null}).eq("id",modal.id);if(error){toast(error.message,"error");return false;}else{toast("Updated");reload("contacts");setSelected({...selected,...f});}};
   const del=async id=>{const{error}=await sb.from("contacts").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Deleted");reload("contacts");if(selected?.id===id)setSelected(null);}};
 
   if(isAdmin&&viewMode==="advisors"){
@@ -6000,7 +6003,7 @@ function ProspectDealForm({initial,contacts=[],onSave,onClose,userProfile,adviso
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const pickAdvisor=e=>{const email=e.target.value;const adv=advisors.find(a=>a.email===email);setF(p=>({...p,advisorEmail:email,advisorName:adv?(adv.full_name||""):""}));};
-  const save=async()=>{if(!f.title.trim())return;setSaving(true);await onSave(f);onClose();};
+  const save=async()=>{if(!f.title.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
     <Field label="Opportunity Title"><Inp value={f.title} onChange={set("title")}/></Field>
     <Field label="Contact"><Sel value={f.contactId||""} onChange={set("contactId")}><option value="">— None —</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Sel></Field>
@@ -6053,8 +6056,8 @@ function ProspectPipelineView({data,reload,toast,userProfile}){
     return Object.values(groups).sort((a,b)=>(b.pipeline-a.pipeline)||(b.openDeals-a.openDeals));
   },[allDeals,allContacts,advisors]);
 
-  const add=async f=>{const{error}=await sb.from("deals").insert({family_id:null,contact_id:f.contactId||null,title:f.title,value:f.value||null,stage:f.stage,close_date:f.closeDate||null,advisor_email:f.advisorEmail||null,advisor_name:f.advisorName||null});if(error)toast(error.message,"error");else{toast("Opportunity added");reload("deals");}};
-  const edit=async f=>{const{error}=await sb.from("deals").update({contact_id:f.contactId||null,title:f.title,value:f.value||null,stage:f.stage,close_date:f.closeDate||null,advisor_email:f.advisorEmail||null,advisor_name:f.advisorName||null}).eq("id",modal.id);if(error)toast(error.message,"error");else{toast("Updated");reload("deals");}};
+  const add=async f=>{const{error}=await sb.from("deals").insert({family_id:null,contact_id:f.contactId||null,title:f.title,value:f.value||null,stage:f.stage,close_date:f.closeDate||null,advisor_email:f.advisorEmail||null,advisor_name:f.advisorName||null});if(error){toast(error.message,"error");return false;}else{toast("Opportunity added");reload("deals");}};
+  const edit=async f=>{const{error}=await sb.from("deals").update({contact_id:f.contactId||null,title:f.title,value:f.value||null,stage:f.stage,close_date:f.closeDate||null,advisor_email:f.advisorEmail||null,advisor_name:f.advisorName||null}).eq("id",modal.id);if(error){toast(error.message,"error");return false;}else{toast("Updated");reload("deals");}};
   const del=async id=>{const{error}=await sb.from("deals").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Deleted");reload("deals");}};
   const move=async(deal,dir)=>{const idx=STAGES.indexOf(deal.stage);const next=STAGES[idx+dir];if(!next)return;const{error}=await sb.from("deals").update({stage:next}).eq("id",deal.id);if(error)toast(error.message,"error");else reload("deals");};
 
@@ -6414,7 +6417,7 @@ function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
         const t=d.task;
         const{error}=await sb.from("tasks").update({done:true,completed_at:new Date().toISOString(),completed_by:userLabel||null}).eq("id",t.id);
         if(error)throw error;
-        if(t.recurrence){const nd=nextRecurrence(t.dueDate,t.recurrence,t.recurrenceInterval,t.recurrenceUnit);if(nd){await sb.from("tasks").insert({family_id:t.familyId||null,contact_id:t.contactId||null,title:t.title,due_date:nd,priority:t.priority,reminder_days:t.reminderDays||7,done:false,recurrence:t.recurrence,recurrence_interval:t.recurrence==="Custom"?(t.recurrenceInterval||1):null,recurrence_unit:t.recurrence==="Custom"?(t.recurrenceUnit||"week"):null});}}
+        if(t.recurrence){const nd=nextRecurrence(t.dueDate,t.recurrence,t.recurrenceInterval,t.recurrenceUnit);if(nd){await sb.from("tasks").insert({family_id:t.familyId||null,contact_id:t.contactId||null,title:t.title,due_date:nd,priority:t.priority,reminder_days:reminderDaysOr7(t.reminderDays),done:false,recurrence:t.recurrence,recurrence_interval:t.recurrence==="Custom"?(t.recurrenceInterval||1):null,recurrence_unit:t.recurrence==="Custom"?(t.recurrenceUnit||"week"):null});}}
         if(reload)reload("tasks");
         if(toast)toast("Task completed");
       } else {
@@ -8627,27 +8630,29 @@ function AddressInput({value,onChange,placeholder}){
   return <input ref={ref} type="text" style={inp} value={value} onChange={onChange} placeholder={placeholder} autoComplete="off"/>;
 }
 function PropertyQuickForm({onSave,onCancel,saving}){
-  const[f,setF]=useState({address:"",propertyType:PROP_TYPES[0],purchasePrice:"",purchaseDate:"",currentValue:"",notes:""});
+  const mkInit=()=>({address:"",propertyType:PROP_TYPES[0],purchasePrice:"",purchaseDate:"",currentValue:"",notes:""});
+  const[f,setF]=useState(mkInit);
   const set=(k,v)=>setF(m=>({...m,[k]:v}));
   const valid=f.address.trim().length>0;
   return <div>
     <Field label="Address"><AddressInput value={f.address} onChange={e=>set("address",e.target.value)} placeholder="Start typing an address…"/></Field>
     <Grid2>
       <Field label="Property type"><Sel value={f.propertyType} onChange={e=>set("propertyType",e.target.value)}>{PROP_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</Sel></Field>
-      <Field label="Current value (if known)"><MoneyInput value={f.currentValue} onChange={v=>set("currentValue",v)} placeholder="850,000"/></Field>
-      <Field label="Purchase price"><MoneyInput value={f.purchasePrice} onChange={v=>set("purchasePrice",v)} placeholder="720,000"/></Field>
+      <Field label="Current value (if known)"><MoneyInput value={f.currentValue} onChange={e=>set("currentValue",e.target.value)} placeholder="850,000"/></Field>
+      <Field label="Purchase price"><MoneyInput value={f.purchasePrice} onChange={e=>set("purchasePrice",e.target.value)} placeholder="720,000"/></Field>
       <Field label="Purchase date"><Inp type="date" value={f.purchaseDate} onChange={e=>set("purchaseDate",e.target.value)}/></Field>
     </Grid2>
     <Field label="Notes (optional)"><textarea value={f.notes} onChange={e=>set("notes",e.target.value)} rows={2} style={{...inp,resize:"vertical",fontFamily:"inherit"}}/></Field>
     <div style={{fontSize:11.5,color:B.textSoft,marginBottom:14}}>Mortgage, insurance and rental details can be added later -- an advisor can also fill these in for you.</div>
     <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
       {onCancel&&<Btn variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Btn>}
-      <Btn onClick={()=>onSave(f)} disabled={saving||!valid}>{saving?"Saving…":"Add property"}</Btn>
+      <Btn onClick={async()=>{const r=await onSave(f);if(r!==false)setF(mkInit());}} disabled={saving||!valid}>{saving?"Saving…":"Add property"}</Btn>
     </div>
   </div>;
 }
 function AccountQuickForm({onSave,onCancel,saving}){
-  const[f,setF]=useState({institution:"",accountType:ACCT_TYPES[0],startingBalance:"",currentBalance:"",accountAdvisorName:"",accountAdvisorPhone:"",accountAdvisorEmail:"",notes:""});
+  const mkInit=()=>({institution:"",accountType:ACCT_TYPES[0],startingBalance:"",currentBalance:"",accountAdvisorName:"",accountAdvisorPhone:"",accountAdvisorEmail:"",notes:""});
+  const[f,setF]=useState(mkInit);
   const set=(k,v)=>setF(m=>({...m,[k]:v}));
   const advisorPhoneOk=isValidPhone(f.accountAdvisorPhone);
   const advisorEmailOk=!f.accountAdvisorEmail.trim()||EMAIL_RE.test(f.accountAdvisorEmail.trim());
@@ -8656,8 +8661,8 @@ function AccountQuickForm({onSave,onCancel,saving}){
     <Grid2>
       <Field label="Institution"><Inp value={f.institution} onChange={e=>set("institution",e.target.value)} placeholder="Institution name"/></Field>
       <Field label="Account type"><Sel value={f.accountType} onChange={e=>set("accountType",e.target.value)}>{ACCT_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</Sel></Field>
-      <Field label="Current balance"><MoneyInput value={f.currentBalance} onChange={v=>set("currentBalance",v)} placeholder="240,000"/></Field>
-      <Field label="Starting balance (optional)"><MoneyInput value={f.startingBalance} onChange={v=>set("startingBalance",v)} placeholder="200,000"/></Field>
+      <Field label="Current balance"><MoneyInput value={f.currentBalance} onChange={e=>set("currentBalance",e.target.value)} placeholder="240,000"/></Field>
+      <Field label="Starting balance (optional)"><MoneyInput value={f.startingBalance} onChange={e=>set("startingBalance",e.target.value)} placeholder="200,000"/></Field>
     </Grid2>
     <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",margin:"4px 0 8px"}}>Your advisor on this account (optional)</div>
     <Grid2>
@@ -8674,18 +8679,19 @@ function AccountQuickForm({onSave,onCancel,saving}){
     <Field label="Notes (optional)"><textarea value={f.notes} onChange={e=>set("notes",e.target.value)} rows={2} style={{...inp,resize:"vertical",fontFamily:"inherit"}}/></Field>
     <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
       {onCancel&&<Btn variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Btn>}
-      <Btn onClick={()=>onSave(f)} disabled={saving||!valid}>{saving?"Saving…":"Add account"}</Btn>
+      <Btn onClick={async()=>{const r=await onSave(f);if(r!==false)setF(mkInit());}} disabled={saving||!valid}>{saving?"Saving…":"Add account"}</Btn>
     </div>
   </div>;
 }
 function ValuableQuickForm({onSave,onCancel,saving}){
-  const[f,setF]=useState({category:VALUABLE_CATS[0],description:"",makeModel:"",year:"",estimatedValue:"",notes:""});
+  const mkInit=()=>({category:VALUABLE_CATS[0],description:"",makeModel:"",year:"",estimatedValue:"",notes:""});
+  const[f,setF]=useState(mkInit);
   const set=(k,v)=>setF(m=>({...m,[k]:v}));
   const valid=f.description.trim().length>0;
   return <div>
     <Grid2>
       <Field label="Category"><Sel value={f.category} onChange={e=>set("category",e.target.value)}>{VALUABLE_CATS.map(t=><option key={t} value={t}>{t}</option>)}</Sel></Field>
-      <Field label="Estimated value"><MoneyInput value={f.estimatedValue} onChange={v=>set("estimatedValue",v)} placeholder="45,000"/></Field>
+      <Field label="Estimated value"><MoneyInput value={f.estimatedValue} onChange={e=>set("estimatedValue",e.target.value)} placeholder="45,000"/></Field>
     </Grid2>
     <Field label="Description"><Inp value={f.description} onChange={e=>set("description",e.target.value)} placeholder="2021 Rolex Submariner"/></Field>
     <Grid2>
@@ -8694,7 +8700,7 @@ function ValuableQuickForm({onSave,onCancel,saving}){
     </Grid2>
     <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
       {onCancel&&<Btn variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Btn>}
-      <Btn onClick={()=>onSave(f)} disabled={saving||!valid}>{saving?"Saving…":"Add valuable"}</Btn>
+      <Btn onClick={async()=>{const r=await onSave(f);if(r!==false)setF(mkInit());}} disabled={saving||!valid}>{saving?"Saving…":"Add valuable"}</Btn>
     </div>
   </div>;
 }
@@ -8735,7 +8741,8 @@ function ImportFromContactsButton({onPick}){
 // a trimmed version of the fuller admin-side forms, reused as both a standalone "+ Add" modal and
 // a wizard step.
 function MemberQuickForm({onSave,onCancel,saving}){
-  const[f,setF]=useState({name:"",relationship:MEMBER_RELATIONSHIPS[0],email:"",phone:""});
+  const mkInit=()=>({name:"",relationship:MEMBER_RELATIONSHIPS[0],email:"",phone:""});
+  const[f,setF]=useState(mkInit);
   const set=(k,v)=>setF(m=>({...m,[k]:v}));
   const phoneOk=isValidPhone(f.phone);
   const valid=f.name.trim().length>0&&phoneOk;
@@ -8752,7 +8759,7 @@ function MemberQuickForm({onSave,onCancel,saving}){
     </Grid2>
     <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
       {onCancel&&<Btn variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Btn>}
-      <Btn onClick={()=>onSave(f)} disabled={saving||!valid}>{saving?"Saving…":"Add member"}</Btn>
+      <Btn onClick={async()=>{const r=await onSave(f);if(r!==false)setF(mkInit());}} disabled={saving||!valid}>{saving?"Saving…":"Add member"}</Btn>
     </div>
   </div>;
 }
@@ -8760,7 +8767,8 @@ function MemberQuickForm({onSave,onCancel,saving}){
 // an assigned Expert, and the server-side check in manage-business-partner enforces the same rule
 // independently of whatever this prop is set to.
 function ProfessionalQuickForm({onSave,onCancel,saving,allowPortalGrant,partnerSeatFree}){
-  const[f,setF]=useState({name:"",role:"",company:"",email:"",phone:"",grantPortalAccess:false});
+  const mkInit=()=>({name:"",role:"",company:"",email:"",phone:"",grantPortalAccess:false});
+  const[f,setF]=useState(mkInit);
   const set=(k,v)=>setF(m=>({...m,[k]:v}));
   const emailOk=EMAIL_RE.test(f.email.trim());
   const phoneOk=isValidPhone(f.phone);
@@ -8786,7 +8794,7 @@ function ProfessionalQuickForm({onSave,onCancel,saving,allowPortalGrant,partnerS
     </label>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
       {onCancel&&<Btn variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Btn>}
-      <Btn onClick={()=>onSave(f)} disabled={saving||!valid}>{saving?"Saving…":"Add contact"}</Btn>
+      <Btn onClick={async()=>{const r=await onSave(f);if(r!==false)setF(mkInit());}} disabled={saving||!valid}>{saving?"Saving…":"Add contact"}</Btn>
     </div>
   </div>;
 }
@@ -8796,7 +8804,8 @@ function ProfessionalQuickForm({onSave,onCancel,saving,allowPortalGrant,partnerS
 // manage-business-partner call), with the same cost wording, but creates no Professional Network
 // row -- the two records are independent. On paid plans the cost must be acknowledged first.
 function BusinessPartnerQuickForm({onSave,onCancel,saving,seatFree}){
-  const[f,setF]=useState({name:"",email:"",agree:false});
+  const mkInit=()=>({name:"",email:"",agree:false});
+  const[f,setF]=useState(mkInit);
   const set=(k,v)=>setF(m=>({...m,[k]:v}));
   const emailOk=EMAIL_RE.test(f.email.trim());
   const valid=f.name.trim().length>0&&emailOk&&(seatFree||f.agree);
@@ -8817,7 +8826,7 @@ function BusinessPartnerQuickForm({onSave,onCancel,saving,seatFree}){
     </label>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
       {onCancel&&<Btn variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Btn>}
-      <Btn onClick={()=>onSave(f)} disabled={saving||!valid}>{saving?"Sending…":"Send invite"}</Btn>
+      <Btn onClick={async()=>{const r=await onSave(f);if(r!==false)setF(mkInit());}} disabled={saving||!valid}>{saving?"Sending…":"Send invite"}</Btn>
     </div>
   </div>;
 }
@@ -8840,11 +8849,13 @@ function OnboardingWizard({onClose,addMember,addProfessional,addBusinessPartner,
   const save=async(kind,f)=>{
     setSaving(true);
     try{
-      if(kind==="member")await addMember(f);
-      if(kind==="professional"){await addProfessional(f);if(f.grantPortalAccess)await addBusinessPartner(f.email,f.name);}
-      if(kind==="property")await addProperty(f);
-      if(kind==="account")await addAccount(f);
-      if(kind==="valuable")await addValuable(f);
+      let r;
+      if(kind==="member")r=await addMember(f);
+      if(kind==="professional"){r=await addProfessional(f);if(r!==false&&f.grantPortalAccess)await addBusinessPartner(f.email,f.name);}
+      if(kind==="property")r=await addProperty(f);
+      if(kind==="account")r=await addAccount(f);
+      if(kind==="valuable")r=await addValuable(f);
+      return r;
     } finally { setSaving(false); }
   };
 
@@ -9142,19 +9153,19 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   // ValuableQuickForm above for why the fields differ from the admin forms.
   const addProperty=async f=>{
     const{error}=await sb.from("properties").insert({family_id:family.id,address:f.address,property_type:f.propertyType,purchase_price:f.purchasePrice||null,purchase_date:f.purchaseDate||null,current_value:f.currentValue||null,notes:f.notes||null});
-    if(error)toast(error.message,"error");else{toast("Property added. Your record is looking more complete.");await reload("properties");}
+    if(error){toast(error.message,"error");return false;}else{toast("Property added. Your record is looking more complete.");await reload("properties");}
   };
   const addAccount=async f=>{
     const{error}=await sb.from("portfolio_accounts").insert({family_id:family.id,institution:f.institution,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,account_advisor_name:f.accountAdvisorName||null,account_advisor_phone:f.accountAdvisorPhone||null,account_advisor_email:f.accountAdvisorEmail||null,notes:f.notes||null});
-    if(error)toast(error.message,"error");else{toast("Account added. Your record is looking more complete.");await reload("portfolio_accounts");}
+    if(error){toast(error.message,"error");return false;}else{toast("Account added. Your record is looking more complete.");await reload("portfolio_accounts");}
   };
   const addValuable=async f=>{
     const{error}=await sb.from("valuables").insert({family_id:family.id,category:f.category,description:f.description,make_model:f.makeModel||null,year:f.year||null,estimated_value:f.estimatedValue||null,notes:f.notes||null});
-    if(error)toast(error.message,"error");else{toast("Valuable added. One more thing safely on file.");await reload("valuables");}
+    if(error){toast(error.message,"error");return false;}else{toast("Valuable added. One more thing safely on file.");await reload("valuables");}
   };
   const addMember=async f=>{
     const{error}=await sb.from("contacts").insert({family_id:family.id,name:f.name,relationship:f.relationship||null,email:f.email||null,phone:f.phone||null,type:"Individual"});
-    if(error)toast(error.message,"error");else{toast("Member added. Welcome to the household record.");await reload("contacts");}
+    if(error){toast(error.message,"error");return false;}else{toast("Member added. Welcome to the household record.");await reload("contacts");}
   };
   const delMember=async id=>{
     const{error}=await sb.from("contacts").delete().eq("id",id);
@@ -9162,7 +9173,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   };
   const addProfessional=async f=>{
     const{error}=await sb.from("family_contacts").insert({family_id:family.id,name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,is_advisor:false});
-    if(error)toast(error.message,"error");else{toast("Contact added. Your team is easy to find now.");await reload("family_contacts");}
+    if(error){toast(error.message,"error");return false;}else{toast("Contact added. Your team is easy to find now.");await reload("family_contacts");}
   };
   const delProfessional=async id=>{
     const{error}=await sb.from("family_contacts").delete().eq("id",id);
@@ -9195,7 +9206,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const[addProfessionalOpen,setAddProfessionalOpen]=useState(false);
   const[addPartnerOpen,setAddPartnerOpen]=useState(false);
   const[savingQuickAdd,setSavingQuickAdd]=useState(false);
-  const runQuickAdd=(fn,close)=>async f=>{setSavingQuickAdd(true);try{await fn(f);close();}finally{setSavingQuickAdd(false);}};
+  const runQuickAdd=(fn,close)=>async f=>{setSavingQuickAdd(true);try{const r=await fn(f);if(r!==false)close();return r;}finally{setSavingQuickAdd(false);}};
 
   // Onboarding wizard: opens once on its own for a brand-new, empty, self-serve household: after
   // that, "seen" is remembered per-family in localStorage so it doesn't nag on every login. (The
@@ -9523,7 +9534,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           <Btn small onClick={()=>setAddProfessionalOpen(true)}>+ Add Contact</Btn>
         </div>
         {addProfessionalOpen&&<Modal title="Add a professional contact" onClose={()=>setAddProfessionalOpen(false)}>
-          <ProfessionalQuickForm saving={savingQuickAdd} allowPortalGrant={true} partnerSeatFree={clientPlan==="premier"} onCancel={()=>setAddProfessionalOpen(false)} onSave={async f=>{setSavingQuickAdd(true);try{await addProfessional(f);if(f.grantPortalAccess)await addBusinessPartner(f.email,f.name);setAddProfessionalOpen(false);}finally{setSavingQuickAdd(false);}}}/>
+          <ProfessionalQuickForm saving={savingQuickAdd} allowPortalGrant={true} partnerSeatFree={clientPlan==="premier"} onCancel={()=>setAddProfessionalOpen(false)} onSave={async f=>{setSavingQuickAdd(true);try{const r=await addProfessional(f);if(r===false)return r;if(f.grantPortalAccess)await addBusinessPartner(f.email,f.name);setAddProfessionalOpen(false);}finally{setSavingQuickAdd(false);}}}/>
         </Modal>}
         {professionals.length===0?<Empty text="No professional contacts on file yet."/>:<div style={{marginBottom:28}}>
           {professionals.map(p=><div key={p.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"14px 18px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:B.shadow,gap:12,flexWrap:"wrap"}}>
@@ -9547,7 +9558,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           <Btn small onClick={()=>setAddPartnerOpen(true)}>+ Add Business Partner</Btn>
         </div>
         {addPartnerOpen&&<Modal title="Add a Business Partner" onClose={()=>setAddPartnerOpen(false)}>
-          <BusinessPartnerQuickForm saving={savingQuickAdd} seatFree={clientPlan==="premier"} onCancel={()=>setAddPartnerOpen(false)} onSave={async f=>{setSavingQuickAdd(true);try{const ok=await addBusinessPartner(f.email.trim(),f.name.trim());if(ok)setAddPartnerOpen(false);}finally{setSavingQuickAdd(false);}}}/>
+          <BusinessPartnerQuickForm saving={savingQuickAdd} seatFree={clientPlan==="premier"} onCancel={()=>setAddPartnerOpen(false)} onSave={async f=>{setSavingQuickAdd(true);try{const ok=await addBusinessPartner(f.email.trim(),f.name.trim());if(ok)setAddPartnerOpen(false);return ok?undefined:false;}finally{setSavingQuickAdd(false);}}}/>
         </Modal>}
         {businessPartners.length===0?<Empty text="No portal seats granted yet."/>:<div>
           {businessPartners.map(p=><div key={p.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid ${B.gold}`,borderRadius:10,padding:"14px 18px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:B.shadow,gap:12,flexWrap:"wrap"}}>
@@ -11475,7 +11486,7 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
       <Grid2>
         <Field label="Name"><Inp value={modal.row.name} onChange={e=>setModal(m=>({...m,row:{...m.row,name:e.target.value}}))} placeholder="ILIT premium — Pacific Life"/></Field>
         <Field label="Type"><Sel value={modal.row.kind} onChange={e=>setModal(m=>({...m,row:{...m.row,kind:e.target.value}}))}>{OBLIGATION_KINDS.map(k=><option key={k.v} value={k.v}>{k.label}</option>)}</Sel></Field>
-        <Field label="Amount"><MoneyInput value={modal.row.amount} onChange={v=>setModal(m=>({...m,row:{...m.row,amount:v}}))} placeholder="48,000"/></Field>
+        <Field label="Amount"><MoneyInput value={modal.row.amount} onChange={e=>setModal(m=>({...m,row:{...m.row,amount:e.target.value}}))} placeholder="48,000"/></Field>
         <Field label="Due date"><Inp type="date" value={modal.row.due_date||""} onChange={e=>setModal(m=>({...m,row:{...m.row,due_date:e.target.value}}))}/></Field>
         <Field label="Recurrence"><Sel value={modal.row.recurrence} onChange={e=>setModal(m=>({...m,row:{...m.row,recurrence:e.target.value}}))}>{RECURRENCES.map(r=><option key={r.v} value={r.v}>{r.label}</option>)}</Sel></Field>
         <Field label="Grace date (if later)"><Inp type="date" value={modal.row.grace_date||""} onChange={e=>setModal(m=>({...m,row:{...m.row,grace_date:e.target.value}}))}/></Field>
