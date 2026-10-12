@@ -312,6 +312,7 @@ function AccountStep({ planKey, prices, onBack, onDone, onSkin }) {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [householdName, setHouseholdName] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -371,29 +372,35 @@ function AccountStep({ planKey, prices, onBack, onDone, onSkin }) {
   // placeholder language pending legal review, not final compliant copy -- see the banner below.
   const [disclosures, setDisclosures] = useState({ subscription_terms: null, sms_consent: null });
   const [disclosuresLoading, setDisclosuresLoading] = useState(true);
+  const [discError, setDiscError] = useState(false);
+  const [discAttempt, setDiscAttempt] = useState(0); // bumped by "Try again"
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [agreeSms, setAgreeSms] = useState(false);
   useEffect(() => {
     let cancelled = false;
+    setDisclosuresLoading(true);
+    setDiscError(false);
     sb.from("signup_disclosures")
       .select("id, kind, version, title, body_html, is_draft")
       .in("kind", ["subscription_terms", "sms_consent"])
       .order("version", { ascending: false })
       .then(({ data, error }) => {
-        if (cancelled || error || !data) return;
+        if (cancelled) return;
+        if (error || !data) { setDiscError(true); setDisclosuresLoading(false); return; }
         const next = {};
         for (const row of data) if (!next[row.kind]) next[row.kind] = row; // highest version per kind, first one seen
         setDisclosures(next);
         setDisclosuresLoading(false);
       });
     return () => { cancelled = true; };
-  }, []);
+  }, [discAttempt]);
 
   const validate = () => {
     if (!fullName.trim()) return "Enter your name.";
     if (!EMAIL_RE.test(email.trim())) return "Enter a valid email address.";
     if (!toE164(phone)) return "Enter a valid 10-digit US mobile number.";
     if (password.length < MIN_PASSWORD_LENGTH) return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+    if (confirmPassword !== password) return "The two passwords don't match.";
     if (!householdName.trim()) return "Tell us what to call the household.";
     if (firmCode.trim() && !firmInfo) return "Check your firm code first, or clear the box to sign up on your own.";
     if (firmInfo && !agreeFirm) return `Please read and accept the notice about what ${firmInfo.name} can see to continue.`;
@@ -461,13 +468,19 @@ function AccountStep({ planKey, prices, onBack, onDone, onSkin }) {
         <h1 style={{ fontFamily: "Georgia,serif", color: C.navy, fontSize: isMobile ? "1.9rem" : "2.4rem", fontWeight: 460, margin: "0 0 .5em" }}>Create your account</h1>
         <p style={{ fontSize: "1.05rem", color: C.slate, marginTop: 12, maxWidth: 520 }}>So a declined card never costs you the work you have already done.</p>
 
-        <div style={{ marginTop: 26, maxWidth: 520 }}>
-          <Field label="Your name" required type="text" placeholder="Jordan Bennett" value={fullName} onChange={(e) => setFullName(e.target.value)} autoComplete="name" />
-          <Field label="Email" required type="email" placeholder="jordan@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+        <div
+          style={{ marginTop: 26, maxWidth: 520 }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && e.target.tagName === "INPUT" && !submitting) { e.preventDefault(); submit(); }
+          }}
+        >
+          <Field label="Your name" required type="text" maxLength={80} placeholder="Jordan Bennett" value={fullName} onChange={(e) => setFullName(e.target.value)} autoComplete="name" />
+          <Field label="Email" required type="email" maxLength={254} placeholder="jordan@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
           <Field label="Mobile phone" required type="tel" inputMode="tel" placeholder="(813) 555-0142" value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))} autoComplete="tel-national" />
           <p style={{ fontSize: ".8rem", color: C.slate, margin: "-10px 0 18px", lineHeight: 1.5 }}>This becomes the primary phone number on your profile. We use it for account security and, with your consent below, text messages.</p>
           <Field label="Password" required type="password" placeholder="At least 12 characters" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
-          <Field label="What should we call the household?" required type="text" placeholder="The Bennett Family" value={householdName} onChange={(e) => setHouseholdName(e.target.value)} autoComplete="off" />
+          <Field label="Confirm password" required type="password" placeholder="Type it again" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" />
+          <Field label="What should we call the household?" required type="text" maxLength={100} placeholder="The Bennett Family" value={householdName} onChange={(e) => setHouseholdName(e.target.value)} autoComplete="off" />
 
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: "block", fontSize: ".72rem", fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: C.muted, marginBottom: 6 }}>
@@ -482,6 +495,7 @@ function AccountStep({ planKey, prices, onBack, onDone, onSkin }) {
                 spellCheck={false}
                 autoCapitalize="characters"
                 placeholder="Firm code"
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); if (!firmChecking && firmCode.trim()) lookupFirm(); } }}
                 onChange={(e) => { setFirmCode(e.target.value); if (firmInfo || firmError) { setFirmInfo(null); setAgreeFirm(false); setFirmError(""); } }}
                 style={{ flex: 1, padding: "12px 14px", border: `1px solid ${C.rule}`, borderRadius: 3, fontSize: ".95rem", fontFamily: "inherit", color: C.navy, background: "#fff", boxSizing: "border-box", minWidth: 0 }}
               />
@@ -515,6 +529,11 @@ function AccountStep({ planKey, prices, onBack, onDone, onSkin }) {
         <div style={{ marginTop: 8, marginBottom: 8, maxWidth: 520 }}>
           {disclosuresLoading ? (
             <div style={{ fontSize: ".82rem", color: C.muted }}>Loading disclosures…</div>
+          ) : discError ? (
+            <div style={{ fontSize: ".84rem", color: "#8b1a1a", lineHeight: 1.5 }}>
+              We couldn't load the Subscription Terms and SMS notice, so we can't continue yet.{" "}
+              <button type="button" onClick={() => setDiscAttempt((n) => n + 1)} style={{ background: "none", border: "none", padding: 0, color: C.navy, textDecoration: "underline", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>Try again</button>
+            </div>
           ) : (
             <>
               {[disclosures.subscription_terms, disclosures.sms_consent].some((d) => d?.is_draft) && (

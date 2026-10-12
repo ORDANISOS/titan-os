@@ -4227,7 +4227,13 @@ function CashFlowEventForm({initial,onSave,onClose,properties=[],vendors=[],bill
     });
   };
   const[showReq,setShowReq]=useState(false);
-  const save=async()=>{if(!f.amount||!f.startDate){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
+  const[err,setErr]=useState("");
+  const save=async()=>{if(!f.amount||!f.startDate){setShowReq(true);return;}
+    if(!(Number(String(f.amount).replace(/[$,\s]/g,""))>0)){setErr("Enter an amount greater than zero. Use Income or Expense above to say which way the money moves.");return;}
+    if(f.frequency!=="once"&&f.endDate&&f.endDate<f.startDate){setErr("The end date can't be before the start date.");return;}
+    setErr("");setSaving(true);
+    // A one-time event has no end date; the box is hidden for it, so don't save a value left over from an earlier choice.
+    const ok=await onSave(f.frequency==="once"?{...f,endDate:""}:f);if(ok===false){setSaving(false);return;}onClose();};
   const isExpense=f.direction==="expense";
   const typeOptions=isExpense?CF_EXPENSE_CATEGORIES:CF_EVENT_TYPES;
   return <div>
@@ -4308,6 +4314,7 @@ function CashFlowEventForm({initial,onSave,onClose,properties=[],vendors=[],bill
     </Grid2>
     <Field label="Notes" optional><Tex value={f.notes||""} onChange={set("notes")}/></Field>
     {showReq&&<ReqHint/>}
+    {err&&<div style={{fontSize:12,color:"#8b1a1a",background:"#fff5f5",border:"1px solid #f3c2c2",borderRadius:8,padding:"8px 10px",marginTop:8}}>{err}</div>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}>
       <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
       <Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save"}</Btn>
