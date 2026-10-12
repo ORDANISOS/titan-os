@@ -912,7 +912,9 @@ function AdvisorScopeBar({userProfile,value,onChange,label="ORDANIS Expert"}){
   </div>;
 }
 const Tex=p=><textarea style={{...inp,minHeight:80,resize:"vertical"}} {...p}/>;
-function Field({label,children}){return <div style={{marginBottom:14}}><label style={{display:"block",fontSize:11,color:B.textSoft,marginBottom:5,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>{label}</label>{children}</div>;}
+function Field({label,children,required,optional}){return <div style={{marginBottom:14}}><label style={{display:"block",fontSize:11,color:B.textSoft,marginBottom:5,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>{label}{required&&<span aria-hidden="true" title="Required" style={{color:"#b42318",marginLeft:4,fontWeight:700}}>*</span>}{optional&&<span style={{fontWeight:500,textTransform:"none",letterSpacing:0,color:B.textMute,marginLeft:6,fontSize:10.5}}>(optional)</span>}</label>{children}</div>;}
+// Shown under a form whose required fields (marked *) are not filled in yet.
+const ReqHint=({text})=><div role="alert" style={{fontSize:12,color:"#b42318",margin:"10px 0 0",textAlign:"right"}}>{text||"Please fill in the fields marked * to continue."}</div>;
 function Grid2({children}){
   return <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(220px,100%),1fr))",gap:12}}>{children}</div>;
 }
@@ -2541,8 +2543,13 @@ const ASSISTANT_UNAVAILABLE="I couldn't get an answer through just now. Please t
 async function saveAssistantName(familyId,name){
   const nm=(name||"").trim().slice(0,40);
   if(!nm)throw new Error("Please enter a name.");
+  // Quick checks here for instant feedback; the database enforces the real rules (including the blocked-word list).
+  if(nm.length<2)throw new Error("Names must be 2 to 40 characters.");
+  if(!/^[\p{L}\p{N}][\p{L}\p{N} '\u2019.\-]*$/u.test(nm))throw new Error("Names can use letters, numbers, spaces, hyphens, apostrophes and periods.");
   const{error:rpcErr}=await sb.rpc("set_my_assistant_name",{p_name:nm});
   if(!rpcErr)return nm;
+  // A rejected name is a rule message, not a permissions problem -- show it instead of trying the admin path.
+  if(/different name|Names (must|can|need|cannot)/i.test(rpcErr.message||""))throw new Error(rpcErr.message);
   const{data:rows,error}=await sb.from("families").update({assistant_name:nm}).eq("id",familyId).select("id");
   if(error)throw error;
   if(!rows||!rows.length)throw new Error("Couldn't save the name \u2014 your account isn't allowed to change it. Please contact the ORDANIS team.");
@@ -3801,18 +3808,20 @@ function PropertyContactForm({initial,onSave,onClose}){
   const[f,setF]=useState(initial||{name:"",role:"",company:"",email:"",phone:"",notes:""});
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-  const save=async()=>{if(!f.name.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
+  const[showReq,setShowReq]=useState(false);
+  const save=async()=>{if(!f.name.trim()){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
-    <Field label="Name"><Inp placeholder="ABC Landscaping" value={f.name} onChange={set("name")}/></Field>
+    <Field label="Name" required><Inp placeholder="ABC Landscaping" value={f.name} onChange={set("name")}/></Field>
     <Grid2>
-      <Field label="Service / Role"><Inp placeholder="Landscaper · Pool · Manager" value={f.role||""} onChange={set("role")}/></Field>
-      <Field label="Company"><Inp placeholder="Company name" value={f.company||""} onChange={set("company")}/></Field>
+      <Field label="Service / Role" optional><Inp placeholder="Landscaper · Pool · Manager" value={f.role||""} onChange={set("role")}/></Field>
+      <Field label="Company" optional><Inp placeholder="Company name" value={f.company||""} onChange={set("company")}/></Field>
     </Grid2>
     <Grid2>
-      <Field label="Phone"><Inp placeholder="(555) 000-0000" value={f.phone||""} onChange={e=>set("phone")({target:{value:formatPhoneInput(e.target.value)}})}/></Field>
-      <Field label="Email"><Inp type="email" placeholder="contact@company.com" value={f.email||""} onChange={set("email")}/></Field>
+      <Field label="Phone" optional><Inp placeholder="(555) 000-0000" value={f.phone||""} onChange={e=>set("phone")({target:{value:formatPhoneInput(e.target.value)}})}/></Field>
+      <Field label="Email" optional><Inp type="email" placeholder="contact@company.com" value={f.email||""} onChange={set("email")}/></Field>
     </Grid2>
-    <Field label="Notes"><Inp placeholder="Optional — schedule, gate code, account #…" value={f.notes||""} onChange={set("notes")}/></Field>
+    <Field label="Notes" optional><Inp placeholder="Optional — schedule, gate code, account #…" value={f.notes||""} onChange={set("notes")}/></Field>
+    {showReq&&<ReqHint/>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}>
       <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
       <Btn onClick={save} disabled={saving}>{saving?"Saving…":initial?"Save Changes":"Add Provider"}</Btn>
@@ -3824,23 +3833,25 @@ function FamilyContactForm({initial,onSave,onClose,hideAdvisor=false,rolePlaceho
   const[f,setF]=useState(initial||{name:"",role:"",company:"",email:"",phone:"",isAdvisor:false,notes:""});
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-  const save=async()=>{if(!f.name.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
+  const[showReq,setShowReq]=useState(false);
+  const save=async()=>{if(!f.name.trim()){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
-    <Field label="Name"><Inp placeholder="John Smith" value={f.name} onChange={set("name")}/></Field>
+    <Field label="Name" required><Inp placeholder="John Smith" value={f.name} onChange={set("name")}/></Field>
     <Grid2>
-      <Field label="Role / Title"><Inp placeholder={rolePlaceholder} value={f.role||""} onChange={set("role")}/></Field>
-      <Field label="Company / Firm"><Inp placeholder="Smith & Co." value={f.company||""} onChange={set("company")}/></Field>
+      <Field label="Role / Title" optional><Inp placeholder={rolePlaceholder} value={f.role||""} onChange={set("role")}/></Field>
+      <Field label="Company / Firm" optional><Inp placeholder="Smith & Co." value={f.company||""} onChange={set("company")}/></Field>
     </Grid2>
     <Grid2>
-      <Field label="Email"><Inp type="email" placeholder="john@firm.com" value={f.email||""} onChange={set("email")}/></Field>
-      <Field label="Phone"><Inp placeholder="(555) 000-0000" value={f.phone||""} onChange={e=>set("phone")({target:{value:formatPhoneInput(e.target.value)}})}/></Field>
+      <Field label="Email" optional><Inp type="email" placeholder="john@firm.com" value={f.email||""} onChange={set("email")}/></Field>
+      <Field label="Phone" optional><Inp placeholder="(555) 000-0000" value={f.phone||""} onChange={e=>set("phone")({target:{value:formatPhoneInput(e.target.value)}})}/></Field>
     </Grid2>
-    <Field label="Notes"><Inp placeholder="Optional" value={f.notes||""} onChange={set("notes")}/></Field>
+    <Field label="Notes" optional><Inp placeholder="Optional" value={f.notes||""} onChange={set("notes")}/></Field>
     {!hideAdvisor&&<label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"10px 14px",background:f.isAdvisor?"rgba(206,182,132,0.15)":B.bg,borderRadius:8,border:`1px solid ${f.isAdvisor?B.gold:B.border}`,marginBottom:4}}>
       <input type="checkbox" checked={!!f.isAdvisor} onChange={e=>setF(p=>({...p,isAdvisor:e.target.checked}))} style={{width:16,height:16,accentColor:B.navy}}/>
       <span style={{fontSize:13,color:B.navy,fontWeight:600}}>Client can email this contact</span>
       <span style={{fontSize:11,color:B.textMute}}>appears in the client's "Email my ORDANIS Expert"</span>
     </label>}
+    {showReq&&<ReqHint/>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}>
       <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
       <Btn onClick={save} disabled={saving}>{saving?"Saving…":initial?"Save Changes":"Add Contact"}</Btn>
@@ -3852,22 +3863,24 @@ function MemberForm({initial,onSave,onClose}){
   const[f,setF]=useState(initial||{name:"",email:"",phone:"",company:"",type:"Individual",dob:"",anniversary:"",address:"",isAdvisor:false});
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-  const save=async()=>{if(!f.name.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
+  const[showReq,setShowReq]=useState(false);
+  const save=async()=>{if(!f.name.trim()){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
-    <Field label="Full Name"><Inp placeholder="Jane Smith" value={f.name} onChange={set("name")}/></Field>
+    <Field label="Full Name" required><Inp placeholder="Jane Smith" value={f.name} onChange={set("name")}/></Field>
     <Grid2>
-      <Field label="Email"><Inp type="email" placeholder="jane@email.com" value={f.email||""} onChange={set("email")}/></Field>
-      <Field label="Phone"><Inp placeholder="(555) 000-0000" value={f.phone||""} onChange={e=>set("phone")({target:{value:formatPhoneInput(e.target.value)}})}/></Field>
+      <Field label="Email" optional><Inp type="email" placeholder="jane@email.com" value={f.email||""} onChange={set("email")}/></Field>
+      <Field label="Phone" optional><Inp placeholder="(555) 000-0000" value={f.phone||""} onChange={e=>set("phone")({target:{value:formatPhoneInput(e.target.value)}})}/></Field>
     </Grid2>
     <Grid2>
-      <Field label="Company / LLC"><Inp placeholder="Smith Holdings LLC" value={f.company||""} onChange={set("company")}/></Field>
+      <Field label="Company / LLC" optional><Inp placeholder="Smith Holdings LLC" value={f.company||""} onChange={set("company")}/></Field>
       <Field label="Type"><Sel value={f.type} onChange={set("type")}><option>Individual</option><option>Business</option></Sel></Field>
     </Grid2>
     <Grid2>
-      <Field label="Date of Birth"><Inp type="date" value={f.dob||""} onChange={set("dob")}/></Field>
-      <Field label="Anniversary"><Inp type="date" value={f.anniversary||""} onChange={set("anniversary")}/></Field>
-      <Field label="Address"><Inp placeholder="123 Main St, Tampa, FL" value={f.address||""} onChange={set("address")}/></Field>
+      <Field label="Date of Birth" optional><Inp type="date" value={f.dob||""} onChange={set("dob")}/></Field>
+      <Field label="Anniversary" optional><Inp type="date" value={f.anniversary||""} onChange={set("anniversary")}/></Field>
+      <Field label="Address" optional><Inp placeholder="123 Main St, Tampa, FL" value={f.address||""} onChange={set("address")}/></Field>
     </Grid2>
+    {showReq&&<ReqHint/>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}>
       <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
       <Btn onClick={save} disabled={saving}>{saving?"Saving…":initial?"Save Changes":"Add Member"}</Btn>
@@ -3922,12 +3935,13 @@ function TaskForm({initial,contacts=[],onSave,onClose}){
   const[f,setF]=useState(initial||{title:"",contactId:"",dueDate:"",priority:"Medium",reminderDays:7,done:false,recurrence:"",recurrenceInterval:1,recurrenceUnit:"week"});
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-  const save=async()=>{if(!f.title.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
+  const[showReq,setShowReq]=useState(false);
+  const save=async()=>{if(!f.title.trim()){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
-    <Field label="Task"><Inp placeholder="Follow up on loan maturity" value={f.title} onChange={set("title")}/></Field>
+    <Field label="Task" required><Inp placeholder="Follow up on loan maturity" value={f.title} onChange={set("title")}/></Field>
     {contacts.length>0&&<Field label="Contact"><Sel value={f.contactId||""} onChange={set("contactId")}><option value="">— None —</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Sel></Field>}
     <Grid2>
-      <Field label="Due Date"><Inp type="date" value={f.dueDate||""} onChange={set("dueDate")}/></Field>
+      <Field label="Due Date" optional><Inp type="date" value={f.dueDate||""} onChange={set("dueDate")}/></Field>
       <Field label="Priority"><Sel value={f.priority} onChange={set("priority")}><option>Low</option><option>Medium</option><option>High</option></Sel></Field>
     </Grid2>
     <Field label="Email Reminder">
@@ -3940,6 +3954,7 @@ function TaskForm({initial,contacts=[],onSave,onClose}){
       🔔 ORDANIS Expert will be emailed on {(()=>{const b=parseLocalDate(f.dueDate);if(isNaN(b.getTime()))return new Date(NaN);const r=new Date(b);r.setDate(r.getDate()-f.reminderDays);return r;})().toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}
     </div>}
     <RecurrenceField f={f} setF={setF}/>
+    {showReq&&<ReqHint/>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}>
       <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
       <Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save Task"}</Btn>
@@ -3957,7 +3972,8 @@ function PropertyForm({initial,onSave,onClose,canExtract=false}){
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const setChk=k=>e=>setF(p=>({...p,[k]:e.target.checked}));
-  const save=async()=>{if(!f.address.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
+  const[showReq,setShowReq]=useState(false);
+  const save=async()=>{if(!f.address.trim()){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   const[extracting,setExtracting]=useState(false);
   const[extractMsg,setExtractMsg]=useState(null); // {type:"success"|"error", text}
   const fileRef=useRef(null);
@@ -4001,28 +4017,28 @@ function PropertyForm({initial,onSave,onClose,canExtract=false}){
       <Btn small variant="ghost" onClick={()=>fileRef.current&&fileRef.current.click()} disabled={extracting}>{extracting?"Reading…":"Upload document"}</Btn>
     </div>
     {extractMsg&&<div style={{background:extractMsg.type==="success"?"#e0f5e9":"#fde8e8",border:`1px solid ${extractMsg.type==="success"?"#2e9e57":"#d43030"}`,color:extractMsg.type==="success"?"#0d5c2b":"#8b1a1a",borderRadius:8,padding:"10px 13px",fontSize:12,marginBottom:14,lineHeight:1.4}}>{extractMsg.type==="success"?"✓ ":"⚠ "}{extractMsg.text}</div>}</>}
-    <Grid2><Field label="Owner / LLC"><Inp placeholder="Smith Holdings LLC" value={f.ownerName||""} onChange={set("ownerName")}/></Field><Field label="Property Type"><Sel value={f.propertyType} onChange={set("propertyType")}>{[...PROP_TYPES,"Other"].map(t=><option key={t}>{t}</option>)}</Sel></Field></Grid2>
-    <Field label="Address"><Inp placeholder="123 Main St, Tampa FL" value={f.address} onChange={set("address")}/></Field>
-    <Grid2><Field label="Purchase Price"><MoneyInput value={f.purchasePrice||""} onChange={set("purchasePrice")}/></Field><Field label="Current Value"><MoneyInput value={f.currentValue||""} onChange={set("currentValue")}/></Field></Grid2>
-    <Grid2><Field label="Purchase Date"><Inp type="date" value={f.purchaseDate||""} onChange={set("purchaseDate")}/></Field><Field label="Loan Type"><Sel value={f.loanType} onChange={set("loanType")}>{LOAN_TYPES.map(t=><option key={t}>{t}</option>)}</Sel></Field></Grid2>
-    <Grid2><Field label="Lender"><Inp value={f.lender||""} onChange={set("lender")}/></Field><Field label="Loan Balance"><MoneyInput value={f.loanBalance||""} onChange={set("loanBalance")}/></Field></Grid2>
-    <Grid2><Field label="Interest Rate (%)"><Inp type="number" step="0.01" value={f.interestRate||""} onChange={set("interestRate")}/></Field><Field label="Monthly Payment"><MoneyInput value={f.loanPayment||""} onChange={set("loanPayment")}/></Field></Grid2>
-    <Grid2><Field label="Second Mortgage Balance"><MoneyInput value={f.secondMortgageBalance||""} onChange={set("secondMortgageBalance")}/></Field><Field label="Second Mortgage Payment/mo"><MoneyInput value={f.secondMortgagePayment||""} onChange={set("secondMortgagePayment")}/></Field></Grid2>
-    <Grid2><Field label="Loan Maturity Date"><Inp type="date" value={f.loanMaturityDate||""} onChange={set("loanMaturityDate")}/></Field><Field label="Rental Income/mo"><MoneyInput value={f.rentalIncome||""} onChange={set("rentalIncome")}/></Field></Grid2>
-    <Grid2><Field label="Property Taxes/yr"><MoneyInput value={f.propertyTaxes||""} onChange={set("propertyTaxes")}/></Field><Field label="Utilities/mo"><MoneyInput value={f.utilities||""} onChange={set("utilities")}/></Field></Grid2>
-    <Grid2><Field label="Insurance Company"><Inp value={f.insuranceCompany||""} onChange={set("insuranceCompany")}/></Field><Field label="Insurance Premium/yr"><MoneyInput value={f.insurancePremium||""} onChange={set("insurancePremium")}/></Field></Grid2>
-    <Grid2><Field label="Insurance Expiration"><Inp type="date" value={f.insuranceExpiration||""} onChange={set("insuranceExpiration")}/></Field><div/></Grid2>
+    <Grid2><Field label="Owner / LLC" optional><Inp placeholder="Smith Holdings LLC" value={f.ownerName||""} onChange={set("ownerName")}/></Field><Field label="Property Type"><Sel value={f.propertyType} onChange={set("propertyType")}>{[...PROP_TYPES,"Other"].map(t=><option key={t}>{t}</option>)}</Sel></Field></Grid2>
+    <Field label="Address" required><Inp placeholder="123 Main St, Tampa FL" value={f.address} onChange={set("address")}/></Field>
+    <Grid2><Field label="Purchase Price" optional><MoneyInput value={f.purchasePrice||""} onChange={set("purchasePrice")}/></Field><Field label="Current Value" optional><MoneyInput value={f.currentValue||""} onChange={set("currentValue")}/></Field></Grid2>
+    <Grid2><Field label="Purchase Date" optional><Inp type="date" value={f.purchaseDate||""} onChange={set("purchaseDate")}/></Field><Field label="Loan Type"><Sel value={f.loanType} onChange={set("loanType")}>{LOAN_TYPES.map(t=><option key={t}>{t}</option>)}</Sel></Field></Grid2>
+    <Grid2><Field label="Lender" optional><Inp value={f.lender||""} onChange={set("lender")}/></Field><Field label="Loan Balance" optional><MoneyInput value={f.loanBalance||""} onChange={set("loanBalance")}/></Field></Grid2>
+    <Grid2><Field label="Interest Rate (%)" optional><Inp type="number" step="0.01" value={f.interestRate||""} onChange={set("interestRate")}/></Field><Field label="Monthly Payment" optional><MoneyInput value={f.loanPayment||""} onChange={set("loanPayment")}/></Field></Grid2>
+    <Grid2><Field label="Second Mortgage Balance" optional><MoneyInput value={f.secondMortgageBalance||""} onChange={set("secondMortgageBalance")}/></Field><Field label="Second Mortgage Payment/mo" optional><MoneyInput value={f.secondMortgagePayment||""} onChange={set("secondMortgagePayment")}/></Field></Grid2>
+    <Grid2><Field label="Loan Maturity Date" optional><Inp type="date" value={f.loanMaturityDate||""} onChange={set("loanMaturityDate")}/></Field><Field label="Rental Income/mo" optional><MoneyInput value={f.rentalIncome||""} onChange={set("rentalIncome")}/></Field></Grid2>
+    <Grid2><Field label="Property Taxes/yr" optional><MoneyInput value={f.propertyTaxes||""} onChange={set("propertyTaxes")}/></Field><Field label="Utilities/mo" optional><MoneyInput value={f.utilities||""} onChange={set("utilities")}/></Field></Grid2>
+    <Grid2><Field label="Insurance Company" optional><Inp value={f.insuranceCompany||""} onChange={set("insuranceCompany")}/></Field><Field label="Insurance Premium/yr" optional><MoneyInput value={f.insurancePremium||""} onChange={set("insurancePremium")}/></Field></Grid2>
+    <Grid2><Field label="Insurance Expiration" optional><Inp type="date" value={f.insuranceExpiration||""} onChange={set("insuranceExpiration")}/></Field><div/></Grid2>
     <div style={{marginBottom:14}}><label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"10px 14px",background:f.floodInsurance?"#e8f0f8":B.bg,borderRadius:8,border:`1px solid ${f.floodInsurance?B.navyMid:B.border}`}}><input type="checkbox" checked={!!f.floodInsurance} onChange={setChk("floodInsurance")} style={{width:16,height:16,accentColor:B.navy}}/><span style={{fontSize:13,color:B.navy,fontWeight:600}}>Flood Insurance</span></label></div>
-    {f.floodInsurance&&<Grid2><Field label="Flood Insurance Co."><Inp value={f.floodInsuranceCompany||""} onChange={set("floodInsuranceCompany")}/></Field><Field label="Flood Premium/yr"><MoneyInput value={f.floodInsurancePremium||""} onChange={set("floodInsurancePremium")}/></Field></Grid2>}
-    {f.floodInsurance&&<Grid2><Field label="Flood Insurance Expiration"><Inp type="date" value={f.floodInsuranceExpiration||""} onChange={set("floodInsuranceExpiration")}/></Field><div/></Grid2>}
+    {f.floodInsurance&&<Grid2><Field label="Flood Insurance Co." optional><Inp value={f.floodInsuranceCompany||""} onChange={set("floodInsuranceCompany")}/></Field><Field label="Flood Premium/yr" optional><MoneyInput value={f.floodInsurancePremium||""} onChange={set("floodInsurancePremium")}/></Field></Grid2>}
+    {f.floodInsurance&&<Grid2><Field label="Flood Insurance Expiration" optional><Inp type="date" value={f.floodInsuranceExpiration||""} onChange={set("floodInsuranceExpiration")}/></Field><div/></Grid2>}
 
     {/* Rental Expenses section */}
     <div style={{marginTop:18,marginBottom:8,paddingTop:14,borderTop:`1px solid ${B.borderLight}`}}>
       <div style={{fontSize:11,fontWeight:800,color:B.textMute,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>Rental Expenses (used in Cash Flow projections)</div>
     </div>
     <Grid2>
-      <Field label="HOA / Monthly Fee ($)"><MoneyInput placeholder="350" value={f.hoaFee||""} onChange={set("hoaFee")}/></Field>
-      <Field label="Property Management Fee (%)"><Inp type="number" step="0.1" placeholder="e.g., 8" value={f.propertyManagementFeePct||""} onChange={set("propertyManagementFeePct")}/></Field>
+      <Field label="HOA / Monthly Fee ($)" optional><MoneyInput placeholder="350" value={f.hoaFee||""} onChange={set("hoaFee")}/></Field>
+      <Field label="Property Management Fee (%)" optional><Inp type="number" step="0.1" placeholder="e.g., 8" value={f.propertyManagementFeePct||""} onChange={set("propertyManagementFeePct")}/></Field>
     </Grid2>
     <div style={{marginBottom:14}}>
       <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"10px 14px",background:f.includeMortgageInCashflow?"#e8f0f8":B.bg,borderRadius:8,border:`1px solid ${f.includeMortgageInCashflow?B.navyMid:B.border}`}}>
@@ -4045,7 +4061,8 @@ function PropertyForm({initial,onSave,onClose,canExtract=false}){
       </div>
     </div>}
 
-    <Field label="Notes"><Tex value={f.notes||""} onChange={set("notes")}/></Field>
+    <Field label="Notes" optional><Tex value={f.notes||""} onChange={set("notes")}/></Field>
+    {showReq&&<ReqHint/>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save Property"}</Btn></div>
   </div>;
 }
@@ -4055,14 +4072,16 @@ function ValuableForm({initial,onSave,onClose}){
   const[f,setF]=useState(initial||{category:"Car / Vehicle",description:"",makeModel:"",year:"",estimatedValue:"",insured:false,insuranceCompany:"",notes:""});
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-  const save=async()=>{if(!f.description.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
+  const[showReq,setShowReq]=useState(false);
+  const save=async()=>{if(!f.description.trim()){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
-    <Grid2><Field label="Category"><Sel value={f.category} onChange={set("category")}>{VALUABLE_CATS.map(c=><option key={c}>{c}</option>)}</Sel></Field><Field label="Year"><Inp type="number" placeholder="2023" value={f.year||""} onChange={set("year")}/></Field></Grid2>
-    <Field label="Description"><Inp placeholder="2023 Ferrari Roma" value={f.description} onChange={set("description")}/></Field>
-    <Grid2><Field label="Make / Model"><Inp value={f.makeModel||""} onChange={set("makeModel")}/></Field><Field label="Estimated Value"><MoneyInput value={f.estimatedValue||""} onChange={set("estimatedValue")}/></Field></Grid2>
+    <Grid2><Field label="Category"><Sel value={f.category} onChange={set("category")}>{VALUABLE_CATS.map(c=><option key={c}>{c}</option>)}</Sel></Field><Field label="Year" optional><Inp type="number" placeholder="2023" value={f.year||""} onChange={set("year")}/></Field></Grid2>
+    <Field label="Description" required><Inp placeholder="2023 Ferrari Roma" value={f.description} onChange={set("description")}/></Field>
+    <Grid2><Field label="Make / Model" optional><Inp value={f.makeModel||""} onChange={set("makeModel")}/></Field><Field label="Estimated Value" optional><MoneyInput value={f.estimatedValue||""} onChange={set("estimatedValue")}/></Field></Grid2>
     <div style={{marginBottom:14}}><label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"10px 14px",background:f.insured?"#e8f0f8":B.bg,borderRadius:8,border:`1px solid ${f.insured?B.navyMid:B.border}`}}><input type="checkbox" checked={!!f.insured} onChange={e=>setF(p=>({...p,insured:e.target.checked}))} style={{width:16,height:16,accentColor:B.navy}}/><span style={{fontSize:13,color:B.navy,fontWeight:600}}>Insured</span></label></div>
-    {f.insured&&<Field label="Insurance Company"><Inp value={f.insuranceCompany||""} onChange={set("insuranceCompany")}/></Field>}
-    <Field label="Notes"><Tex value={f.notes||""} onChange={set("notes")}/></Field>
+    {f.insured&&<Field label="Insurance Company" optional><Inp value={f.insuranceCompany||""} onChange={set("insuranceCompany")}/></Field>}
+    <Field label="Notes" optional><Tex value={f.notes||""} onChange={set("notes")}/></Field>
+    {showReq&&<ReqHint/>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save"}</Btn></div>
   </div>;
 }
@@ -4072,12 +4091,14 @@ function SimpleDealForm({contacts=[],onSave,onClose}){
   const[f,setF]=useState({contactId:"",title:"",value:"",stage:"Lead",closeDate:""});
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-  const save=async()=>{if(!f.title.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
+  const[showReq,setShowReq]=useState(false);
+  const save=async()=>{if(!f.title.trim()){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
-    <Field label="Deal Title"><Inp placeholder="Estate planning engagement" value={f.title} onChange={set("title")}/></Field>
+    <Field label="Deal Title" required><Inp placeholder="Estate planning engagement" value={f.title} onChange={set("title")}/></Field>
     {contacts.length>0&&<Field label="Contact"><Sel value={f.contactId||""} onChange={set("contactId")}><option value="">— None —</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Sel></Field>}
-    <Grid2><Field label="Value ($)"><MoneyInput value={f.value||""} onChange={set("value")}/></Field><Field label="Close Date"><Inp type="date" value={f.closeDate||""} onChange={set("closeDate")}/></Field></Grid2>
+    <Grid2><Field label="Value ($)" optional><MoneyInput value={f.value||""} onChange={set("value")}/></Field><Field label="Close Date" optional><Inp type="date" value={f.closeDate||""} onChange={set("closeDate")}/></Field></Grid2>
     <Field label="Stage"><Sel value={f.stage} onChange={set("stage")}>{STAGES.map(s=><option key={s}>{s}</option>)}</Sel></Field>
+    {showReq&&<ReqHint/>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save Deal"}</Btn></div>
   </div>;
 }
@@ -4089,29 +4110,31 @@ function AccountForm({initial,onSave,onClose}){
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const advisorPhoneOk=isValidPhone(f.accountAdvisorPhone||"");
   const advisorEmailOk=!(f.accountAdvisorEmail||"").trim()||EMAIL_RE.test((f.accountAdvisorEmail||"").trim());
-  const save=async()=>{if(!f.institution.trim()||!advisorPhoneOk||!advisorEmailOk)return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
+  const[showReq,setShowReq]=useState(false);
+  const save=async()=>{if(!f.institution.trim()||!advisorPhoneOk||!advisorEmailOk){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   const pct=pctChange(f.startingBalance,f.currentBalance);
   return <div>
-    <Grid2><Field label="Institution"><Inp placeholder="Merrill Lynch" value={f.institution} onChange={set("institution")}/></Field><Field label="Banker Name"><Inp value={f.bankerName||""} onChange={set("bankerName")}/></Field></Grid2>
+    <Grid2><Field label="Institution" required><Inp placeholder="Merrill Lynch" value={f.institution} onChange={set("institution")}/></Field><Field label="Banker Name" optional><Inp value={f.bankerName||""} onChange={set("bankerName")}/></Field></Grid2>
     <Field label="Account Type"><Sel value={f.accountType} onChange={set("accountType")}>{ACCT_TYPES.map(t=><option key={t}>{t}</option>)}</Sel></Field>
-    <Grid2><Field label="Starting Balance"><MoneyInput value={f.startingBalance||""} onChange={set("startingBalance")}/></Field><Field label="Current Balance"><MoneyInput value={f.currentBalance||""} onChange={set("currentBalance")}/></Field></Grid2>
+    <Grid2><Field label="Starting Balance" optional><MoneyInput value={f.startingBalance||""} onChange={set("startingBalance")}/></Field><Field label="Current Balance" optional><MoneyInput value={f.currentBalance||""} onChange={set("currentBalance")}/></Field></Grid2>
     {pct!==null&&<div style={{background:Number(pct)>=0?"#e0f5e9":"#fde8e8",border:`1px solid ${Number(pct)>=0?"#2e9e57":"#d43030"}`,borderRadius:8,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
       <span style={{fontSize:20}}>{Number(pct)>=0?"📈":"📉"}</span>
       <div style={{fontSize:18,fontFamily:"'Cormorant Garamond',serif",fontWeight:600,color:Number(pct)>=0?"#0d5c2b":"#8b1a1a"}}>{Number(pct)>=0?"+":""}{pct}% performance</div>
     </div>}
     <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",margin:"4px 0 8px"}}>Household's advisor on this account</div>
     <Grid2>
-      <Field label="Advisor Name"><Inp value={f.accountAdvisorName||""} onChange={set("accountAdvisorName")}/></Field>
-      <Field label="Advisor Phone">
+      <Field label="Advisor Name" optional><Inp value={f.accountAdvisorName||""} onChange={set("accountAdvisorName")}/></Field>
+      <Field label="Advisor Phone" optional>
         <Inp value={f.accountAdvisorPhone||""} onChange={e=>setF(p=>({...p,accountAdvisorPhone:formatPhoneInput(e.target.value)}))} placeholder="(555) 123-4567"/>
         {!advisorPhoneOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid phone number, or leave it blank.</div>}
       </Field>
-      <Field label="Advisor Email">
+      <Field label="Advisor Email" optional>
         <Inp type="email" value={f.accountAdvisorEmail||""} onChange={set("accountAdvisorEmail")}/>
         {!advisorEmailOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid email address, or leave it blank.</div>}
       </Field>
     </Grid2>
-    <Field label="Notes"><Tex value={f.notes||""} onChange={set("notes")}/></Field>
+    <Field label="Notes" optional><Tex value={f.notes||""} onChange={set("notes")}/></Field>
+    {showReq&&<ReqHint/>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save Account"}</Btn></div>
   </div>;
 }
@@ -4147,7 +4170,8 @@ function CashFlowEventForm({initial,onSave,onClose,properties=[],vendors=[],bill
       return next;
     });
   };
-  const save=async()=>{if(!f.amount||!f.startDate)return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
+  const[showReq,setShowReq]=useState(false);
+  const save=async()=>{if(!f.amount||!f.startDate){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   const isExpense=f.direction==="expense";
   const typeOptions=isExpense?CF_EXPENSE_CATEGORIES:CF_EVENT_TYPES;
   return <div>
@@ -4209,27 +4233,28 @@ function CashFlowEventForm({initial,onSave,onClose,properties=[],vendors=[],bill
       matching figure on the property record will no longer be added separately. Itemise the rest
       of that category the same way, or the remainder will be missing.
     </div>}
-    <Field label="Description"><Inp placeholder={isExpense?"e.g., Monthly grocery budget":"e.g., Acme Corp Q4 Bonus"} value={f.description||""} onChange={set("description")}/></Field>
+    <Field label="Description" optional><Inp placeholder={isExpense?"e.g., Monthly grocery budget":"e.g., Acme Corp Q4 Bonus"} value={f.description||""} onChange={set("description")}/></Field>
     {isExpense?
       <>
-      <Field label="Amount ($)"><MoneyInput value={f.amount||""} onChange={set("amount")}/></Field>
+      <Field label="Amount ($)" required><MoneyInput value={f.amount||""} onChange={set("amount")}/></Field>
       {billPay&&<label style={{display:"flex",alignItems:"center",gap:8,margin:"2px 0 10px",cursor:"pointer",fontSize:13,color:B.text}}>
         <input type="checkbox" checked={!!f.pcmResponsible} onChange={e=>setF(p=>({...p,pcmResponsible:e.target.checked}))} style={{width:16,height:16,accentColor:B.navy}}/>
         <span>{BRAND.short} is responsible for making this payment</span>
       </label>}
       </>
     :<Grid2>
-      <Field label="Gross Amount ($)"><MoneyInput value={f.amount||""} onChange={set("amount")}/></Field>
+      <Field label="Gross Amount ($)" required><MoneyInput value={f.amount||""} onChange={set("amount")}/></Field>
       <Field label="Tax Treatment"><Sel value={f.taxTreatment} onChange={set("taxTreatment")}>{CF_TAX_TREATMENTS.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}</Sel></Field>
     </Grid2>}
     <Grid2>
-      <Field label={f.frequency==="once"?"Date":"Start Date"}><Inp type="date" value={f.startDate||""} onChange={set("startDate")}/></Field>
-      {f.frequency!=="once"&&<Field label="End Date (optional)"><Inp type="date" value={f.endDate||""} onChange={set("endDate")}/></Field>}
+      <Field label={f.frequency==="once"?"Date":"Start Date"} required><Inp type="date" value={f.startDate||""} onChange={set("startDate")}/></Field>
+      {f.frequency!=="once"&&<Field label="End Date" optional><Inp type="date" value={f.endDate||""} onChange={set("endDate")}/></Field>}
     </Grid2>
-    <Field label="Notes"><Tex value={f.notes||""} onChange={set("notes")}/></Field>
+    <Field label="Notes" optional><Tex value={f.notes||""} onChange={set("notes")}/></Field>
+    {showReq&&<ReqHint/>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}>
       <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-      <Btn onClick={save} disabled={saving||!f.amount||!f.startDate}>{saving?"Saving…":"Save"}</Btn>
+      <Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save"}</Btn>
     </div>
   </div>;
 }
@@ -5050,9 +5075,10 @@ function FamilyForm({initial,onSave,onClose,userProfile,advisors=[]}){
     setF(p=>({...p,advisorEmail:email,advisorName:adv?(adv.full_name||""):""}));
   };
   const canSave=!!f.name.trim()&&PLANS.includes(f.plan);
-  const save=async()=>{if(!canSave)return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
+  const[showReq,setShowReq]=useState(false);
+  const save=async()=>{if(!canSave){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
-    <Field label="Family Name"><Inp placeholder="The Smith Family" value={f.name} onChange={set("name")}/></Field>
+    <Field label="Family Name" required><Inp placeholder="The Smith Family" value={f.name} onChange={set("name")}/></Field>
     <Field label="Plan">
       <div style={{display:"grid",gap:8}}>
         {PLANS.map(p=>{
@@ -5077,7 +5103,7 @@ function FamilyForm({initial,onSave,onClose,userProfile,advisors=[]}){
         </div>}
     </Field>
     {isAdmin
-      ? <Field label="Assign ORDANIS Expert">
+      ? <Field label="Assign ORDANIS Expert" optional>
           <select value={f.advisorEmail||""} onChange={pickAdvisor} style={{width:"100%",padding:"10px 12px",borderRadius:8,border:`1px solid ${B.border}`,fontSize:14,fontFamily:"'DM Sans',sans-serif",background:B.white,color:B.navy}}>
             <option value="">— Select a ORDANIS Expert —</option>
             {advisors.map(a=><option key={a.id} value={a.email}>{(a.full_name||a.email)}{a.full_name?` (${a.email})`:""}</option>)}
@@ -5085,7 +5111,7 @@ function FamilyForm({initial,onSave,onClose,userProfile,advisors=[]}){
         </Field>
       : <Field label="ORDANIS Expert"><Inp value={userProfile?.fullName||userProfile?.email||""} disabled/></Field>
     }
-    <Field label="Notes"><Tex value={f.notes||""} onChange={set("notes")}/></Field>
+    <Field label="Notes" optional><Tex value={f.notes||""} onChange={set("notes")}/></Field>
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",alignItems:"center",marginTop:10}}>
       {!canSave&&<span style={{fontSize:11,color:B.textMute,marginRight:"auto"}}>
         {f.name.trim()?"Choose a plan to continue.":"A name and a plan are required."}
@@ -5355,15 +5381,17 @@ function PortfolioAccountForm({initial,families=[],onSave,onClose}){
   const[f,setF]=useState(initial||{familyId:"",institution:"",bankerName:"",accountType:"Investment",startingBalance:"",currentBalance:"",notes:""});
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-  const save=async()=>{if(!f.institution.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
+  const[showReq,setShowReq]=useState(false);
+  const save=async()=>{if(!f.institution.trim()){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   const pct=pctChange(f.startingBalance,f.currentBalance);
   return <div>
     {families.length>0&&<Field label="Family"><Sel value={f.familyId||""} onChange={set("familyId")}><option value="">— No family —</option>{families.map(fm=><option key={fm.id} value={fm.id}>{fm.name}</option>)}</Sel></Field>}
-    <Grid2><Field label="Institution"><Inp placeholder="Merrill Lynch" value={f.institution} onChange={set("institution")}/></Field><Field label="Banker Name"><Inp value={f.bankerName||""} onChange={set("bankerName")}/></Field></Grid2>
+    <Grid2><Field label="Institution" required><Inp placeholder="Merrill Lynch" value={f.institution} onChange={set("institution")}/></Field><Field label="Banker Name" optional><Inp value={f.bankerName||""} onChange={set("bankerName")}/></Field></Grid2>
     <Field label="Account Type"><Sel value={f.accountType} onChange={set("accountType")}>{ACCT_TYPES.map(t=><option key={t}>{t}</option>)}</Sel></Field>
-    <Grid2><Field label="Starting Balance"><MoneyInput value={f.startingBalance||""} onChange={set("startingBalance")}/></Field><Field label="Current Balance"><MoneyInput value={f.currentBalance||""} onChange={set("currentBalance")}/></Field></Grid2>
+    <Grid2><Field label="Starting Balance" optional><MoneyInput value={f.startingBalance||""} onChange={set("startingBalance")}/></Field><Field label="Current Balance" optional><MoneyInput value={f.currentBalance||""} onChange={set("currentBalance")}/></Field></Grid2>
     {pct!==null&&<div style={{background:Number(pct)>=0?"#e0f5e9":"#fde8e8",border:`1px solid ${Number(pct)>=0?"#2e9e57":"#d43030"}`,borderRadius:8,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>{Number(pct)>=0?"📈":"📉"}</span><div style={{fontSize:18,fontFamily:"'Cormorant Garamond',serif",fontWeight:600,color:Number(pct)>=0?"#0d5c2b":"#8b1a1a"}}>{Number(pct)>=0?"+":""}{pct}% performance</div></div>}
-    <Field label="Notes"><Tex value={f.notes||""} onChange={set("notes")}/></Field>
+    <Field label="Notes" optional><Tex value={f.notes||""} onChange={set("notes")}/></Field>
+    {showReq&&<ReqHint/>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save"}</Btn></div>
   </div>;
 }
@@ -5844,15 +5872,17 @@ function GlobalTaskForm({initial,families=[],contacts=[],onSave,onClose}){
   const[f,setF]=useState(initial||{familyId:"",contactId:"",title:"",dueDate:"",priority:"Medium",reminderDays:7,done:false,recurrence:"",recurrenceInterval:1,recurrenceUnit:"week"});
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-  const save=async()=>{if(!f.title.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
+  const[showReq,setShowReq]=useState(false);
+  const save=async()=>{if(!f.title.trim()){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
     <Grid2><Field label="Family"><Sel value={f.familyId||""} onChange={set("familyId")}><option value="">— None —</option>{families.map(fm=><option key={fm.id} value={fm.id}>{fm.name}</option>)}</Sel></Field>
     <Field label="Contact"><Sel value={f.contactId||""} onChange={set("contactId")}><option value="">— None —</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Sel></Field></Grid2>
-    <Field label="Task"><Inp placeholder="Follow up on loan maturity" value={f.title} onChange={set("title")}/></Field>
-    <Grid2><Field label="Due Date"><Inp type="date" value={f.dueDate||""} onChange={set("dueDate")}/></Field><Field label="Priority"><Sel value={f.priority} onChange={set("priority")}><option>Low</option><option>Medium</option><option>High</option></Sel></Field></Grid2>
+    <Field label="Task" required><Inp placeholder="Follow up on loan maturity" value={f.title} onChange={set("title")}/></Field>
+    <Grid2><Field label="Due Date" optional><Inp type="date" value={f.dueDate||""} onChange={set("dueDate")}/></Field><Field label="Priority"><Sel value={f.priority} onChange={set("priority")}><option>Low</option><option>Medium</option><option>High</option></Sel></Field></Grid2>
     <Field label="Email Reminder"><Sel value={reminderDaysOr7(f.reminderDays)} onChange={e=>setF(p=>({...p,reminderDays:Number(e.target.value)}))}><option value={0}>No reminder</option>{REMINDER_OPTIONS.map(r=><option key={r.days} value={r.days}>{r.label}</option>)}</Sel></Field>
     {Number(f.reminderDays)>0&&f.dueDate&&<div style={{background:"#e8f0f8",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:12,color:B.navyMid}}>🔔 ORDANIS Expert emailed on {new Date(new Date(f.dueDate).setDate(new Date(f.dueDate).getDate()-Number(f.reminderDays))).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</div>}
     <RecurrenceField f={f} setF={setF}/>
+    {showReq&&<ReqHint/>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save Task"}</Btn></div>
   </div>;
 }
@@ -5865,7 +5895,8 @@ function ProspectContactForm({initial,onSave,onClose,userProfile,advisors=[]}){
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const pickAdvisor=e=>{const email=e.target.value;const adv=advisors.find(a=>a.email===email);setF(p=>({...p,advisorEmail:email,advisorName:adv?(adv.full_name||""):""}));};
-  const save=async()=>{if(!f.name.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
+  const[showReq,setShowReq]=useState(false);
+  const save=async()=>{if(!f.name.trim()){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
     <Grid2><Field label="Full Name"><Inp placeholder="Jane Smith" value={f.name} onChange={set("name")}/></Field><Field label="Company"><Inp value={f.company||""} onChange={set("company")}/></Field></Grid2>
     <Grid2><Field label="Email"><Inp type="email" value={f.email||""} onChange={set("email")}/></Field><Field label="Phone"><Inp placeholder="(555) 000-0000" value={f.phone||""} onChange={e=>set("phone")({target:{value:formatPhoneInput(e.target.value)}})}/></Field></Grid2>
@@ -5880,6 +5911,7 @@ function ProspectContactForm({initial,onSave,onClose,userProfile,advisors=[]}){
       : <Field label="ORDANIS Expert"><Inp value={f.advisorName||f.advisorEmail||userProfile?.fullName||userProfile?.email||""} disabled/></Field>
     }
     <Field label="Tags"><Inp placeholder="warm-lead, vip" value={f.tags||""} onChange={set("tags")}/></Field>
+    {showReq&&<ReqHint/>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save"}</Btn></div>
   </div>;
 }
@@ -6007,7 +6039,8 @@ function ProspectDealForm({initial,contacts=[],onSave,onClose,userProfile,adviso
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const pickAdvisor=e=>{const email=e.target.value;const adv=advisors.find(a=>a.email===email);setF(p=>({...p,advisorEmail:email,advisorName:adv?(adv.full_name||""):""}));};
-  const save=async()=>{if(!f.title.trim())return;setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
+  const[showReq,setShowReq]=useState(false);
+  const save=async()=>{if(!f.title.trim()){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
     <Field label="Opportunity Title"><Inp value={f.title} onChange={set("title")}/></Field>
     <Field label="Contact"><Sel value={f.contactId||""} onChange={set("contactId")}><option value="">— None —</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Sel></Field>
@@ -6022,6 +6055,7 @@ function ProspectDealForm({initial,contacts=[],onSave,onClose,userProfile,adviso
         </Field>
       : <Field label="ORDANIS Expert"><Inp value={f.advisorName||f.advisorEmail||userProfile?.fullName||userProfile?.email||""} disabled/></Field>
     }
+    {showReq&&<ReqHint/>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save"}</Btn></div>
   </div>;
 }
@@ -8639,15 +8673,16 @@ function PropertyQuickForm({onSave,onCancel,saving}){
   const set=(k,v)=>setF(m=>({...m,[k]:v}));
   const valid=f.address.trim().length>0;
   return <div>
-    <Field label="Address"><AddressInput value={f.address} onChange={e=>set("address",e.target.value)} placeholder="Start typing an address…"/></Field>
+    <Field label="Address" required><AddressInput value={f.address} onChange={e=>set("address",e.target.value)} placeholder="Start typing an address…"/></Field>
     <Grid2>
       <Field label="Property type"><Sel value={f.propertyType} onChange={e=>set("propertyType",e.target.value)}>{PROP_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</Sel></Field>
-      <Field label="Current value (if known)"><MoneyInput value={f.currentValue} onChange={e=>set("currentValue",e.target.value)} placeholder="850,000"/></Field>
-      <Field label="Purchase price"><MoneyInput value={f.purchasePrice} onChange={e=>set("purchasePrice",e.target.value)} placeholder="720,000"/></Field>
-      <Field label="Purchase date"><Inp type="date" value={f.purchaseDate} onChange={e=>set("purchaseDate",e.target.value)}/></Field>
+      <Field label="Current value (if known)" optional><MoneyInput value={f.currentValue} onChange={e=>set("currentValue",e.target.value)} placeholder="850,000"/></Field>
+      <Field label="Purchase price" optional><MoneyInput value={f.purchasePrice} onChange={e=>set("purchasePrice",e.target.value)} placeholder="720,000"/></Field>
+      <Field label="Purchase date" optional><Inp type="date" value={f.purchaseDate} onChange={e=>set("purchaseDate",e.target.value)}/></Field>
     </Grid2>
-    <Field label="Notes (optional)"><textarea value={f.notes} onChange={e=>set("notes",e.target.value)} rows={2} style={{...inp,resize:"vertical",fontFamily:"inherit"}}/></Field>
+    <Field label="Notes" optional><textarea value={f.notes} onChange={e=>set("notes",e.target.value)} rows={2} style={{...inp,resize:"vertical",fontFamily:"inherit"}}/></Field>
     <div style={{fontSize:11.5,color:B.textSoft,marginBottom:14}}>Mortgage, insurance and rental details can be added later -- an advisor can also fill these in for you.</div>
+    {!valid&&<div style={{fontSize:11.5,color:B.textMute,textAlign:"right",marginBottom:8}}>Fill in the fields marked * to continue.</div>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
       {onCancel&&<Btn variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Btn>}
       <Btn onClick={async()=>{const r=await onSave(f);if(r!==false)setF(mkInit());}} disabled={saving||!valid}>{saving?"Saving…":"Add property"}</Btn>
@@ -8663,24 +8698,25 @@ function AccountQuickForm({onSave,onCancel,saving}){
   const valid=f.institution.trim().length>0&&advisorPhoneOk&&advisorEmailOk;
   return <div>
     <Grid2>
-      <Field label="Institution"><Inp value={f.institution} onChange={e=>set("institution",e.target.value)} placeholder="Institution name"/></Field>
+      <Field label="Institution" required><Inp value={f.institution} onChange={e=>set("institution",e.target.value)} placeholder="Institution name"/></Field>
       <Field label="Account type"><Sel value={f.accountType} onChange={e=>set("accountType",e.target.value)}>{ACCT_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</Sel></Field>
-      <Field label="Current balance"><MoneyInput value={f.currentBalance} onChange={e=>set("currentBalance",e.target.value)} placeholder="240,000"/></Field>
-      <Field label="Starting balance (optional)"><MoneyInput value={f.startingBalance} onChange={e=>set("startingBalance",e.target.value)} placeholder="200,000"/></Field>
+      <Field label="Current balance" optional><MoneyInput value={f.currentBalance} onChange={e=>set("currentBalance",e.target.value)} placeholder="240,000"/></Field>
+      <Field label="Starting balance" optional><MoneyInput value={f.startingBalance} onChange={e=>set("startingBalance",e.target.value)} placeholder="200,000"/></Field>
     </Grid2>
     <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",margin:"4px 0 8px"}}>Your advisor on this account (optional)</div>
     <Grid2>
-      <Field label="Advisor name"><Inp value={f.accountAdvisorName} onChange={e=>set("accountAdvisorName",e.target.value)} placeholder="Jordan Lee"/></Field>
-      <Field label="Advisor phone">
+      <Field label="Advisor name" optional><Inp value={f.accountAdvisorName} onChange={e=>set("accountAdvisorName",e.target.value)} placeholder="Jordan Lee"/></Field>
+      <Field label="Advisor phone" optional>
         <Inp value={f.accountAdvisorPhone} onChange={e=>set("accountAdvisorPhone",formatPhoneInput(e.target.value))} placeholder="(555) 123-4567"/>
         {!advisorPhoneOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid phone number, or leave it blank.</div>}
       </Field>
-      <Field label="Advisor email">
+      <Field label="Advisor email" optional>
         <Inp type="email" value={f.accountAdvisorEmail} onChange={e=>set("accountAdvisorEmail",e.target.value)} placeholder="jordan@example.com"/>
         {!advisorEmailOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid email address, or leave it blank.</div>}
       </Field>
     </Grid2>
-    <Field label="Notes (optional)"><textarea value={f.notes} onChange={e=>set("notes",e.target.value)} rows={2} style={{...inp,resize:"vertical",fontFamily:"inherit"}}/></Field>
+    <Field label="Notes" optional><textarea value={f.notes} onChange={e=>set("notes",e.target.value)} rows={2} style={{...inp,resize:"vertical",fontFamily:"inherit"}}/></Field>
+    {!valid&&<div style={{fontSize:11.5,color:B.textMute,textAlign:"right",marginBottom:8}}>Fill in the fields marked * to continue.</div>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
       {onCancel&&<Btn variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Btn>}
       <Btn onClick={async()=>{const r=await onSave(f);if(r!==false)setF(mkInit());}} disabled={saving||!valid}>{saving?"Saving…":"Add account"}</Btn>
@@ -8695,13 +8731,14 @@ function ValuableQuickForm({onSave,onCancel,saving}){
   return <div>
     <Grid2>
       <Field label="Category"><Sel value={f.category} onChange={e=>set("category",e.target.value)}>{VALUABLE_CATS.map(t=><option key={t} value={t}>{t}</option>)}</Sel></Field>
-      <Field label="Estimated value"><MoneyInput value={f.estimatedValue} onChange={e=>set("estimatedValue",e.target.value)} placeholder="45,000"/></Field>
+      <Field label="Estimated value" optional><MoneyInput value={f.estimatedValue} onChange={e=>set("estimatedValue",e.target.value)} placeholder="45,000"/></Field>
     </Grid2>
-    <Field label="Description"><Inp value={f.description} onChange={e=>set("description",e.target.value)} placeholder="2021 Rolex Submariner"/></Field>
+    <Field label="Description" required><Inp value={f.description} onChange={e=>set("description",e.target.value)} placeholder="2021 Rolex Submariner"/></Field>
     <Grid2>
-      <Field label="Make / model (optional)"><Inp value={f.makeModel} onChange={e=>set("makeModel",e.target.value)}/></Field>
-      <Field label="Year (optional)"><Inp value={f.year} onChange={e=>set("year",e.target.value)}/></Field>
+      <Field label="Make / model" optional><Inp value={f.makeModel} onChange={e=>set("makeModel",e.target.value)}/></Field>
+      <Field label="Year" optional><Inp value={f.year} onChange={e=>set("year",e.target.value)}/></Field>
     </Grid2>
+    {!valid&&<div style={{fontSize:11.5,color:B.textMute,textAlign:"right",marginBottom:8}}>Fill in the fields marked * to continue.</div>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
       {onCancel&&<Btn variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Btn>}
       <Btn onClick={async()=>{const r=await onSave(f);if(r!==false)setF(mkInit());}} disabled={saving||!valid}>{saving?"Saving…":"Add valuable"}</Btn>
@@ -8752,15 +8789,16 @@ function MemberQuickForm({onSave,onCancel,saving}){
   const valid=f.name.trim().length>0&&phoneOk;
   return <div>
     <ImportFromContactsButton onPick={c=>setF(m=>({...m,name:c.name||m.name,email:c.email||m.email,phone:c.phone?formatPhoneInput(c.phone):m.phone}))}/>
-    <Field label="Name"><Inp value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Jane Smith"/></Field>
+    <Field label="Name" required><Inp value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Jane Smith"/></Field>
     <Grid2>
       <Field label="Relationship"><Sel value={f.relationship} onChange={e=>set("relationship",e.target.value)}>{MEMBER_RELATIONSHIPS.map(t=><option key={t} value={t}>{t}</option>)}</Sel></Field>
-      <Field label="Email (optional)"><Inp type="email" value={f.email} onChange={e=>set("email",e.target.value)} placeholder="jane@email.com"/></Field>
-      <Field label="Phone (optional)">
+      <Field label="Email" optional><Inp type="email" value={f.email} onChange={e=>set("email",e.target.value)} placeholder="jane@email.com"/></Field>
+      <Field label="Phone" optional>
         <Inp value={f.phone} onChange={e=>set("phone",formatPhoneInput(e.target.value))} placeholder="(555) 123-4567"/>
         {!phoneOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid phone number, or leave it blank.</div>}
       </Field>
     </Grid2>
+    {!valid&&<div style={{fontSize:11.5,color:B.textMute,textAlign:"right",marginBottom:8}}>Fill in the fields marked * to continue.</div>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
       {onCancel&&<Btn variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Btn>}
       <Btn onClick={async()=>{const r=await onSave(f);if(r!==false)setF(mkInit());}} disabled={saving||!valid}>{saving?"Saving…":"Add member"}</Btn>
@@ -8781,11 +8819,11 @@ function ProfessionalQuickForm({onSave,onCancel,saving,allowPortalGrant,partnerS
   return <div>
     <ImportFromContactsButton onPick={c=>setF(m=>({...m,name:c.name||m.name,email:c.email||m.email,phone:c.phone?formatPhoneInput(c.phone):m.phone}))}/>
     <Grid2>
-      <Field label="Name"><Inp value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Dr. John Reyes"/></Field>
-      <Field label="Role"><Inp value={f.role} onChange={e=>set("role",e.target.value)} placeholder="CPA, Attorney, Physician…"/></Field>
-      <Field label="Company"><Inp value={f.company} onChange={e=>set("company",e.target.value)} placeholder="Reyes Family Medicine"/></Field>
-      <Field label={f.grantPortalAccess?"Email (required for portal access)":"Email (optional)"}><Inp type="email" value={f.email} onChange={e=>set("email",e.target.value)}/></Field>
-      <Field label="Phone (optional)">
+      <Field label="Name" required><Inp value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Dr. John Reyes"/></Field>
+      <Field label="Role" optional><Inp value={f.role} onChange={e=>set("role",e.target.value)} placeholder="CPA, Attorney, Physician…"/></Field>
+      <Field label="Company" required><Inp value={f.company} onChange={e=>set("company",e.target.value)} placeholder="Reyes Family Medicine"/></Field>
+      <Field label={f.grantPortalAccess?"Email (needed for portal access)":"Email"} required={!!f.grantPortalAccess} optional={!f.grantPortalAccess}><Inp type="email" value={f.email} onChange={e=>set("email",e.target.value)}/></Field>
+      <Field label="Phone" optional>
         <Inp value={f.phone} onChange={e=>set("phone",formatPhoneInput(e.target.value))} placeholder="(555) 123-4567"/>
         {!phoneOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid phone number, or leave it blank.</div>}
       </Field>
@@ -8796,6 +8834,7 @@ function ProfessionalQuickForm({onSave,onCancel,saving,allowPortalGrant,partnerS
         <strong style={{color:B.navy}}>Also give this Business Partner their own portal login</strong> — a read-only account so they can see this household's dashboard on their own (properties, cash flow, documents, and more). We'll email them a secure link to set it up. {partnerSeatFree?<><strong style={{color:B.navy}}>Free</strong>, included with Premier.</>:<><strong style={{color:B.navy}}>$5.00/month</strong>, billed to this household until removed.</>}
       </span>
     </label>}
+    {!valid&&<div style={{fontSize:11.5,color:B.textMute,textAlign:"right",marginBottom:8}}>Fill in the fields marked * to continue.</div>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
       {onCancel&&<Btn variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Btn>}
       <Btn onClick={async()=>{const r=await onSave(f);if(r!==false)setF(mkInit());}} disabled={saving||!valid}>{saving?"Saving…":"Add contact"}</Btn>
@@ -8815,8 +8854,8 @@ function BusinessPartnerQuickForm({onSave,onCancel,saving,seatFree}){
   const valid=f.name.trim().length>0&&emailOk&&(seatFree||f.agree);
   return <div>
     <Grid2>
-      <Field label="Name"><Inp value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Jane Reyes"/></Field>
-      <Field label="Email (they will get the login link here)">
+      <Field label="Name" required><Inp value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Jane Reyes"/></Field>
+      <Field label="Email (they will get the login link here)" required>
         <Inp type="email" value={f.email} onChange={e=>set("email",e.target.value)}/>
         {f.email&&!emailOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid email address.</div>}
       </Field>
@@ -8828,6 +8867,7 @@ function BusinessPartnerQuickForm({onSave,onCancel,saving,seatFree}){
       <input type="checkbox" checked={f.agree} onChange={e=>set("agree",e.target.checked)} style={{marginTop:2}}/>
       <span style={{fontSize:12.5,color:B.text,lineHeight:1.5}}>I understand <strong style={{color:B.navy}}>$5.00/month</strong> will be added to this household's bill for this seat until I revoke their access.</span>
     </label>}
+    {!valid&&<div style={{fontSize:11.5,color:B.textMute,textAlign:"right",marginBottom:8}}>Fill in the fields marked * to continue.</div>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
       {onCancel&&<Btn variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Btn>}
       <Btn onClick={async()=>{const r=await onSave(f);if(r!==false)setF(mkInit());}} disabled={saving||!valid}>{saving?"Sending…":"Send invite"}</Btn>
