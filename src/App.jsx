@@ -11471,6 +11471,40 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
   useEffect(()=>{load();},[family.id]);
 
   const tplFor=key=>templates.find(t=>t.key===key);
+  // Picking the workflow first fills in the rest of a NEW obligation. Only fields the person has not
+  // touched are filled: a value is replaced only if it is blank, still the form's default, or the
+  // value this same function put there for the previously chosen workflow. Anything typed by hand stays.
+  const TEMPLATE_KIND={grat_annuity:"grat_annuity",note_interest:"note_interest",policy_review:"policy_review",capital_call:"capital_call",rmd:"rmd",estimated_tax:"tax",k1_collection:"tax_document",ilit_premium:"premium"};
+  const TEMPLATE_RECURRENCE={capital_call:"once",estimated_tax:"quarterly",quarterly_statement_collection_and:"quarterly",rmd:"annually"};
+  const templateDefaults=t=>{
+    if(!t)return{};
+    const cat=t.category||"";
+    const kind=TEMPLATE_KIND[t.key]||(cat==="Insurance"?"premium":cat==="Tax"?"tax":"other");
+    const recurrence=TEMPLATE_RECURRENCE[t.key]||(t.trigger_kind==="manual"?"once":"annually");
+    const d={name:t.name,kind,recurrence,notes:t.description||""};
+    if(t.trigger_kind==="manual")d.due_date=todayISO(); // event-driven playbooks start now
+    if(accounts.length===1)d.source_account_id=accounts[0].id;
+    return d;
+  };
+  const chooseTemplate=key=>setModal(m=>{
+    const row=m.row,auto=row._auto||{};
+    const next={...row,template_key:key};
+    if(!m.isNew){return{...m,row:next};}
+    const nd=templateDefaults(tplFor(key));
+    const blank=v=>v===""||v==null;
+    const fresh={kind:"premium",recurrence:"annually"}; // BLANK_OBLIGATION's defaults
+    const newAuto={};
+    for(const f of ["name","kind","recurrence","notes","due_date","source_account_id"]){
+      const cur=row[f];
+      const untouched=blank(cur)||cur===auto[f]||(f in fresh&&cur===fresh[f]&&!(f in auto));
+      if(untouched){
+        if(key&&f in nd){next[f]=nd[f];newAuto[f]=nd[f];}
+        else if(!key&&f in auto){next[f]=(f in fresh)?fresh[f]:"";}
+      }else if(f in auto)newAuto[f]=auto[f];
+    }
+    next._auto=newAuto;
+    return{...m,row:next};
+  });
   // Flags a playbook can ask about, so the form only offers relevant questions.
   const flagsFor=key=>{
     const t=tplFor(key);
@@ -11770,6 +11804,28 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
       onClose={()=>setReview(null)} onApproved={load}/>}
 
     {modal&&<Modal wide title={modal.isNew?"New Obligation":`Edit — ${modal.row.name}`} onClose={()=>setModal(null)}>
+      <Field label="Workflow" optional>
+        <Sel value={modal.row.template_key||""} onChange={e=>chooseTemplate(e.target.value)}>
+          <option value="">— none, track the date only —</option>
+          {templates.map(t=><option key={t.key} value={t.key}>{t.name}</option>)}
+        </Sel>
+      </Field>
+      {modal.isNew&&modal.row.template_key&&<div style={{fontSize:11.5,color:B.textSoft,margin:"-6px 0 12px"}}>Name, type, repeat and notes were filled in from this workflow. Change anything that doesn't fit; just add the due date and any amount.</div>}
+      {/* Conditional questions are asked HERE, before any cycle exists, because
+          the answer changes every downstream date. */}
+      {flagsFor(modal.row.template_key).map(flag=>
+        <label key={flag} style={{display:"flex",gap:9,alignItems:"flex-start",background:B.bg,border:`1px solid ${B.border}`,borderRadius:8,padding:"10px 13px",marginBottom:10,cursor:"pointer"}}>
+          <input type="checkbox" checked={!!(modal.row.options||{})[flag]}
+            onChange={e=>setModal(m=>({...m,row:{...m.row,options:{...(m.row.options||{}),[flag]:e.target.checked}}}))}
+            style={{marginTop:2}}/>
+          <span style={{fontSize:12.5,color:B.text}}>
+            <strong style={{textTransform:"capitalize"}}>{flag.replace(/_/g," ")}</strong>
+            <span style={{display:"block",fontSize:11,color:B.textSoft,marginTop:2}}>
+              Answered before a cycle starts, because it changes the schedule. Steps that depend on it are skipped when unticked, and stay visible as "not required".
+            </span>
+          </span>
+        </label>)}
+
       <Grid2>
         <Field label="Name" required><Inp maxLength={120} value={modal.row.name} onChange={e=>setModal(m=>({...m,row:{...m.row,name:e.target.value}}))} placeholder="ILIT premium — Pacific Life"/></Field>
         <Field label="Type"><Sel value={modal.row.kind} onChange={e=>setModal(m=>({...m,row:{...m.row,kind:e.target.value}}))}>{OBLIGATION_KINDS.map(k=><option key={k.v} value={k.v}>{k.label}</option>)}</Sel></Field>
@@ -11796,28 +11852,6 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
           </Sel>
         </Field>
       </Grid2>
-
-      <SectionLabel>Playbook</SectionLabel>
-      <Field label="Which workflow carries this" optional>
-        <Sel value={modal.row.template_key||""} onChange={e=>setModal(m=>({...m,row:{...m.row,template_key:e.target.value}}))}>
-          <option value="">— none, track the date only —</option>
-          {templates.map(t=><option key={t.key} value={t.key}>{t.name}</option>)}
-        </Sel>
-      </Field>
-      {/* Conditional questions are asked HERE, before any cycle exists, because
-          the answer changes every downstream date. */}
-      {flagsFor(modal.row.template_key).map(flag=>
-        <label key={flag} style={{display:"flex",gap:9,alignItems:"flex-start",background:B.bg,border:`1px solid ${B.border}`,borderRadius:8,padding:"10px 13px",marginBottom:10,cursor:"pointer"}}>
-          <input type="checkbox" checked={!!(modal.row.options||{})[flag]}
-            onChange={e=>setModal(m=>({...m,row:{...m.row,options:{...(m.row.options||{}),[flag]:e.target.checked}}}))}
-            style={{marginTop:2}}/>
-          <span style={{fontSize:12.5,color:B.text}}>
-            <strong style={{textTransform:"capitalize"}}>{flag.replace(/_/g," ")}</strong>
-            <span style={{display:"block",fontSize:11,color:B.textSoft,marginTop:2}}>
-              Answered before a cycle starts, because it changes the schedule. Steps that depend on it are skipped when unticked, and stay visible as "not required".
-            </span>
-          </span>
-        </label>)}
 
       <Field label="Notes" optional><textarea maxLength={2000} value={modal.row.notes||""} onChange={e=>setModal(m=>({...m,row:{...m.row,notes:e.target.value}}))} rows={2} style={{...inp,resize:"vertical",fontFamily:"inherit"}}/></Field>
 
