@@ -9341,7 +9341,9 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   };
   // Plan preview video: offered on sign-in until played once (or offered 3 times); then only the link.
   const planVideoPlan=String(clientPlan||"").toLowerCase();
-  const hasPlanVideo=!!(userProfile&&userProfile.role==="client"&&PLAN_VIDEO_FILE[planVideoPlan]);
+  // Households that belong to a firm are left out: the videos are ORDANIS-branded and a firm's clients
+  // should hear about their plan from the firm.
+  const hasPlanVideo=!!(userProfile&&userProfile.role==="client"&&PLAN_VIDEO_FILE[planVideoPlan]&&!fam.enterprise_id&&!family.enterprise_id);
   const[planVideo,setPlanVideo]=useState(null);          // {offers,seen}; null while being counted
   const[planVideoOfferDone,setPlanVideoOfferDone]=useState(false);
   const[planVideoWatching,setPlanVideoWatching]=useState(false);
