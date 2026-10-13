@@ -2610,7 +2610,68 @@ function countAssistantPromptLogin(uid){
   return _assistantPromptCalls[uid];
 }
 
-function AssistantWelcome({family,data,reload,onClose,userProfile,toast}){
+// ── PLAN PREVIEW VIDEO ───────────────────────────────────────────────────────
+// One short video per plan, kept in the private "Videos" storage bucket. A client is offered the video
+// for their plan when they sign in, until they have played it once (or it has been offered 3 times).
+// After that, the "Watch the video" link in the assistant's sign-in greeting is how they watch it.
+// The counter lives on user_profiles (record_plan_video_offer / mark_plan_video_seen), so it follows the
+// person across devices; the per-tab cache stops a page reload from counting as another sign-in.
+const PLAN_VIDEO_BUCKET="Videos";
+const PLAN_VIDEO_FILE={basic:"ORDANIS_Basic.mp4",core:"ORDANIS_Core.mp4",premier:"ORDANIS_Premier.mp4"};
+const planVideoKey=uid=>"ordanis_assistant_prompt:video:"+uid; // shares the prefix so sign-out clears it
+function recordPlanVideoOffer(uid){
+  const k="video:"+uid;
+  try{const v=JSON.parse(sessionStorage.getItem(planVideoKey(uid))||"null");if(v&&typeof v.offers==="number")return Promise.resolve(v);}catch(e){}
+  if(!_assistantPromptCalls[k]){
+    _assistantPromptCalls[k]=(async()=>{
+      let v={offers:99,seen:true}; // if the counter can't be read or written, err on the side of not nagging
+      try{const{data,error}=await sb.rpc("record_plan_video_offer");if(!error&&data&&typeof data.offers==="number")v={offers:data.offers,seen:!!data.seen};}catch(e){}
+      try{sessionStorage.setItem(planVideoKey(uid),JSON.stringify(v));}catch(e){}
+      return v;
+    })();
+  }
+  return _assistantPromptCalls[k];
+}
+function markPlanVideoSeenSession(uid){
+  try{sessionStorage.setItem(planVideoKey(uid),JSON.stringify({offers:99,seen:true}));}catch(e){}
+}
+function PlanVideoModal({plan,mode,onPlayed,onClose}){
+  const file=PLAN_VIDEO_FILE[plan];
+  const label=planLabel(plan);
+  const[started,setStarted]=useState(mode==="watch");
+  const[url,setUrl]=useState(null);
+  const[err,setErr]=useState("");
+  useEffect(()=>{
+    if(!started||!file)return;
+    let cancelled=false;
+    (async()=>{
+      try{
+        const{data,error}=await sb.storage.from(PLAN_VIDEO_BUCKET).createSignedUrl(file,3600);
+        if(cancelled)return;
+        if(error||!data||!data.signedUrl)throw error||new Error("no link");
+        setUrl(data.signedUrl);
+      }catch(e){ if(!cancelled)setErr("We couldn't load the video right now. Please try again in a moment."); }
+    })();
+    return()=>{cancelled=true;};
+  },[started,file]);
+  if(!file)return null;
+  return <Modal title={`${label} Plan Preview`} onClose={onClose} wide>
+    <div style={{fontSize:14,color:B.text,lineHeight:1.55,marginBottom:16}}>
+      Here is a quick video to explore your {label} Plan.
+    </div>
+    {!started&&<div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <Btn variant="ghost" onClick={onClose}>Not now</Btn>
+      <Btn onClick={()=>setStarted(true)}>▶ Watch the video</Btn>
+    </div>}
+    {started&&!err&&!url&&<div style={{fontSize:13,color:B.textSoft,padding:"28px 0",textAlign:"center"}}>Loading the video…</div>}
+    {started&&err&&<div style={{fontSize:13,color:B.red||"#B3261E",padding:"12px 0"}}>{err}</div>}
+    {started&&url&&<video src={url} controls autoPlay playsInline preload="metadata" controlsList="nodownload"
+      onPlay={onPlayed} style={{width:"100%",maxHeight:"62vh",borderRadius:10,background:"#000",display:"block"}}/>}
+    {started&&<div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}><Btn variant="ghost" onClick={onClose}>Close</Btn></div>}
+  </Modal>;
+}
+
+function AssistantWelcome({family,data,reload,onClose,userProfile,toast,onWatchVideo}){
   const famRow=(data.families||[]).find(x=>x.id===family.id)||family;
   const assistantName=(famRow.assistantName||"").trim()||"ORDANIS";
   const[emailOpen,setEmailOpen]=useState(false);
@@ -2621,6 +2682,11 @@ function AssistantWelcome({family,data,reload,onClose,userProfile,toast}){
     <div style={{fontSize:14,color:B.text,lineHeight:1.55,marginBottom:16}}>
       Anything I can help you find before you dive in? Ask me about your net worth, properties, loans, insurance, tasks, or documents — or head straight to the dashboard.
     </div>
+    {onWatchVideo&&<div style={{marginBottom:14}}>
+      <button type="button" onClick={onWatchVideo} style={{background:"none",border:"none",padding:0,cursor:"pointer",color:B.navy,fontSize:13.5,fontWeight:600,fontFamily:"inherit",textDecoration:"underline",textUnderlineOffset:3}}>
+        ▶ Watch the {planLabel(famRow.plan)||""} plan video
+      </button>
+    </div>}
     <FamilyAssistant family={family} data={data} reload={reload} compact toast={toast}/>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginTop:16,flexWrap:"wrap"}}>
       {isClient?<Btn variant="ghost" onClick={()=>setEmailOpen(true)}>✉ Email my ORDANIS Expert</Btn>:<span/>}
@@ -9273,15 +9339,39 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
       setWelcomeErr(e&&e.message?e.message:"Couldn't save the name. Please try again.");
     }finally{ setSavingWelcome(false); }
   };
+  // Plan preview video: offered on sign-in until played once (or offered 3 times); then only the link.
+  const planVideoPlan=String(clientPlan||"").toLowerCase();
+  const hasPlanVideo=!!(userProfile&&userProfile.role==="client"&&PLAN_VIDEO_FILE[planVideoPlan]);
+  const[planVideo,setPlanVideo]=useState(null);          // {offers,seen}; null while being counted
+  const[planVideoOfferDone,setPlanVideoOfferDone]=useState(false);
+  const[planVideoWatching,setPlanVideoWatching]=useState(false);
+  useEffect(()=>{
+    if(!promptUid||!hasPlanVideo)return;
+    let cancelled=false;
+    recordPlanVideoOffer(promptUid).then(v=>{if(!cancelled)setPlanVideo(v);});
+    return()=>{cancelled=true;};
+  },[promptUid,hasPlanVideo]);
+  const planVideoPending=hasPlanVideo&&planVideo===null;
+  const showPlanVideoOffer=hasPlanVideo&&!!planVideo&&!planVideo.seen&&planVideo.offers<=3&&!planVideoOfferDone&&!showNamePrompt&&!promptPending;
+  // Deliberately does not touch `planVideo`: the offer pop-up is the one playing the video, and flipping
+  // "seen" here would unmount it mid-play. The saved flag and the tab cache are what stop the next offer.
+  const planVideoMarked=useRef(false);
+  const onPlanVideoPlayed=()=>{
+    if(planVideoMarked.current)return;
+    planVideoMarked.current=true;
+    if(promptUid)markPlanVideoSeenSession(promptUid);
+    sb.rpc("mark_plan_video_seen").then(()=>{},()=>{});
+  };
   const[showAssistantGreeting,setShowAssistantGreeting]=useState(false);
   useEffect(()=>{
     if(!family?.id)return;
     if(promptPending)return;                    // wait until we know whether to ask first
     if(showNamePrompt){ _greetedFamilies.add(family.id); return; }
+    if(planVideoPending||showPlanVideoOffer)return;   // the video offer goes first; the greeting follows it
     if(_greetedFamilies.has(family.id))return;
     _greetedFamilies.add(family.id);
     setShowAssistantGreeting(true);
-  },[family?.id,showNamePrompt,promptPending]);
+  },[family?.id,showNamePrompt,promptPending,planVideoPending,showPlanVideoOffer]);
   const properties=(data.properties||[]).filter(p=>p.familyId===family.id);
   const accounts=(data.portfolio_accounts||[]).filter(a=>a.familyId===family.id);
   const valuables=(data.valuables||[]).filter(v=>v.familyId===family.id);
@@ -9435,7 +9525,9 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
       </div>
     </Modal>}
 
-    {showAssistantGreeting&&!showNamePrompt&&<AssistantWelcome family={family} data={data} reload={reload} userProfile={userProfile} onClose={()=>setShowAssistantGreeting(false)} toast={toast}/>}
+    {showPlanVideoOffer&&<PlanVideoModal plan={planVideoPlan} mode="offer" onPlayed={onPlanVideoPlayed} onClose={()=>setPlanVideoOfferDone(true)}/>}
+    {showAssistantGreeting&&!showNamePrompt&&<AssistantWelcome family={family} data={data} reload={reload} userProfile={userProfile} onClose={()=>setShowAssistantGreeting(false)} toast={toast} onWatchVideo={hasPlanVideo?()=>setPlanVideoWatching(true):undefined}/>}
+    {planVideoWatching&&<PlanVideoModal plan={planVideoPlan} mode="watch" onPlayed={onPlanVideoPlayed} onClose={()=>setPlanVideoWatching(false)}/>}
     {emailAdvisorOpen&&<EmailAdvisorModal family={family} userProfile={userProfile} data={data} onClose={()=>setEmailAdvisorOpen(false)}/>}
     {wizardOpen&&<OnboardingWizard onClose={closeWizard} addMember={addMember} addProfessional={addProfessional} addBusinessPartner={addBusinessPartner} addProperty={addProperty} addAccount={addAccount} addValuable={addValuable} members={members} professionals={professionals} properties={properties} accounts={accounts} valuables={valuables}/>}
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
