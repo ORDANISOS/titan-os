@@ -174,6 +174,9 @@ const BRAND_ADMIN = String(import.meta.env.VITE_BRAND_ADMIN||"")==="1";
 // Set VITE_HIDE_SIGNUP=1 on the demo only: the login screen drops its "Create an Account" link, and
 // main.jsx sends /signup to the login screen. Unset (the default, and production) changes nothing.
 const HIDE_SIGNUP = String(import.meta.env.VITE_HIDE_SIGNUP||"")==="1";
+// New sign-ups are paused. While this is set, the login screen's "Create an Account" link goes to the
+// maintenance page on the marketing site instead of /signup. Set it to "" to send people to /signup again.
+const SIGNUP_PAUSED_URL = "https://ordanisos.com/signup-maintenance.html";
 // One minimum for every way of setting a password, matching self-serve signup (SignupFlow.jsx and
 // the public-signup function). The real enforcement is the Supabase Auth setting and the
 // admin-set-password function; these client checks only give a faster message.
@@ -1599,7 +1602,7 @@ function LoginScreen(){
             </div>
             {mode==="login"&&!HIDE_SIGNUP&&<div style={{textAlign:"center",marginTop:16,paddingTop:16,borderTop:`1px solid ${B.borderLight}`}}>
               <span style={{fontSize:12,color:B.textMute}}>New to {BRAND.name}? </span>
-              <a href="/signup" style={{fontSize:12,color:B.navy,fontWeight:700,textDecoration:"underline"}}>Create an Account</a>
+              <a href={SIGNUP_PAUSED_URL||"/signup"} style={{fontSize:12,color:B.navy,fontWeight:700,textDecoration:"underline"}}>Create an Account</a>
             </div>}
           </>
         ))}
