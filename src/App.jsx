@@ -1591,12 +1591,17 @@ function LoginScreen(){
           </div>
         ):(
           <>
-            <Field label="Email" required><input type="email" value={email} onChange={e=>{setEmail(e.target.value);setError("");}} onKeyDown={e=>e.key==="Enter"&&(mode==="login"?handleLogin():handleReset())} placeholder={"you@"+BRAND.emailDomain} autoFocus style={{...inp,fontSize:15,padding:"13px 16px"}}/></Field>
-            {mode==="login"&&<Field label="Password" required><PasswordField autoComplete="current-password" value={password} onChange={e=>{setPassword(e.target.value);setError("");}} onKeyDown={e=>e.key==="Enter"&&handleLogin()} placeholder="••••••••" style={{fontSize:15,padding:"13px 16px"}}/></Field>}
+            {/* A real <form> with labelled fields, so the browser's password manager saves and offers this
+                login for this site only. The email portal (emailportal.ordanisos.com) uses the same email
+                address as its username; without these hints Chrome guessed and mixed the two up. */}
+            <form name="signin" onSubmit={e=>{e.preventDefault();if(mode==="login")handleLogin();else handleReset();}}>
+            <Field label="Email" required><input type="email" id="signin-email" name="email" autoComplete="username" value={email} onChange={e=>{setEmail(e.target.value);setError("");}} placeholder={"you@"+BRAND.emailDomain} autoFocus style={{...inp,fontSize:15,padding:"13px 16px"}}/></Field>
+            {mode==="login"&&<Field label="Password" required><PasswordField id="signin-password" name="password" autoComplete="current-password" value={password} onChange={e=>{setPassword(e.target.value);setError("");}} placeholder="••••••••" style={{fontSize:15,padding:"13px 16px"}}/></Field>}
             {error&&<div style={{fontSize:12,color:"#d43030",marginBottom:12,fontWeight:600,padding:"8px 12px",background:"#fde8e8",borderRadius:8}}>{error}</div>}
-            <button onClick={mode==="login"?handleLogin:handleReset} disabled={loading} style={{width:"100%",background:`linear-gradient(135deg,${B.navy},${B.navyMid})`,color:B.white,border:"none",borderRadius:10,padding:"13px",fontSize:14,fontWeight:700,cursor:loading?"not-allowed":"pointer",fontFamily:"inherit",letterSpacing:"0.06em",marginBottom:16,opacity:loading?.7:1}}>
+            <button type="submit" disabled={loading} style={{width:"100%",background:`linear-gradient(135deg,${B.navy},${B.navyMid})`,color:B.white,border:"none",borderRadius:10,padding:"13px",fontSize:14,fontWeight:700,cursor:loading?"not-allowed":"pointer",fontFamily:"inherit",letterSpacing:"0.06em",marginBottom:16,opacity:loading?.7:1}}>
               {loading?"Please wait…":mode==="login"?"SIGN IN":"SEND RESET LINK"}
             </button>
+            </form>
             <div style={{textAlign:"center"}}>
               {mode==="login"?<button onClick={()=>{setMode("reset");setError("");}} style={{background:"none",border:"none",color:B.textSoft,fontSize:12,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>Forgot your password?</button>:<button onClick={()=>{setMode("login");setError("");}} style={{background:"none",border:"none",color:B.textSoft,fontSize:12,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>Back to sign in</button>}
             </div>
@@ -3930,7 +3935,7 @@ function PropertyContactForm({initial,onSave,onClose}){
     </Grid2>
     <Grid2>
       <Field label="Phone" optional><Inp placeholder="(555) 000-0000" value={f.phone||""} onChange={e=>set("phone")({target:{value:formatPhoneInput(e.target.value)}})}/></Field>
-      <Field label="Email" optional><Inp type="email" placeholder="contact@company.com" value={f.email||""} onChange={set("email")}/></Field>
+      <Field label="Email" optional><Inp type="email" autoComplete="off" placeholder="contact@company.com" value={f.email||""} onChange={set("email")}/></Field>
     </Grid2>
     <Field label="Notes" optional><Inp placeholder="Optional — schedule, gate code, account #…" value={f.notes||""} onChange={set("notes")}/></Field>
     {showReq&&<ReqHint/>}
@@ -3956,7 +3961,7 @@ function FamilyContactForm({initial,onSave,onClose,hideAdvisor=false,rolePlaceho
       <Field label="Company / Firm" optional><Inp placeholder="Smith & Co." value={f.company||""} onChange={set("company")}/></Field>
     </Grid2>
     <Grid2>
-      <Field label="Email" optional><Inp type="email" placeholder="john@firm.com" value={f.email||""} onChange={set("email")}/></Field>
+      <Field label="Email" optional><Inp type="email" autoComplete="off" placeholder="john@firm.com" value={f.email||""} onChange={set("email")}/></Field>
       <Field label="Phone" optional><Inp placeholder="(555) 000-0000" value={f.phone||""} onChange={e=>set("phone")({target:{value:formatPhoneInput(e.target.value)}})}/></Field>
     </Grid2>
     <Field label="Notes" optional><Inp placeholder="Optional" value={f.notes||""} onChange={set("notes")}/></Field>
@@ -3984,7 +3989,7 @@ function MemberForm({initial,onSave,onClose}){
   return <div>
     <Field label="Full Name" required><Inp placeholder="Jane Smith" value={f.name} maxLength={120} onChange={set("name")}/></Field>
     <Grid2>
-      <Field label="Email" optional><Inp type="email" placeholder="jane@email.com" value={f.email||""} onChange={set("email")}/></Field>
+      <Field label="Email" optional><Inp type="email" autoComplete="off" placeholder="jane@email.com" value={f.email||""} onChange={set("email")}/></Field>
       <Field label="Phone" optional><Inp placeholder="(555) 000-0000" value={f.phone||""} onChange={e=>set("phone")({target:{value:formatPhoneInput(e.target.value)}})}/></Field>
     </Grid2>
     <Grid2>
@@ -4264,7 +4269,7 @@ function AccountForm({initial,onSave,onClose}){
         {!advisorPhoneOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid phone number, or leave it blank.</div>}
       </Field>
       <Field label="Advisor Email" optional>
-        <Inp type="email" value={f.accountAdvisorEmail||""} onChange={set("accountAdvisorEmail")}/>
+        <Inp type="email" autoComplete="off" value={f.accountAdvisorEmail||""} onChange={set("accountAdvisorEmail")}/>
         {!advisorEmailOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid email address, or leave it blank.</div>}
       </Field>
     </Grid2>
@@ -6044,7 +6049,7 @@ function ProspectContactForm({initial,onSave,onClose,userProfile,advisors=[]}){
   const save=async()=>{if(!f.name.trim()){setShowReq(true);return;}const pr=contactProblem(f);if(pr){setErr(pr);return;}setErr("");setSaving(true);const ok=await onSave({...f,email:String(f.email||"").trim().toLowerCase()});if(ok===false){setSaving(false);return;}onClose();};
   return <div>
     <Grid2><Field label="Full Name" required><Inp maxLength={120} placeholder="Jane Smith" value={f.name} onChange={set("name")}/></Field><Field label="Company" optional><Inp value={f.company||""} onChange={set("company")}/></Field></Grid2>
-    <Grid2><Field label="Email" optional><Inp type="email" value={f.email||""} onChange={set("email")}/></Field><Field label="Phone" optional><Inp placeholder="(555) 000-0000" value={f.phone||""} onChange={e=>set("phone")({target:{value:formatPhoneInput(e.target.value)}})}/></Field></Grid2>
+    <Grid2><Field label="Email" optional><Inp type="email" autoComplete="off" value={f.email||""} onChange={set("email")}/></Field><Field label="Phone" optional><Inp placeholder="(555) 000-0000" value={f.phone||""} onChange={e=>set("phone")({target:{value:formatPhoneInput(e.target.value)}})}/></Field></Grid2>
     <Grid2><Field label="Type"><Sel value={f.type} onChange={set("type")}><option>Individual</option><option>Business</option></Sel></Field><Field label="Lead Source" optional><Inp placeholder="Referral, LinkedIn…" value={f.source||""} onChange={set("source")}/></Field></Grid2>
     {isAdmin
       ? <Field label="Assign ORDANIS Expert">
@@ -7132,11 +7137,11 @@ function UserManagementView({userProfile,data={},toast}){
           <div>
             <Grid2>
               <Field label="Full Name"><Inp placeholder="Jane Smith" value={newName} onChange={e=>setNewName(e.target.value)}/></Field>
-              <Field label="Email Address"><Inp type="email" placeholder="jane@email.com" value={newEmail} onChange={e=>setNewEmail(e.target.value)}/></Field>
+              <Field label="Email Address"><Inp type="email" autoComplete="off" placeholder="jane@email.com" value={newEmail} onChange={e=>setNewEmail(e.target.value)}/></Field>
             </Grid2>
             <Field label="Temporary Password">
               <div style={{display:"flex",gap:8}}>
-                <Inp placeholder={`Min ${MIN_PASSWORD_LENGTH} characters`} value={newPassword} onChange={e=>setNewPassword(e.target.value)} style={{flex:1}}/>
+                <Inp autoComplete="off" placeholder={`Min ${MIN_PASSWORD_LENGTH} characters`} value={newPassword} onChange={e=>setNewPassword(e.target.value)} style={{flex:1}}/>
                 <Btn variant="ghost" onClick={()=>setNewPassword(genTempPassword())}>Generate</Btn>
               </div>
             </Field>
@@ -7278,6 +7283,116 @@ const UTIL_SCHEME={
   Medium:{bg:"#fef3e2",text:"#8a5c00",dot:"#d4900a"},
   Low:   {bg:"#fde8e8",text:"#8b1a1a",dot:"#d43030"},
 };
+// ── PLAN REQUESTS (admin) ────────────────────────────────────────────────
+// Households ask for a plan change from their Billing tab (request_plan_change). Moves to or from
+// Premier are arranged by the ORDANIS team, so they land here instead of on a self-serve button.
+// Approve moves the Stripe subscription through change-subscription-plan, which also records the
+// approval. A household with no Stripe subscription (comped, firm-arranged, test) is approved without
+// billing: the plan is switched and Stripe is not touched. A decline carries a note the household sees.
+function PlanRequestsView({data,toast,reload,onChanged}){
+  const isMobile=useIsMobile();
+  const[rows,setRows]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[show,setShow]=useState("pending");   // pending | recent
+  const[sortBy,setSortBy]=useState("oldest"); // oldest | expert
+  const[busyId,setBusyId]=useState(null);
+  const[acting,setActing]=useState(null);     // {row, kind:"approve"|"decline"}
+  const[note,setNote]=useState("");
+  const famOf=id=>(data.families||[]).find(f=>f.id===id);
+  const load=async()=>{
+    setLoading(true);
+    let q=sb.from("plan_change_requests").select("*").order("created_at",{ascending:show==="pending"}).limit(200);
+    q=show==="pending"?q.eq("status","pending"):q.neq("status","pending");
+    const{data:r,error}=await q;
+    if(error)toast(error.message,"error"); else setRows(r||[]);
+    setLoading(false);
+  };
+  useEffect(()=>{load();},[show]);
+  const expertOf=r=>{const f=famOf(r.family_id);return (f&&(f.advisorName||f.advisorEmail))||"No Expert yet";};
+  const list=sortBy==="expert"
+    ? [...rows].sort((a,b)=>expertOf(a).localeCompare(expertOf(b))||String(a.created_at).localeCompare(String(b.created_at)))
+    : rows;
+  const hasStripe=r=>{const f=famOf(r.family_id);return !!(f&&(f.stripeSubscriptionId||f.stripe_subscription_id));};
+  const after=async msg=>{toast(msg);setActing(null);setNote("");await load();onChanged&&onChanged();if(reload)await reload("families");};
+  const approve=async r=>{
+    setBusyId(r.id);
+    try{
+      if(hasStripe(r)){
+        const{data:resp,error}=await sb.functions.invoke("change-subscription-plan",{body:{family_id:r.family_id,new_plan:r.to_plan,request_id:r.id,decision_note:note||null}});
+        if(error)throw new Error(error.message||"Could not change the plan.");
+        if(resp&&resp.error)throw new Error(resp.error);
+        if(resp&&resp.request_warning)toast(resp.request_warning,"error");
+        await after(resp&&resp.pending_plan
+          ? `Approved. ${planLabel(r.to_plan)} starts ${fmt(resp.effective_at)}, at the end of the current billing period.`
+          : `Approved. ${famOf(r.family_id)?.name||"The household"} is now on ${planLabel(r.to_plan)}; the prorated difference was charged today.`);
+      }else{
+        const{error}=await sb.rpc("decide_plan_change_request",{p_id:r.id,p_status:"approved",p_note:note||null,p_billing:"no_billing"});
+        if(error)throw new Error(error.message);
+        await after(`Approved without billing. ${famOf(r.family_id)?.name||"The household"} is now on ${planLabel(r.to_plan)}; Stripe was not changed.`);
+      }
+    }catch(e){toast(e.message||"Could not approve the request.","error");}
+    setBusyId(null);
+  };
+  const decline=async r=>{
+    if(!note.trim()){toast("Add a short note for the household explaining the decision.","error");return;}
+    setBusyId(r.id);
+    const{error}=await sb.rpc("decide_plan_change_request",{p_id:r.id,p_status:"declined",p_note:note.trim()});
+    if(error)toast(error.message,"error"); else await after("Request declined. The household will see your note on its Billing tab.");
+    setBusyId(null);
+  };
+  const statusChip=s=>{const c={approved:["#e0f5e9","#0d5c2b"],declined:["#fde8e8","#8b1a1a"],cancelled:["#eceff3","#5b6573"],pending:["rgba(206,182,129,0.22)","#7a5a19"]}[s]||["#eceff3","#5b6573"];
+    return <span style={{fontSize:9.5,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",borderRadius:20,padding:"2px 8px",background:c[0],color:c[1]}}>{s}</span>;};
+  return <div style={{padding:isMobile?16:28,maxWidth:1100}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:12,flexWrap:"wrap",marginBottom:6}}>
+      <div>
+        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600}}>Plan requests</div>
+        <div style={{fontSize:12.5,color:B.textSoft,marginTop:2}}>Households ask from their Billing tab. Moves to or from Premier are decided here.</div>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <Sel value={show} onChange={e=>setShow(e.target.value)} style={{width:"auto"}}><option value="pending">Waiting for a decision</option><option value="recent">Decided and cancelled</option></Sel>
+        <Sel value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{width:"auto"}}><option value="oldest">{show==="pending"?"Oldest first":"Newest first"}</option><option value="expert">By ORDANIS Expert</option></Sel>
+      </div>
+    </div>
+    <GoldLine/>
+    {loading?<Empty text="Loading…"/>:list.length===0?<Empty text={show==="pending"?"No requests waiting.":"No decided requests yet."}/>:
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {list.map(r=>{const f=famOf(r.family_id);return <div key={r.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:12,padding:"14px 18px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap",alignItems:"flex-start"}}>
+          <div style={{minWidth:0}}>
+            <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{f?.name||"Household"} <span style={{fontWeight:400,color:B.textSoft}}>· {planLabel(r.from_plan)} → <strong style={{color:B.navy}}>{planLabel(r.to_plan)}</strong></span></div>
+            <div style={{fontSize:12,color:B.textSoft,marginTop:3}}>Asked by {r.requested_by_label||"the household"} on {fmt(String(r.created_at).slice(0,10))} · Expert: {expertOf(r)} · {hasStripe(r)?"Card on file with Stripe":"No Stripe subscription"}</div>
+            {r.note&&<div style={{fontSize:13,color:B.text,marginTop:8,whiteSpace:"pre-wrap"}}>“{r.note}”</div>}
+            {r.status!=="pending"&&<div style={{fontSize:12,color:B.textSoft,marginTop:8}}>{statusChip(r.status)} {r.decided_at?`on ${fmt(String(r.decided_at).slice(0,10))}`:""}{r.decided_by_label?` by ${r.decided_by_label}`:""}{r.billing==="no_billing"?" · without billing":r.billing==="stripe"?" · billed through Stripe":""}{r.decision_note?<> · “{r.decision_note}”</>:null}</div>}
+          </div>
+          {r.status==="pending"&&<div style={{display:"flex",gap:8,flexShrink:0}}>
+            <Btn small variant="ghost" disabled={busyId===r.id} onClick={()=>{setActing({row:r,kind:"decline"});setNote("");}}>Decline</Btn>
+            <Btn small disabled={busyId===r.id} onClick={()=>{setActing({row:r,kind:"approve"});setNote("");}}>Approve</Btn>
+          </div>}
+        </div>
+      </div>;})}
+    </div>}
+    {acting&&<Modal title={acting.kind==="approve"?`Approve ${planLabel(acting.row.to_plan)}`:"Decline request"} onClose={()=>busyId?null:setActing(null)}>
+      <div style={{fontSize:13.5,color:B.text,lineHeight:1.6,marginBottom:14}}>
+        {acting.kind==="decline"
+          ? <>The household stays on {planLabel(acting.row.from_plan)}. Your note is shown to them on their Billing tab.</>
+          : hasStripe(acting.row)
+            ? (SIGNUP_PLAN_ORDER.indexOf(acting.row.to_plan)>SIGNUP_PLAN_ORDER.indexOf(acting.row.from_plan)
+                ? <>{famOf(acting.row.family_id)?.name||"The household"} moves to {planLabel(acting.row.to_plan)} now, and their card is charged the prorated difference today.</>
+                : <>{famOf(acting.row.family_id)?.name||"The household"} moves to {planLabel(acting.row.to_plan)} at the end of the current billing period, with no proration.</>)
+            : <>This household has no Stripe subscription, so the plan is switched without billing. Arrange any payment separately.</>}
+        {acting.kind==="approve"&&acting.row.to_plan==="premier"&&!(famOf(acting.row.family_id)?.advisorEmail)&&<div style={{marginTop:10,color:"#8a5c00"}}>No ORDANIS Expert is assigned yet. Premier promises a named Expert, so assign one on the household after approving.</div>}
+      </div>
+      <Field label={acting.kind==="decline"?"Note to the household":"Note"} required={acting.kind==="decline"} optional={acting.kind==="approve"}>
+        <Tex maxLength={1000} value={note} onChange={e=>setNote(e.target.value)} placeholder={acting.kind==="decline"?"Why, and what they can do instead":"Optional, kept with the request"}/>
+      </Field>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <Btn variant="ghost" disabled={!!busyId} onClick={()=>setActing(null)}>Cancel</Btn>
+        <Btn disabled={!!busyId} onClick={()=>acting.kind==="approve"?approve(acting.row):decline(acting.row)}>{busyId?"Working…":acting.kind==="approve"?"Approve":"Decline request"}</Btn>
+      </div>
+    </Modal>}
+  </div>;
+}
+
 function SignupsRevenueView({data,toast,userProfile,reload}){
   const isMobile=useIsMobile();
   const families=(data.families||[]).filter(f=>!(f.archived_at||f.archivedAt));
@@ -8863,7 +8978,7 @@ function AccountQuickForm({onSave,onCancel,saving}){
         {!advisorPhoneOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid phone number, or leave it blank.</div>}
       </Field>
       <Field label="Advisor email" optional>
-        <Inp type="email" value={f.accountAdvisorEmail} onChange={e=>set("accountAdvisorEmail",e.target.value)} placeholder="jordan@example.com"/>
+        <Inp type="email" autoComplete="off" value={f.accountAdvisorEmail} onChange={e=>set("accountAdvisorEmail",e.target.value)} placeholder="jordan@example.com"/>
         {!advisorEmailOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid email address, or leave it blank.</div>}
       </Field>
     </Grid2>
@@ -8944,7 +9059,7 @@ function MemberQuickForm({onSave,onCancel,saving}){
     <Field label="Name" required><Inp value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Jane Smith"/></Field>
     <Grid2>
       <Field label="Relationship"><Sel value={f.relationship} onChange={e=>set("relationship",e.target.value)}>{MEMBER_RELATIONSHIPS.map(t=><option key={t} value={t}>{t}</option>)}</Sel></Field>
-      <Field label="Email" optional><Inp type="email" value={f.email} onChange={e=>set("email",e.target.value)} placeholder="jane@email.com"/></Field>
+      <Field label="Email" optional><Inp type="email" autoComplete="off" value={f.email} onChange={e=>set("email",e.target.value)} placeholder="jane@email.com"/></Field>
       <Field label="Phone" optional>
         <Inp value={f.phone} onChange={e=>set("phone",formatPhoneInput(e.target.value))} placeholder="(555) 123-4567"/>
         {!phoneOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid phone number, or leave it blank.</div>}
@@ -8974,7 +9089,7 @@ function ProfessionalQuickForm({onSave,onCancel,saving,allowPortalGrant,partnerS
       <Field label="Name" required><Inp value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Dr. John Reyes"/></Field>
       <Field label="Role" optional><Inp value={f.role} onChange={e=>set("role",e.target.value)} placeholder="CPA, Attorney, Physician…"/></Field>
       <Field label="Company" required><Inp value={f.company} onChange={e=>set("company",e.target.value)} placeholder="Reyes Family Medicine"/></Field>
-      <Field label="Email" required={!!f.grantPortalAccess} optional={!f.grantPortalAccess}><Inp type="email" value={f.email} onChange={e=>set("email",e.target.value)} placeholder={f.grantPortalAccess?"Needed for portal access":""}/></Field>
+      <Field label="Email" required={!!f.grantPortalAccess} optional={!f.grantPortalAccess}><Inp type="email" autoComplete="off" value={f.email} onChange={e=>set("email",e.target.value)} placeholder={f.grantPortalAccess?"Needed for portal access":""}/></Field>
       <Field label="Phone" optional>
         <Inp value={f.phone} onChange={e=>set("phone",formatPhoneInput(e.target.value))} placeholder="(555) 123-4567"/>
         {!phoneOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid phone number, or leave it blank.</div>}
@@ -9008,7 +9123,7 @@ function BusinessPartnerQuickForm({onSave,onCancel,saving,seatFree}){
     <Grid2>
       <Field label="Name" required><Inp value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Jane Reyes"/></Field>
       <Field label="Email" required>
-        <Inp type="email" value={f.email} onChange={e=>set("email",e.target.value)} placeholder="jane@example.com"/>
+        <Inp type="email" autoComplete="off" value={f.email} onChange={e=>set("email",e.target.value)} placeholder="jane@example.com"/>
         {f.email&&!emailOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid email address.</div>}
       </Field>
     </Grid2>
@@ -9292,9 +9407,45 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   };
   const cancelPendingChange=()=>requestPlanChange(clientPlan);
   const planSelfServe=planIsSelfServe(clientPlan);
-  // Premier is set up by people, not by a button that calls Stripe, so its card looks like the others
-  // but the button opens an email to the ORDANIS team (or the household's own Expert once it has one).
-  const premierMailto=`mailto:${BRAND.contactEmail}?subject=${encodeURIComponent("Interested in Premier — "+family.name)}`;
+  // Premier is set up by people, not by a button that calls Stripe. A move to or from it is an in-app
+  // request (request_plan_change) that lands in the admins' Plan requests queue; the household sees it
+  // here as waiting, and sees the decision (with the team's note) once it is made.
+  const[planRequest,setPlanRequest]=useState(null);       // the open request, if any
+  const[planDecision,setPlanDecision]=useState(null);     // the latest decided request, shown for 30 days
+  const[askPlan,setAskPlan]=useState(null);               // plan being requested in the dialog
+  const[askNote,setAskNote]=useState("");
+  const[askBusy,setAskBusy]=useState(false);
+  const loadPlanRequests=async()=>{
+    const{data:r,error}=await sb.from("plan_change_requests").select("id,to_plan,status,created_at,decided_at,decision_note")
+      .eq("family_id",family.id).order("created_at",{ascending:false}).limit(5);
+    if(error||!r)return;
+    setPlanRequest(r.find(x=>x.status==="pending")||null);
+    const recent=r.find(x=>(x.status==="declined"||x.status==="approved")&&x.decided_at&&(Date.now()-new Date(x.decided_at).getTime())<30*86400000);
+    setPlanDecision(recent||null);
+  };
+  useEffect(()=>{loadPlanRequests();},[family.id,fam.plan]);
+  const sendPlanRequest=async()=>{
+    setAskBusy(true);
+    const{error}=await sb.rpc("request_plan_change",{p_to_plan:askPlan,p_note:askNote.trim()||null});
+    setAskBusy(false);
+    if(error){toast(error.message||"Could not send your request.","error");return;}
+    toast(`Request sent. The ${BRAND.name} team will be in touch about ${billingLabelOf(askPlan)}.`);
+    setAskPlan(null);setAskNote("");await loadPlanRequests();
+  };
+  const cancelPlanRequest=async()=>{
+    if(!planRequest)return;
+    setAskBusy(true);
+    const{error}=await sb.rpc("cancel_plan_change_request",{p_id:planRequest.id});
+    setAskBusy(false);
+    if(error){toast(error.message||"Could not cancel your request.","error");return;}
+    toast("Request cancelled.");await loadPlanRequests();
+  };
+  // The button on a plan card the household must ask for, rather than buy directly.
+  const askButton=p=>planRequest
+    ? (planRequest.to_plan===p
+        ? <span style={{fontSize:12,color:"#7a5a19",fontWeight:600}}>Requested · waiting</span>
+        : <span style={{fontSize:12,color:B.textMute}}>Another request is waiting</span>)
+    : <Btn small variant={p==="premier"?"primary":"ghost"} onClick={()=>{setAskPlan(p);setAskNote("");}}>{`Request ${billingLabelOf(p)}`}</Btn>;
   const premierPriceText=billingPriceOf("premier")>0?`${fmtMoney(billingPriceOf("premier"))}/mo`:"Custom pricing";
   const planCardStyle={background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:12,padding:"16px 18px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"};
   const upgradeTargets=planSelfServe?SIGNUP_PLAN_ORDER.filter(p=>p!==clientPlan&&planIsSelfServe(p)&&SIGNUP_PLAN_ORDER.indexOf(p)>SIGNUP_PLAN_ORDER.indexOf(clientPlan)):[];
@@ -9961,6 +10112,15 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           </div>}
         </div>}
 
+        {/* Plan request waiting for the team, or the team's recent decision */}
+        {planRequest&&<div style={{background:"rgba(206,182,129,0.14)",border:`1px solid ${B.gold}`,borderRadius:10,padding:"14px 18px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+          <div style={{fontSize:13,color:B.text}}>You asked for <strong>{billingLabelOf(planRequest.to_plan)}</strong> on {fmt(String(planRequest.created_at).slice(0,10))}. The {BRAND.name} team will be in touch; nothing changes or is charged until then.</div>
+          <Btn variant="ghost" small onClick={cancelPlanRequest} disabled={askBusy}>{askBusy?"Working…":"Cancel request"}</Btn>
+        </div>}
+        {!planRequest&&planDecision&&planDecision.status==="declined"&&<div style={{background:"#f6f4ee",border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"14px 18px",marginBottom:16,fontSize:13,color:B.text,lineHeight:1.55}}>
+          Your request for <strong>{billingLabelOf(planDecision.to_plan)}</strong> wasn't approved{planDecision.decision_note?<>: “{planDecision.decision_note}”</>:"."} You can send a new request at any time.
+        </div>}
+
         {/* Pending scheduled change */}
         {fam.pending_plan&&<div style={{background:"#fef3e2",border:"1px solid #fcd97d",borderRadius:10,padding:"14px 18px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
           <div style={{fontSize:13,color:"#8a5c00"}}>Scheduled: moving to <strong>{billingLabelOf(fam.pending_plan)}</strong> on <strong>{fmt(fam.pending_plan_effective_at)}</strong>. No charge until then.</div>
@@ -9999,7 +10159,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
                 <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>{PLAN_BLURB.premier}</div>
                 <div style={{fontSize:11,color:B.textMute,marginTop:4}}>Set up with your ORDANIS team. Once it's active you're charged the prorated difference for the rest of this billing period, then the full rate at renewal.</div>
               </div>
-              <Btn small onClick={()=>{window.location.href=premierMailto;}}>{`Request ${billingLabelOf("premier")}`}</Btn>
+              {askButton("premier")}
             </div>
           </div>}
           {downgradeTargets.length>0&&<div style={{marginBottom:16}}>
@@ -10028,11 +10188,25 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
                 <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>{PLAN_BLURB[p]}</div>
                 <div style={{fontSize:11,color:B.textMute,marginTop:4}}>Arranged with your ORDANIS Expert, who confirms the timing and any proration for the difference before anything changes.</div>
               </div>
-              <Btn small variant="ghost" onClick={()=>{if(clientHasExpert)setEmailAdvisorOpen(true);else window.location.href=`mailto:${BRAND.contactEmail}?subject=${encodeURIComponent("Plan change to "+billingLabelOf(p)+" — "+family.name)}`;}}>{`Request ${billingLabelOf(p)}`}</Btn>
+              {askButton(p)}
             </div>)}
           </div>}
         </>}
 
+        {askPlan&&<Modal title={`Request ${billingLabelOf(askPlan)}`} onClose={()=>askBusy?null:setAskPlan(null)}>
+          <div style={{fontSize:14,color:B.text,lineHeight:1.6,marginBottom:14}}>
+            {askPlan==="premier"
+              ? <>Premier is set up with you by the {BRAND.name} team: a named {BRAND.name} Expert, bill pay and unlimited workflows. Send the request and we'll be in touch to arrange it. Nothing changes and nothing is charged until it's confirmed with you.</>
+              : <>The {BRAND.name} team will confirm the timing and any difference in price with you before anything changes.</>}
+          </div>
+          <Field label="Anything we should know?" optional>
+            <Tex maxLength={1000} value={askNote} onChange={e=>setAskNote(e.target.value)} placeholder="For example, the best time to reach you"/>
+          </Field>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <Btn variant="ghost" onClick={()=>setAskPlan(null)} disabled={askBusy}>Cancel</Btn>
+            <Btn onClick={sendPlanRequest} disabled={askBusy}>{askBusy?"Sending…":"Send request"}</Btn>
+          </div>
+        </Modal>}
         {confirmDowngrade&&<Modal title="Confirm downgrade" onClose={()=>setConfirmDowngrade(null)}>
           <div style={{fontSize:14,color:B.text,lineHeight:1.6,marginBottom:18}}>
             This household has <strong>{confirmDowngrade.count} workflow{confirmDowngrade.count===1?"":"s"}</strong> still in progress. You can still move to {billingLabelOf(confirmDowngrade.plan)} — the change takes effect at the end of your current billing period, so there's time to finish or hand those off first.
@@ -13259,7 +13433,7 @@ function FirmBillingView({toast}){
         <div style={lab}>Billing details</div>
         {billing&&billing.stripe_customer_id&&<div style={{fontSize:12,color:B.textSoft,marginBottom:10}}>Set up in Stripe. Customer <span style={{fontFamily:"monospace"}}>{billing.stripe_customer_id}</span></div>}
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(220px,100%),1fr))",gap:12}}>
-          <Field label="Billing email (invoices are sent here)"><Inp type="email" placeholder="accounts@firm.com" value={email} onChange={e=>setEmail(e.target.value)}/></Field>
+          <Field label="Billing email (invoices are sent here)"><Inp type="email" autoComplete="off" placeholder="accounts@firm.com" value={email} onChange={e=>setEmail(e.target.value)}/></Field>
           <Field label="Payment terms (days)"><Inp type="number" min="1" max="90" value={terms} onChange={e=>setTerms(e.target.value)}/></Field>
         </div>
         <div style={{display:"flex",justifyContent:"flex-end"}}>
@@ -13729,7 +13903,7 @@ function EntPeople({row,data,toast,onChanged}){
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(220px,100%),1fr))",gap:12,maxWidth:760}}>
         <Field label="Household name"><Inp value={en.hh} onChange={e=>setEn({...en,hh:e.target.value})} placeholder="e.g. The Smith Family"/></Field>
         <Field label="Owner's full name"><Inp value={en.owner} onChange={e=>setEn({...en,owner:e.target.value})}/></Field>
-        <Field label="Owner's email"><Inp type="email" value={en.email} onChange={e=>setEn({...en,email:e.target.value})}/></Field>
+        <Field label="Owner's email"><Inp type="email" autoComplete="off" value={en.email} onChange={e=>setEn({...en,email:e.target.value})}/></Field>
         <Field label="Plan"><Sel value={en.plan} onChange={e=>setEn({...en,plan:e.target.value})}>
           <option value="">Choose a plan…</option>
           {data.plans.map(p=><option key={p.plan} value={p.plan}>{p.label} - {money2(p.monthly_price)}/mo</option>)}
@@ -13955,6 +14129,7 @@ const NAV_SECTIONS=[
   {section:"ADMIN",items:[
     {id:"users",label:"Users",icon:"⊕"},
     {id:"signups",label:"Signups",icon:"◈"},
+    {id:"planrequests",label:"Plan requests",icon:"⇅"},
     {id:"enterprises",label:"Enterprises",icon:"▣"},
     {id:"firmbilling",label:"Firm billing",icon:"▤"},
     {id:"staterules",label:"State Rules",icon:"⚖"},
@@ -14170,6 +14345,15 @@ export default function App(){
   const pStats={"p-contacts":data.contacts.filter(c=>!c.familyId&&_mine((c.advisorEmail||"").toLowerCase())).length,"p-pipeline":data.deals.filter(d=>!d.familyId&&d.stage!=="Closed Lost"&&_mine(_dealAdv(d))).length,"p-notes":data.notes.filter(n=>!n.familyId&&_mine(_contactAdv(n.contactId))).length,"p-tasks":data.tasks.filter(t=>!t.familyId&&!t.done&&_mine(_contactAdv(t.contactId))).length};
   const allStats={...cmStats,...pStats,users:0};
   const overdue=data.tasks.filter(t=>t.familyId&&!t.done&&t.dueDate&&dueEnd(t.dueDate)<new Date()).length;
+  // Plan requests waiting for an admin, shown as a badge on the sidebar item. Refreshed on every tab
+  // change and after each decision, so it never needs its own polling.
+  const[pendingPlanRequests,setPendingPlanRequests]=useState(0);
+  const loadPendingPlanRequests=async()=>{
+    if(userProfile?.role!=="admin")return;
+    const{count,error}=await sb.from("plan_change_requests").select("id",{count:"exact",head:true}).eq("status","pending");
+    if(!error)setPendingPlanRequests(count||0);
+  };
+  useEffect(()=>{loadPendingPlanRequests();},[userProfile?.role,tab]);
   const currentLabel=ALL_NAV.find(n=>n.id===tab)?.label||"";
   const currentSection=NAV_SECTIONS.find(s=>s.items.some(i=>i.id===tab))?.section||"";
 
@@ -14230,7 +14414,7 @@ export default function App(){
           <div style={{fontSize:9,fontWeight:800,color:B.textMute,letterSpacing:"0.16em",padding:"10px 10px 6px",textTransform:"uppercase"}}>{section}</div>
           {items.map(item=><button key={item.id} onClick={()=>{setTab(item.id);setNavNonce(n=>n+1);if(isMobile)setSidebarOpen(false);}} style={{width:"100%",display:"flex",alignItems:"center",gap:9,padding:isMobile?"13px 14px":"10px 14px",borderRadius:8,border:`1px solid ${tab===item.id?B.gold:"transparent"}`,cursor:"pointer",background:tab===item.id?"rgba(206,182,132,0.13)":"transparent",color:tab===item.id?B.navy:B.textMid,fontFamily:"inherit",fontSize:isMobile?15:13,fontWeight:tab===item.id?700:400,marginBottom:6,textAlign:"left"}}>
             <span style={{flex:1}}>{item.label}</span>
-            {item.id==="cm-tasks"&&overdue>0?<span style={{background:"#d43030",borderRadius:10,padding:"1px 6px",fontSize:9,color:"#fff",fontWeight:700}}>{overdue}</span>:allStats[item.id]>0?<span style={{background:B.bg,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"1px 6px",fontSize:9,color:B.textMid}}>{allStats[item.id]}</span>:null}
+            {item.id==="planrequests"&&pendingPlanRequests>0?<span title="Waiting for a decision" style={{background:B.gold,borderRadius:10,padding:"1px 6px",fontSize:9,color:B.navy,fontWeight:700}}>{pendingPlanRequests}</span>:item.id==="cm-tasks"&&overdue>0?<span style={{background:"#d43030",borderRadius:10,padding:"1px 6px",fontSize:9,color:"#fff",fontWeight:700}}>{overdue}</span>:allStats[item.id]>0?<span style={{background:B.bg,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"1px 6px",fontSize:9,color:B.textMid}}>{allStats[item.id]}</span>:null}
           </button>)}
         </div>)}
       </nav>
@@ -14285,6 +14469,7 @@ export default function App(){
               open. */}
           {tab==="users"       &&isAdminRole&&<UserManagementView key={navNonce} userProfile={userProfile} data={data} toast={showToast}/>}
           {tab==="signups"     &&isAdminRole&&<SignupsRevenueView key={navNonce} data={data} toast={showToast} userProfile={userProfile} reload={reload}/>}
+          {tab==="planrequests"&&isAdminRole&&<PlanRequestsView key={navNonce} data={data} toast={showToast} reload={reload} onChanged={loadPendingPlanRequests}/>}
           {tab==="enterprises" &&isAdminRole&&<EnterprisesView key={navNonce} toast={showToast} userProfile={userProfile} onOpenBranding={BRAND_ADMIN?()=>setTab("branding"):null}/>}
           {tab==="firmbilling" &&isAdminRole&&<FirmBillingView key={navNonce} toast={showToast}/>}
           {tab==="staterules"  &&isAdminRole&&<StateRulesView key={navNonce} userProfile={userProfile} toast={showToast}/>}

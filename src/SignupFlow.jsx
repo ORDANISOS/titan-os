@@ -475,7 +475,7 @@ function AccountStep({ planKey, prices, onBack, onDone, onSkin }) {
           }}
         >
           <Field label="Your name" required type="text" maxLength={80} placeholder="Jordan Bennett" value={fullName} onChange={(e) => setFullName(e.target.value)} autoComplete="name" />
-          <Field label="Email" required type="email" maxLength={254} placeholder="jordan@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+          <Field label="Email" required type="email" maxLength={254} placeholder="jordan@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
           <Field label="Mobile phone" required type="tel" inputMode="tel" placeholder="(813) 555-0142" value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))} autoComplete="tel-national" />
           <p style={{ fontSize: ".8rem", color: C.slate, margin: "-10px 0 18px", lineHeight: 1.5 }}>This becomes the primary phone number on your profile. We use it for account security and, with your consent below, text messages.</p>
           <Field label="Password" required type="password" placeholder="At least 12 characters" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
