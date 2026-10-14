@@ -1,184 +1,287 @@
-// Deployed on prod (unkirihxtruhdjeldfpm) v17 ONLY — the demo project (tkryueqzvgcigvxgjzsp) does not have this function, so there is nothing to compare against and no drift.
-// Supabase Edge Function: send-task-reminders
-// Runs daily at 8am via Supabase Cron
-// Sends reminder emails to ORDANIS Experts for upcoming tasks
+// supabase/functions/send-task-reminders/index.ts
+// Daily reminder sweep. Covers BOTH work queues:
+//   1. tasks           — one-off items with reminder_days / reminder_sent
+//   2. cash_flow_events — bills the firm is responsible for paying
+//
+// Bills were previously invisible to this job: they had a due date and a "we pay
+// this" flag and raised no alert at all, so a Premier household depended on someone
+// opening the Cash Flow tab and noticing. That is the failure mode that loses a
+// bill-pay client.
+//
+// WHY BILLS ARE DIGESTED AND TASKS ARE NOT
+// Tasks are sporadic; a bill run is not. Six households turning over on the 1st
+// would mean six separate emails to the same Expert on the same morning, which is
+// how a mailbox gets filtered. Bills are therefore grouped into one message per
+// ORDANIS Expert, ordered by due date. Tasks keep their existing one-email-each
+// behaviour so nothing about the current flow changes.
+//
+// RECURRENCE
+// cash_flow_events.reminder_sent_for stores the OCCURRENCE a reminder covered, not
+// a boolean. Deciding whether to send is a comparison against the next due date, so
+// a monthly bill needs nothing reset between cycles. See the migration for why.
+//
+// AUTH: verify_jwt is false because pg_cron cannot mint a user JWT, so the function
+// verifies a shared secret itself. Without it this endpoint was open to anyone who
+// knew the URL — the cron job presented only the anon key, which ships publicly in
+// the frontend bundle.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-const FROM_EMAIL = "alerts@pcmfamilyoffice.com";
+const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
+const DEMO_EMAIL_OVERRIDE = (Deno.env.get("DEMO_EMAIL_OVERRIDE") ?? "").trim();
 
 const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-Deno.serve(async (req) => {
+const esc = (s: unknown) =>
+  String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+const money = (n: unknown) => {
+  const v = Number(n);
+  if (!isFinite(v)) return "—";
+  return "$" + v.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+};
+
+const prettyDate = (d: string) =>
+  new Date(d + "T12:00:00Z").toLocaleDateString("en-US",
+    { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+
+// Brand and sender resolved from the database, so a white-label deployment does not
+// introduce itself as another firm. No shared default: a wrong from-address is worse
+// than a refused send.
+async function loadBrand() {
+  let brand = "";
+  let domain = "";
+  let appUrl = "";
   try {
+    const { data } = await sb.from("brand_profiles")
+      .select("brand_name, email_domain, app_url").eq("is_active", true).maybeSingle();
+    brand = String(data?.brand_name ?? "").trim();
+    domain = String(data?.email_domain ?? "").trim().toLowerCase();
+    appUrl = String(data?.app_url ?? "").trim();
+  } catch { /* older project without the table */ }
+
+  let from = "";
+  try {
+    const { data } = await sb.from("outbound_email_settings")
+      .select("fixed_from_email, sending_domain").limit(1).maybeSingle();
+    const fixed = String(data?.fixed_from_email ?? "").trim().toLowerCase();
+    const sending = String(data?.sending_domain ?? "").trim().toLowerCase();
+    if (fixed) from = fixed;
+    else if (sending) from = `alerts@${sending}`;
+  } catch { /* ditto */ }
+  if (!from && domain) from = `alerts@${domain}`;
+
+  return { brand, from, appUrl };
+}
+
+async function sendEmail(to: string, subject: string, html: string, brand: string, from: string) {
+  const realTo = to;
+  const finalTo = DEMO_EMAIL_OVERRIDE || to;
+  const finalSubject = DEMO_EMAIL_OVERRIDE ? `[DEMO → ${realTo}] ${subject}` : subject;
+
+  const resp = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: brand ? `${brand} <${from}>` : from,
+      to: [finalTo],
+      subject: finalSubject,
+      html,
+    }),
+  });
+  if (!resp.ok) {
+    const detail = await resp.text().catch(() => "");
+    return { ok: false, detail: detail.slice(0, 300) };
+  }
+  return { ok: true, detail: "" };
+}
+
+function shell(brand: string, headline: string, sub: string, body: string, accentDark: boolean) {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+<body style="font-family:'Helvetica Neue',Arial,sans-serif;background:#f9f7f3;margin:0;padding:20px;">
+  <div style="max-width:640px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08);">
+    <div style="background:#092b49;padding:26px 34px;">
+      <div style="color:#ceb684;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;margin-bottom:4px;">${esc(brand || "Family Office")} · ${esc(sub)}</div>
+      <div style="color:#fff;font-size:21px;font-weight:600;">${esc(headline)}</div>
+    </div>
+    <div style="height:2px;background:linear-gradient(90deg,#ceb684,#dfc99a,transparent);"></div>
+    <div style="padding:28px 34px;">${body}</div>
+    <div style="background:#092b49;padding:14px 34px;display:flex;justify-content:space-between;">
+      <span style="font-size:11px;color:rgba(255,255,255,0.4);">${esc(brand)}</span>
+      <span style="font-size:10px;color:rgba(206,182,132,0.5);letter-spacing:0.1em;">CONFIDENTIAL</span>
+    </div>
+  </div>
+</body></html>`;
+}
+
+Deno.serve(async (req) => {
+  // Fail closed: if CRON_SECRET is unset on this project, refuse rather than
+  // silently reverting to the old wide-open behaviour.
+  const presented = (req.headers.get("x-cron-secret") ?? "").trim();
+  if (!CRON_SECRET || presented !== CRON_SECRET) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const { brand, from, appUrl } = await loadBrand();
+  if (!from) {
+    return new Response(JSON.stringify({
+      success: false,
+      error: "No verified sending address is configured for this deployment, so nothing was sent.",
+    }), { status: 409, headers: { "Content-Type": "application/json" } });
+  }
+
+  const summary = { tasks: { sent: 0, skipped: 0, failed: 0 }, bills: { sent: 0, digests: 0, failed: 0 } };
+
+  try {
+    // ── 1. TASK REMINDERS ────────────────────────────────────────────────
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Get all pending tasks with reminders not yet sent
-    const { data: tasks, error } = await sb
+    const { data: tasks, error: taskErr } = await sb
       .from("tasks")
-      .select(`
-        *,
-        families (
-          id,
-          name,
-          advisor_name,
-          advisor_email
-        )
-      `)
+      .select(`*, families ( id, name, advisor_name, advisor_email )`)
       .eq("done", false)
       .eq("reminder_sent", false)
       .not("due_date", "is", null)
       .not("reminder_days", "is", null)
       .gt("reminder_days", 0);
-
-    if (error) throw error;
-
-    let sent = 0;
-    let skipped = 0;
-    const results = [];
+    if (taskErr) throw taskErr;
 
     for (const task of tasks || []) {
       const family = task.families;
-      if (!family?.advisor_email) { skipped++; continue; }
+      if (!family?.advisor_email) { summary.tasks.skipped++; continue; }
 
-      const dueDate = new Date(task.due_date);
-      dueDate.setHours(0, 0, 0, 0);
+      const due = new Date(task.due_date);
+      due.setHours(0, 0, 0, 0);
+      const remindOn = new Date(due);
+      remindOn.setDate(remindOn.getDate() - task.reminder_days);
+      remindOn.setHours(0, 0, 0, 0);
+      if (today.getTime() !== remindOn.getTime()) { summary.tasks.skipped++; continue; }
 
-      // Calculate when reminder should be sent
-      const reminderDate = new Date(dueDate);
-      reminderDate.setDate(reminderDate.getDate() - task.reminder_days);
-      reminderDate.setHours(0, 0, 0, 0);
+      const daysUntil = Math.round((due.getTime() - today.getTime()) / 86400000);
+      const overdue = daysUntil < 0;
+      const tint = overdue ? "#fde8e8" : daysUntil <= 7 ? "#fef3e2" : "#e8f0f8";
+      const edge = overdue ? "#d43030" : daysUntil <= 7 ? "#d4900a" : "#293d5c";
 
-      // Only send if today is the reminder date
-      if (today.getTime() !== reminderDate.getTime()) { skipped++; continue; }
+      const body = `
+        <p style="font-size:14px;color:#5a6e84;margin:0 0 18px;">
+          Hello ${esc(family.advisor_name || "")},<br><br>
+          This is your ${task.reminder_days}-day reminder for an upcoming task for the
+          <strong>${esc(family.name)}</strong> family.
+        </p>
+        <div style="background:${tint};border-left:4px solid ${edge};border-radius:8px;padding:16px 20px;margin-bottom:20px;">
+          <div style="font-size:11px;font-weight:700;color:${edge};text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">
+            ${overdue ? "Overdue" : `Due in ${daysUntil} day${daysUntil === 1 ? "" : "s"}`}
+          </div>
+          <div style="font-size:19px;color:#092b49;font-weight:600;">${esc(task.title)}</div>
+          <div style="font-size:13px;color:#5a6e84;margin-top:3px;">${esc(prettyDate(task.due_date))}</div>
+        </div>
+        <div style="font-size:13px;color:#5a6e84;">Priority: <strong style="color:#092b49;">${esc(task.priority)}</strong></div>
+        ${appUrl ? `<a href="${esc(appUrl)}" style="display:inline-block;background:#092b49;color:#fff;padding:11px 26px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;margin-top:22px;">Open the platform →</a>` : ""}`;
 
-      const daysUntilDue = Math.round((dueDate - today) / 86400000);
-      const isOverdue = daysUntilDue < 0;
-      const dueDateStr = dueDate.toLocaleDateString("en-US", { 
-        weekday: "long", year: "numeric", month: "long", day: "numeric" 
-      });
+      const html = shell(brand, family.name, "Task Reminder", body, overdue);
+      const subject = `Reminder: "${task.title}" — ${family.name} (${overdue ? "OVERDUE" : `due in ${daysUntil} days`})`;
+      const r = await sendEmail(family.advisor_email, subject, html, brand, from);
 
-      // Build email
-      const emailHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width">
-  <style>
-    body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #f9f7f3; margin: 0; padding: 20px; }
-    .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-    .header { background: #092b49; padding: 28px 36px; }
-    .header-title { color: #ceb684; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; margin-bottom: 4px; }
-    .header-name { color: #ffffff; font-size: 22px; font-weight: 600; }
-    .gold-line { height: 2px; background: linear-gradient(90deg, #ceb684, #dfc99a, transparent); }
-    .body { padding: 32px 36px; }
-    .alert-box { background: ${isOverdue ? '#fde8e8' : daysUntilDue <= 7 ? '#fef3e2' : '#e8f0f8'}; 
-                 border-left: 4px solid ${isOverdue ? '#d43030' : daysUntilDue <= 7 ? '#d4900a' : '#293d5c'}; 
-                 border-radius: 8px; padding: 16px 20px; margin-bottom: 24px; }
-    .alert-label { font-size: 11px; font-weight: 700; color: ${isOverdue ? '#8b1a1a' : daysUntilDue <= 7 ? '#8a5c00' : '#293d5c'}; 
-                   text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
-    .alert-title { font-size: 20px; color: #092b49; font-weight: 600; margin-bottom: 4px; }
-    .alert-due { font-size: 13px; color: #5a6e84; }
-    .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #ede8de; font-size: 13px; }
-    .detail-label { color: #8fa0b2; }
-    .detail-value { color: #092b49; font-weight: 600; }
-    .cta { display: inline-block; background: #092b49; color: #ffffff; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; margin-top: 24px; }
-    .footer { background: #092b49; padding: 16px 36px; display: flex; justify-content: space-between; align-items: center; }
-    .footer-left { font-size: 11px; color: rgba(255,255,255,0.4); }
-    .footer-right { font-size: 10px; color: rgba(206,182,132,0.5); letter-spacing: 0.1em; text-transform: uppercase; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <div class="header-title">PCM Family Office · Task Reminder</div>
-      <div class="header-name">${family.name}</div>
-    </div>
-    <div class="gold-line"></div>
-    <div class="body">
-      <p style="font-size:14px;color:#5a6e84;margin-bottom:20px;">
-        Hello ${family.advisor_name || "ORDANIS Expert"},<br><br>
-        This is your ${task.reminder_days}-day reminder for an upcoming task assigned to the <strong>${family.name}</strong> family.
-      </p>
-
-      <div class="alert-box">
-        <div class="alert-label">${isOverdue ? '⚠ Overdue' : `Due in ${daysUntilDue} day${daysUntilDue !== 1 ? 's' : ''}`}</div>
-        <div class="alert-title">${task.title}</div>
-        <div class="alert-due">${dueDateStr}</div>
-      </div>
-
-      <div class="detail-row">
-        <span class="detail-label">Family</span>
-        <span class="detail-value">${family.name}</span>
-      </div>
-      <div class="detail-row">
-        <span class="detail-label">Priority</span>
-        <span class="detail-value">${task.priority}</span>
-      </div>
-      <div class="detail-row">
-        <span class="detail-label">Due Date</span>
-        <span class="detail-value">${dueDateStr}</span>
-      </div>
-      <div class="detail-row">
-        <span class="detail-label">Status</span>
-        <span class="detail-value">${isOverdue ? 'Overdue' : 'Pending'}</span>
-      </div>
-
-      <a href="https://pcm-realestate.vercel.app" class="cta">View in PCM Platform →</a>
-    </div>
-    <div class="footer">
-      <div class="footer-left">PCM Family Office · alerts@pcmfamilyoffice.com</div>
-      <div class="footer-right">CONFIDENTIAL</div>
-    </div>
-  </div>
-</body>
-</html>`;
-
-      // Send via Resend
-      const res = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${RESEND_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: `PCM Family Office <${FROM_EMAIL}>`,
-          to: [family.advisor_email],
-          subject: `⏰ Reminder: "${task.title}" — ${family.name} (Due ${daysUntilDue >= 0 ? `in ${daysUntilDue} days` : 'OVERDUE'})`,
-          html: emailHtml,
-        }),
-      });
-
-      if (res.ok) {
-        // Mark reminder as sent
+      if (r.ok) {
         await sb.from("tasks").update({ reminder_sent: true }).eq("id", task.id);
-        sent++;
-        results.push({ task: task.title, family: family.name, to: family.advisor_email, status: "sent" });
+        summary.tasks.sent++;
       } else {
-        const err = await res.text();
-        results.push({ task: task.title, family: family.name, to: family.advisor_email, status: "failed", error: err });
+        summary.tasks.failed++;
+        console.error("task reminder failed", task.id, r.detail);
       }
     }
 
-    return new Response(JSON.stringify({ 
-      success: true, 
-      sent, 
-      skipped, 
-      total: (tasks || []).length,
-      results 
-    }), {
+    // ── 2. BILL REMINDERS ────────────────────────────────────────────────
+    // The SQL side decides what is due: it understands recurrence, the payment
+    // log, and which occurrence was last reminded. Keeping that judgement in one
+    // place means the email layer cannot disagree with the dashboard.
+    const { data: bills, error: billErr } = await sb.rpc("bills_due_for_reminder");
+    if (billErr) throw billErr;
+
+    // One digest per ORDANIS Expert rather than one email per bill.
+    const byExpert = new Map<string, { name: string; rows: Record<string, unknown>[] }>();
+    for (const b of bills || []) {
+      const to = String(b.expert_email ?? "").trim();
+      if (!to) continue;
+      if (!byExpert.has(to)) byExpert.set(to, { name: String(b.expert_name ?? ""), rows: [] });
+      byExpert.get(to)!.rows.push(b);
+    }
+
+    for (const [expertEmail, group] of byExpert) {
+      const rows = group.rows;
+      const total = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+      const soonest = Math.min(...rows.map((r) => Number(r.days_until) || 0));
+
+      const lines = rows.map((r) => {
+        const d = Number(r.days_until) || 0;
+        const edge = d <= 2 ? "#d43030" : d <= 5 ? "#d4900a" : "#293d5c";
+        return `<tr>
+          <td style="padding:10px 0;border-bottom:1px solid #ede8de;">
+            <div style="font-size:14px;color:#092b49;font-weight:600;">${esc(r.description || r.event_type)}</div>
+            <div style="font-size:12px;color:#8fa0b2;margin-top:2px;">${esc(r.family_name)}${r.category ? " · " + esc(r.category) : ""} · ${esc(r.frequency)}</div>
+          </td>
+          <td style="padding:10px 0;border-bottom:1px solid #ede8de;text-align:right;white-space:nowrap;">
+            <div style="font-size:14px;color:#092b49;font-weight:700;">${money(r.amount)}</div>
+            <div style="font-size:12px;color:${edge};font-weight:600;margin-top:2px;">
+              ${d === 0 ? "Due today" : `in ${d} day${d === 1 ? "" : "s"}`} · ${esc(String(r.due_date))}
+            </div>
+          </td>
+        </tr>`;
+      }).join("");
+
+      const body = `
+        <p style="font-size:14px;color:#5a6e84;margin:0 0 18px;">
+          Hello ${esc(group.name || "")},<br><br>
+          ${rows.length} bill${rows.length === 1 ? "" : "s"} you are responsible for
+          ${rows.length === 1 ? "is" : "are"} coming due.
+        </p>
+        <div style="background:#e8f0f8;border-left:4px solid #293d5c;border-radius:8px;padding:14px 18px;margin-bottom:18px;">
+          <div style="font-size:11px;font-weight:700;color:#293d5c;text-transform:uppercase;letter-spacing:0.08em;">Total outstanding</div>
+          <div style="font-size:22px;color:#092b49;font-weight:700;margin-top:3px;">${money(total)}</div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;">${lines}</table>
+        ${appUrl ? `<a href="${esc(appUrl)}" style="display:inline-block;background:#092b49;color:#fff;padding:11px 26px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;margin-top:22px;">Review and pay →</a>` : ""}
+        <p style="font-size:11px;color:#8fa0b2;margin-top:20px;">Mark each bill paid in the platform once settled, so it drops off this list.</p>`;
+
+      const headline = rows.length === 1
+        ? String(rows[0].family_name)
+        : `${rows.length} bills · ${money(total)}`;
+      const html = shell(brand, headline, "Bills Due", body, soonest <= 2);
+      const subject = rows.length === 1
+        ? `Bill due ${soonest === 0 ? "today" : `in ${soonest} days`}: ${rows[0].description || rows[0].event_type} — ${rows[0].family_name}`
+        : `${rows.length} bills due — ${money(total)} (soonest ${soonest === 0 ? "today" : `in ${soonest} days`})`;
+
+      const r = await sendEmail(expertEmail, subject, html, brand, from);
+
+      if (r.ok) {
+        summary.bills.digests++;
+        // Stamp each occurrence only after the message is accepted, so a provider
+        // failure leaves the bill outstanding and it is retried tomorrow rather
+        // than being silently marked as handled.
+        for (const b of rows) {
+          const { error } = await sb.from("cash_flow_events")
+            .update({ reminder_sent_for: b.due_date }).eq("id", b.event_id);
+          if (!error) summary.bills.sent++;
+        }
+      } else {
+        summary.bills.failed += rows.length;
+        console.error("bill digest failed", expertEmail, r.detail);
+      }
+    }
+
+    return new Response(JSON.stringify({ success: true, ...summary }), {
       headers: { "Content-Type": "application/json" },
     });
-
   } catch (err) {
-    return new Response(JSON.stringify({ success: false, error: err.message }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
+    console.error("send-task-reminders error", err);
+    return new Response(JSON.stringify({ success: false, error: String((err as Error)?.message ?? err), ...summary }), {
+      status: 500, headers: { "Content-Type": "application/json" },
     });
   }
 });

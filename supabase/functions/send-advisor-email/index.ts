@@ -37,6 +37,14 @@
 // Deploy:  supabase functions deploy send-advisor-email
 // Secrets: RESEND_API_KEY (required)
 //          ADVISOR_EMAIL_FROM (optional; prefer outbound_email_settings)
+//          DEMO_EMAIL_OVERRIDE (demo/staging only)
+//
+// ── DEMO DEPLOYMENTS ──────────────────────────────────────────
+// This function is the one most able to reach a real outsider, because the
+// recipient is chosen by the client rather than drawn from firm records. On a
+// demo instance DEMO_EMAIL_OVERRIDE redirects every envelope to a single mailbox.
+// The variable is unset in production, which makes the block inert there — the
+// same file is safe to deploy to every tenant.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -46,8 +54,10 @@ const BRAND_NAME_ENV = Deno.env.get("BRAND_NAME") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const DEMO_EMAIL_OVERRIDE = (Deno.env.get("DEMO_EMAIL_OVERRIDE") ?? "").trim();
 
 const MAX_RECIPIENTS = 8;
+const DAILY_LIMIT = 20; // messages per sender per rolling 24 hours
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const corsHeaders = {
@@ -148,7 +158,23 @@ Deno.serve(async (req) => {
     if (!familyId) return json({ error: "No family is associated with your account." }, 403);
     const clientName = clean(profile?.full_name) || clientEmail;
 
-    const { data: fam } = await admin.from("families").select("advisor_name, advisor_email").eq("id", familyId).single();
+    const { data: fam } = await admin.from("families").select("advisor_name, advisor_email, subscription_state").eq("id", familyId).single();
+
+    // This sends to outside addresses from the firm's verified domain, so it is limited to households
+    // in good standing and to a daily allowance per sender. Before 2026-10-14 there was no limit.
+    if (fam?.subscription_state !== "active") {
+      return json({ error: "Email is available once your subscription is active." }, 403);
+    }
+    const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const { count: sentToday, error: cntErr } = await admin.from("client_email_sends")
+      .select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("created_at", since);
+    if (cntErr) {
+      console.error("send-advisor-email: could not read send log:", cntErr.message);
+      return json({ error: "Email is temporarily unavailable. Please try again later." }, 503);
+    }
+    if ((sentToday ?? 0) >= DAILY_LIMIT) {
+      return json({ error: `You have reached today's limit of ${DAILY_LIMIT} messages. Please try again tomorrow, or contact your ORDANIS Expert.` }, 429);
+    }
     const primaryEmail = (fam?.advisor_email || "").trim().toLowerCase();
     const primaryName = clean(fam?.advisor_name);
 
@@ -184,6 +210,18 @@ Deno.serve(async (req) => {
     };
     if (cc) payload.cc = cc;
 
+    // ── Demo safety override ─────────────────────────────────────────
+    // Deliberately last: every check above has already run against the REAL
+    // addresses, so a demo exercises the same code path a client would. Only the
+    // envelope is rewritten, and the intended recipients are carried in the subject.
+    if (DEMO_EMAIL_OVERRIDE) {
+      const routed = [`to: ${toEmails.join(", ")}`, cc ? `cc: ${cc.join(", ")}` : null]
+        .filter(Boolean).join(" | ");
+      payload.to = [DEMO_EMAIL_OVERRIDE];
+      delete payload.cc;
+      payload.subject = `[DEMO → ${routed}] ${subject}`.slice(0, 300);
+    }
+
     const resp = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
@@ -194,7 +232,15 @@ Deno.serve(async (req) => {
       console.error("Resend error", resp.status, detail, "sender source:", sender.source);
       return json({ error: "The email service returned an error.", detail: detail.slice(0, 300) }, 502);
     }
-    return json({ ok: true, to: toEmails, cc: cc ? primaryEmail : null });
+    const { error: logErr } = await admin.from("client_email_sends")
+      .insert({ user_id: user.id, family_id: familyId, recipients: toEmails.length + (cc ? cc.length : 0) });
+    if (logErr) console.error("send-advisor-email: could not log send:", logErr.message);
+    return json({
+      ok: true,
+      to: toEmails,
+      cc: cc ? primaryEmail : null,
+      demoRoutedTo: DEMO_EMAIL_OVERRIDE || undefined,
+    });
   } catch (e) {
     console.error("send-advisor-email error", e);
     return json({ error: "Server error.", detail: String((e as Error)?.message || e) }, 500);

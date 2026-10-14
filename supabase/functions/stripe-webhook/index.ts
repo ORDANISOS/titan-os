@@ -97,8 +97,38 @@ function mapStripeStatus(status: string): "active" | "past_due" | "cancelled" | 
   }
 }
 
+// Which household a subscription belongs to. Advisor-created checkouts carry family_id in the
+// subscription metadata; self-serve sign-ups did not (the household did not exist yet when the
+// subscription was created), so fall back to the household that recorded this subscription id.
+// Before 2026-10-14 there was no fallback, and cancellations, plan changes and failed payments for
+// self-serve households were silently ignored.
+async function familyIdForSubscription(sub: Stripe.Subscription | null): Promise<string | null> {
+  if (!sub) return null;
+  if (sub.metadata?.family_id) return sub.metadata.family_id;
+  const { data } = await admin.from("families").select("id").eq("stripe_subscription_id", sub.id).maybeSingle();
+  return (data?.id as string) ?? null;
+}
+
+// Self-serve sign-up logins are created blocked by public-signup and may only sign in once payment
+// has created their household. Thrown on failure so Stripe retries: a paid customer must not be
+// left locked out.
+async function unblockSignupLogin(authUserId: string) {
+  const { error } = await admin.auth.admin.updateUserById(authUserId, { ban_duration: "none" });
+  if (error) throw new Error(`Could not unblock login ${authUserId}: ${error.message}`);
+}
+
+// Stamp the household onto the subscription so every later event finds it directly. Logged, not
+// thrown: familyIdForSubscription's fallback covers it if this fails.
+async function tagSubscriptionWithFamily(subId: string, familyId: string) {
+  try {
+    await stripe.subscriptions.update(subId, { metadata: { family_id: familyId } });
+  } catch (e) {
+    console.error(`Could not tag subscription ${subId} with family ${familyId}:`, e instanceof Error ? e.message : e);
+  }
+}
+
 async function syncFamilyFromSubscription(sub: Stripe.Subscription) {
-  const familyId = sub.metadata?.family_id;
+  const familyId = await familyIdForSubscription(sub);
   if (!familyId) return; // not one of ours, or created outside this flow
 
   const mapped = mapStripeStatus(sub.status);
@@ -125,6 +155,13 @@ async function createFamilyFromSignup(session: Stripe.Checkout.Session, authUser
     .select("id").eq("stripe_subscription_id", sub.id).maybeSingle();
   if (existing) {
     await syncFamilyFromSubscription(sub);
+    // A replay after an earlier attempt failed part-way must still finish the job: link the login to
+    // the household if that did not happen, then unblock it.
+    const { error: linkErr } = await admin.from("user_profiles")
+      .update({ family_id: existing.id }).eq("id", authUserId).is("family_id", null);
+    if (linkErr) throw new Error(`Could not link login ${authUserId} to family ${existing.id}: ${linkErr.message}`);
+    await tagSubscriptionWithFamily(sub.id, existing.id);
+    await unblockSignupLogin(authUserId);
     return;
   }
 
@@ -169,7 +206,13 @@ async function createFamilyFromSignup(session: Stripe.Checkout.Session, authUser
     family_id: family.id,
   }, { onConflict: "id" });
 
-  if (profileErr) console.error(`user_profiles upsert failed for ${authUserId}:`, profileErr.message);
+  // Thrown, not just logged: the login is about to be unblocked, and must not be unblocked without a
+  // household. Stripe retries; the replay branch above links it and unblocks.
+  if (profileErr) throw new Error(`user_profiles upsert failed for ${authUserId}: ${profileErr.message}`);
+
+  await tagSubscriptionWithFamily(sub.id, family.id);
+  // Payment has created the household: the login made at sign-up may now sign in.
+  await unblockSignupLogin(authUserId);
 
   // Signed up with a firm code (validated by public-signup before payment): place the household in the
   // firm now that it exists, keep the client's acceptance of the notice on the membership log, give it the
@@ -545,7 +588,7 @@ Deno.serve(async (req) => {
 
       case "customer.subscription.deleted": {
         const sub = event.data.object as Stripe.Subscription;
-        const familyId = sub.metadata?.family_id;
+        const familyId = await familyIdForSubscription(sub);
         // A Stripe cancellation lands here whether it came from the household's own churn, a
         // dunning process finally giving up, OR from archive-family cancelling billing on a
         // household that just asked to be removed from the platform. That last case must not be
@@ -568,7 +611,7 @@ Deno.serve(async (req) => {
         const sub = invoice.subscription
           ? await stripe.subscriptions.retrieve(String(invoice.subscription))
           : null;
-        const familyId = sub?.metadata?.family_id;
+        const familyId = await familyIdForSubscription(sub);
         if (familyId) {
           await admin.from("families")
             .update({ subscription_state: "past_due", past_due_since: new Date().toISOString().slice(0, 10) })
@@ -602,7 +645,7 @@ Deno.serve(async (req) => {
           ? await stripe.subscriptions.retrieve(String(invoice.subscription))
           : null;
         // One-off invoices with no subscription (the Expert-assist fee) carry the household in their own metadata.
-        const familyId = sub?.metadata?.family_id || invoice.metadata?.family_id;
+        const familyId = (await familyIdForSubscription(sub)) || invoice.metadata?.family_id;
         // Only clears a household that was overdue -- does not touch one already active,
         // final_notice or archived, since a routine renewal invoice should not silently undo a
         // firm decision like archiving.

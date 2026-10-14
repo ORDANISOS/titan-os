@@ -72,6 +72,12 @@ const stripe = new Stripe(STRIPE_SECRET_KEY, {
 const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const clean = (s: unknown) => String(s ?? "").trim();
 
+// A sign-up login stays blocked until payment creates its household (stripe-webhook unblocks it).
+// 100 years: effectively "until unblocked", which is the only way it should ever end.
+const SIGNUP_BLOCK = "876000h";
+const isBlocked = (u?: { banned_until?: string | null } | null) =>
+  !!u?.banned_until && new Date(u.banned_until).getTime() > Date.now();
+
 // Firm codes (see the enterprise_check_code migration). A wrong, expired or inactive code all look the
 // same to the caller, and repeated failures from one address are blocked by the database.
 const BAD_FIRM_CODE = "That firm code is not valid. Check it and try again.";
@@ -209,6 +215,10 @@ Deno.serve(async (req) => {
 
   // Create the login before payment -- per the sign-up design, this is what makes a declined card
   // recoverable instead of a dead end. The household this account belongs to does not exist yet.
+  //
+  // PAYMENT FIRST: the login is created BLOCKED (banned) and cannot sign in until stripe-webhook
+  // creates the household on checkout.session.completed and unblocks it. Before 2026-10-14 the login
+  // worked immediately, so anyone could hold a signed-in account without ever paying.
   let authUserId: string;
   let resumed = false;
 
@@ -216,11 +226,21 @@ Deno.serve(async (req) => {
     email,
     password,
     email_confirm: true,
+    ban_duration: SIGNUP_BLOCK,
     user_metadata: { full_name, phone },
   });
 
   if (created?.user && !createErr) {
     authUserId = created.user.id;
+    // Make sure the block actually took. If it did not and cannot be applied, remove the brand-new
+    // login (nothing is attached to it yet) rather than leave a working unpaid account behind.
+    if (!isBlocked(created.user)) {
+      const { error: banErr } = await admin.auth.admin.updateUserById(authUserId, { ban_duration: SIGNUP_BLOCK });
+      if (banErr) {
+        await admin.auth.admin.deleteUser(authUserId).catch(() => {});
+        return json({ error: "Could not create account. Please try again." }, 500);
+      }
+    }
   } else {
     const alreadyExists = /already registered|already exists/i.test(createErr?.message ?? "");
     if (!alreadyExists) {
@@ -230,14 +250,26 @@ Deno.serve(async (req) => {
     // Resume path -- see header comment. Prove ownership of the existing auth user with a real
     // sign-in attempt before doing anything else. A wrong password here means either someone else
     // guessed a registered email, or the account owner mistyped -- either way, do not proceed.
-    const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    const { data: signInData, error: signInErr } = await anon.auth.signInWithPassword({ email, password });
-    if (signInErr || !signInData?.user) {
-      return json({
-        error: "An account with this email already exists and that password doesn't match it. Sign in instead, or reset your password.",
-      }, 409);
+    // An unpaid login is blocked, and a blocked login cannot sign in, so it is unblocked only for
+    // the length of this one check and blocked again straight after (finally), whatever happens.
+    const NO_MATCH = "An account with this email already exists and that password doesn't match it. Sign in instead, or reset your password.";
+    const { data: known } = await admin.from("user_profiles")
+      .select("id").ilike("email", email.replace(/[\\%_]/g, (c) => `\\${c}`)).limit(2);
+    if (!known || known.length !== 1) return json({ error: NO_MATCH }, 409);
+    const { data: existing } = await admin.auth.admin.getUserById(known[0].id);
+    const wasBlocked = isBlocked(existing?.user);
+
+    const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+    let signInUserId: string | null = null;
+    try {
+      if (wasBlocked) await admin.auth.admin.updateUserById(known[0].id, { ban_duration: "none" });
+      const { data: signInData, error: signInErr } = await anon.auth.signInWithPassword({ email, password });
+      if (!signInErr && signInData?.user) signInUserId = signInData.user.id;
+    } finally {
+      if (wasBlocked) await admin.auth.admin.updateUserById(known[0].id, { ban_duration: SIGNUP_BLOCK });
     }
-    const existingUserId = signInData.user.id;
+    if (!signInUserId) return json({ error: NO_MATCH }, 409);
+    const existingUserId = signInUserId;
 
     // Only resumable if payment never actually went through for them. A family_id already set
     // means a household was already created (a prior Checkout succeeded) -- that is a genuine
@@ -249,6 +281,12 @@ Deno.serve(async (req) => {
       return json({
         error: "An account with this email already exists and is already set up. Sign in instead.",
       }, 409);
+    }
+
+    // An older unpaid login, created before sign-ups were blocked until payment, is blocked now too.
+    if (!wasBlocked) {
+      const { error: banErr } = await admin.auth.admin.updateUserById(existingUserId, { ban_duration: SIGNUP_BLOCK });
+      if (banErr) return json({ error: "Could not resume sign-up. Please try again." }, 500);
     }
 
     authUserId = existingUserId;
