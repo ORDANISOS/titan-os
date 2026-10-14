@@ -32,6 +32,8 @@ import { execFileSync } from "node:child_process";
 import { writeFileSync, readFileSync, rmSync, mkdirSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+const LAST_MONTH_FIRST = (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`; })();
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..");
 const tmp = join(repo, ".probe-tmp");
@@ -274,7 +276,9 @@ const planRows = plan => ({
       startDate: "2026-01-01", pcmResponsible: true, category: "household_payroll" },
   ],
   cash_flow_payment_log: [
-    { id: "l1", eventId: "p2", familyId: PLAN_FID, period: "2026-02-01", paid: true },
+    // Last month, so it always falls inside the register's window (6 months back from today).
+    // A fixed date stopped counting once it aged out of that window, and the test failed.
+    { id: "l1", eventId: "p2", familyId: PLAN_FID, period: LAST_MONTH_FIRST, paid: true },
   ],
 });
 
@@ -291,7 +295,8 @@ ok("Core reports its plan", core.family.servicePlan === "Core");
 ok("Premier says the firm pays bills", priv.family.firmPaysBills === true);
 ok("Core says the firm does not", core.family.firmPaysBills === false);
 ok("Premier says workflows run", priv.family.runsWorkflows === true);
-ok("Core says they do not", core.family.runsWorkflows === false);
+// Core includes workflows (10 a month, then a fee each); only Basic has none. See src/plans.js.
+ok("Core says they run too", core.family.runsWorkflows === true);
 
 const privOnce = pEv("Chubb annual premium")(priv);
 const coreOnce = pEv("Chubb annual premium")(core);

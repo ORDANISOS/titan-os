@@ -34,11 +34,16 @@ export default [{
       atob: "readonly", btoa: "readonly", Image: "readonly", alert: "readonly",
       confirm: "readonly", prompt: "readonly", location: "readonly", history: "readonly",
       caches: "readonly", process: "readonly", structuredClone: "readonly",
+      URLSearchParams: "readonly",
     },
   },
   // Directives for rules this config does not load (react-hooks/exhaustive-deps) are
   // correct under the project's fuller lint setup and must not be reported here.
   linterOptions: { reportUnusedDisableDirectives: false },
+  // ESLint 9 reports a disable comment that names a rule it has never heard of. The react-hooks rule is
+  // registered here as an inert stub (never switched on) so those comments resolve without loading the
+  // whole plugin.
+  plugins: { "react-hooks": { rules: { "exhaustive-deps": { create: () => ({}) } } } },
   rules: {
     "no-undef": "error",
     // A duplicate declaration in one scope is the other half of a botched refactor.

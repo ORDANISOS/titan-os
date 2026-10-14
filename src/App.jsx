@@ -626,6 +626,13 @@ function parseLocalDate(s){
 // The last moment of a due date in the person's own time zone. A task is overdue once its due day has ended,
 // not at UTC midnight (which, in the US, is the evening before it is due).
 function dueEnd(s){const d=parseLocalDate(s);d.setHours(23,59,59,999);return d;}
+// Today (or a given moment) as a YYYY-MM-DD calendar date in the person's own time zone. toISOString()
+// gives the UTC date, which after about 8pm Eastern is already tomorrow.
+const localDayISO=(d=new Date())=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+// For values that may be either a calendar date ("2026-11-01") or a full timestamp. A bare date is a day
+// on the calendar and is read in local time; new Date("2026-11-01") reads it as UTC midnight, which in
+// the US is the evening before, so dates showed a day early. A timestamp is a moment and is read as-is.
+function asDate(v){return typeof v==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(v)?parseLocalDate(v):new Date(v);}
 function expandEvent(event,projectionStart,monthsOut){
   const occurrences=[];
   const start=parseLocalDate(event.startDate);
@@ -639,19 +646,32 @@ function expandEvent(event,projectionStart,monthsOut){
     }
     return occurrences;
   }
-  // Recurring — advance through dates
-  let cur=new Date(start);
-  let safety=600; // max iterations
-  while(cur<=projEnd&&safety-->0){
-    if(cur>=projectionStart&&(!end||cur<=end)){
-      occurrences.push({date:new Date(cur),amount});
+  // Recurring. Each occurrence is computed from the start date, never by adding to the previous one:
+  //  * month-based frequencies keep the original day of month and clamp to short months (the same rule
+  //    as nextBillDue). Adding a month to 31 January overflowed into March, so February was skipped and
+  //    every later date drifted.
+  //  * the walk starts just before the projection window. It used to start at the event's own start
+  //    date with a 600-step cap, so a weekly expense begun years ago ran out of steps and vanished.
+  const add=o=>{if(o>=projectionStart&&o<=projEnd&&(!end||o<=end))occurrences.push({date:o,amount});};
+  const months={monthly:1,quarterly:3,annually:12}[event.frequency];
+  if(months){
+    const anchorDay=start.getDate();
+    const nth=k=>{const m=new Date(start.getFullYear(),start.getMonth()+months*k,1);
+      const dim=new Date(m.getFullYear(),m.getMonth()+1,0).getDate();
+      return new Date(m.getFullYear(),m.getMonth(),Math.min(anchorDay,dim));};
+    const behind=(projectionStart.getFullYear()-start.getFullYear())*12+(projectionStart.getMonth()-start.getMonth());
+    for(let k=Math.max(0,Math.floor(behind/months)-1),guard=0;guard<2000;k++,guard++){
+      const o=nth(k); if(o>projEnd)break; add(o);
     }
-    if(event.frequency==="weekly")cur.setDate(cur.getDate()+7);
-    else if(event.frequency==="biweekly")cur.setDate(cur.getDate()+14);
-    else if(event.frequency==="monthly")cur.setMonth(cur.getMonth()+1);
-    else if(event.frequency==="quarterly")cur.setMonth(cur.getMonth()+3);
-    else if(event.frequency==="annually")cur.setFullYear(cur.getFullYear()+1);
-    else break;
+    return occurrences;
+  }
+  const days={weekly:7,biweekly:14}[event.frequency];
+  if(!days)return occurrences;
+  const step=days*86400000;
+  const skip=Math.max(0,Math.floor((projectionStart-start)/step)-1);
+  for(let k=skip,guard=0;guard<2000;k++,guard++){
+    const o=new Date(start.getFullYear(),start.getMonth(),start.getDate()+days*k);
+    if(o>projEnd)break; add(o);
   }
   return occurrences;
 }
@@ -762,6 +782,11 @@ const REMINDER_OPTIONS=[
 //
 // parseLocalDate (defined above for cash-flow projections) already solved this. It
 // simply was not used here, so every date outside the cash-flow charts was wrong.
+// Escapes text for the printable reports, which are written into a new window with document.write.
+// That window shares this app's origin, so any household text written into it unescaped (a note, a task
+// title, an address) could run as script with the signed-in user's session. Every value a household can
+// type goes through this before it reaches a report.
+const escHtml=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt=iso=>{
   if(!iso)return"—";
   const d=parseLocalDate(iso);
@@ -1662,7 +1687,7 @@ function FamilyReport({family,data,onClose}){
     </style></head><body>
     <div class="header">
       <div><img src="${BRAND.logo}" alt="${BRAND.name}" class="logo-img"/></div>
-      <div style="text-align:right"><h1>${family.name}</h1><div class="advisor">ORDANIS Expert: ${family.advisorName||"—"} | ${family.advisorEmail||""}</div><div class="date">${new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</div></div>
+      <div style="text-align:right"><h1>${escHtml(family.name)}</h1><div class="advisor">ORDANIS Expert: ${escHtml(family.advisorName||"—")} | ${escHtml(family.advisorEmail||"")}</div><div class="date">${new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</div></div>
     </div>
     <div class="stats">
       <div class="stat"><div class="stat-l">Real Estate Value</div><div class="stat-v">${fmtMoney(totalPortfolio)}</div></div>
@@ -1672,37 +1697,37 @@ function FamilyReport({family,data,onClose}){
     </div>
     <h2>Contacts & Members</h2>
     <table><thead><tr><th>Name</th><th>Type</th><th>Email</th><th>Phone</th></tr></thead><tbody>
-    ${contacts.map(c=>`<tr><td>${c.name}</td><td>${c.type}</td><td>${c.email||"—"}</td><td>${c.phone||"—"}</td></tr>`).join("")||"<tr><td colspan='4' style='color:#8fa0b2'>No contacts</td></tr>"}
+    ${contacts.map(c=>`<tr><td>${escHtml(c.name)}</td><td>${escHtml(c.type)}</td><td>${escHtml(c.email||"—")}</td><td>${escHtml(c.phone||"—")}</td></tr>`).join("")||"<tr><td colspan='4' style='color:#8fa0b2'>No contacts</td></tr>"}
     </tbody></table>
     <h2>Properties</h2>
-    ${properties.map(p=>`<table style="margin-bottom:14px"><thead><tr><th colspan="4">${p.address}${p.ownerName?` — ${p.ownerName}`:""}</th></tr></thead><tbody>
-    <tr><td><b>Type</b></td><td>${p.propertyType}</td><td><b>Purchase Price</b></td><td>${fmtMoney(p.purchasePrice)}</td></tr>
+    ${properties.map(p=>`<table style="margin-bottom:14px"><thead><tr><th colspan="4">${escHtml(p.address)}${p.ownerName?` — ${escHtml(p.ownerName)}`:""}</th></tr></thead><tbody>
+    <tr><td><b>Type</b></td><td>${escHtml(p.propertyType)}</td><td><b>Purchase Price</b></td><td>${fmtMoney(p.purchasePrice)}</td></tr>
     <tr><td><b>Current Value</b></td><td>${fmtMoney(p.currentValue)}</td><td><b>Purchase Date</b></td><td>${fmt(p.purchaseDate)}</td></tr>
-    <tr><td><b>Lender</b></td><td>${p.lender||"—"}</td><td><b>Loan Type</b></td><td>${p.loanType}</td></tr>
+    <tr><td><b>Lender</b></td><td>${escHtml(p.lender||"—")}</td><td><b>Loan Type</b></td><td>${escHtml(p.loanType)}</td></tr>
     <tr><td><b>Loan Balance</b></td><td>${fmtMoney(p.loanBalance)}</td><td><b>Interest Rate</b></td><td>${fmtPct(p.interestRate)}</td></tr>
     <tr><td><b>Monthly Payment</b></td><td>${fmtMoney(p.loanPayment)}</td><td><b>Loan Maturity</b></td><td>${fmt(p.loanMaturityDate)}</td></tr>
     ${Number(p.secondMortgageBalance)>0?`<tr><td><b>2nd Mortgage</b></td><td>${fmtMoney(p.secondMortgageBalance)}</td><td><b>2nd Mtg Payment</b></td><td>${p.secondMortgagePayment?`${fmtMoney(p.secondMortgagePayment)}/mo`:"—"}</td></tr>`:""}
     <tr><td><b>Rental Income</b></td><td>${fmtMoney(p.rentalIncome)}/mo</td><td><b>Property Taxes</b></td><td>${fmtMoney(p.propertyTaxes)}/yr</td></tr>
-    <tr><td><b>Insurance</b></td><td>${p.insuranceCompany||"—"}</td><td><b>Flood Insurance</b></td><td>${p.floodInsurance?"Yes":"No"}</td></tr>
+    <tr><td><b>Insurance</b></td><td>${escHtml(p.insuranceCompany||"—")}</td><td><b>Flood Insurance</b></td><td>${p.floodInsurance?"Yes":"No"}</td></tr>
     </tbody></table>`).join("")||"<p style='color:#8fa0b2;margin-bottom:12px'>No properties</p>"}
     <h2>Portfolio Accounts</h2>
     <table><thead><tr><th>Institution</th><th>Type</th><th>Banker</th><th>Starting</th><th>Current</th><th>Change</th></tr></thead><tbody>
-    ${accounts.map(a=>{const pct=pctChange(a.startingBalance,a.currentBalance);return`<tr><td>${a.institution}</td><td>${a.accountType}</td><td>${a.bankerName||"—"}</td><td>${fmtMoney(a.startingBalance)}</td><td>${fmtMoney(a.currentBalance)}</td><td style="color:${Number(pct)>=0?"#18a850":"#d43030"};font-weight:700">${pct!==null?(Number(pct)>=0?"+":"")+pct+"%":"—"}</td></tr>`;}).join("")||"<tr><td colspan='6' style='color:#8fa0b2'>No accounts</td></tr>"}
+    ${accounts.map(a=>{const pct=pctChange(a.startingBalance,a.currentBalance);return`<tr><td>${escHtml(a.institution)}</td><td>${escHtml(a.accountType)}</td><td>${escHtml(a.bankerName||"—")}</td><td>${fmtMoney(a.startingBalance)}</td><td>${fmtMoney(a.currentBalance)}</td><td style="color:${Number(pct)>=0?"#18a850":"#d43030"};font-weight:700">${pct!==null?(Number(pct)>=0?"+":"")+pct+"%":"—"}</td></tr>`;}).join("")||"<tr><td colspan='6' style='color:#8fa0b2'>No accounts</td></tr>"}
     </tbody></table>
     <h2>Valuables</h2>
     <table><thead><tr><th>Category</th><th>Description</th><th>Year</th><th>Est. Value</th><th>Insured</th></tr></thead><tbody>
-    ${valuables.map(v=>`<tr><td>${v.category}</td><td>${v.description}</td><td>${v.year||"—"}</td><td>${fmtMoney(v.estimatedValue)}</td><td>${v.insured?"Yes":"No"}</td></tr>`).join("")||"<tr><td colspan='5' style='color:#8fa0b2'>No valuables</td></tr>"}
+    ${valuables.map(v=>`<tr><td>${escHtml(v.category)}</td><td>${escHtml(v.description)}</td><td>${escHtml(v.year||"—")}</td><td>${fmtMoney(v.estimatedValue)}</td><td>${v.insured?"Yes":"No"}</td></tr>`).join("")||"<tr><td colspan='5' style='color:#8fa0b2'>No valuables</td></tr>"}
     </tbody></table>
     <h2>Open Deals</h2>
     <table><thead><tr><th>Deal</th><th>Stage</th><th>Value</th><th>Close Date</th></tr></thead><tbody>
-    ${deals.filter(d=>d.stage!=="Closed Lost"&&d.stage!=="Closed Won").map(d=>`<tr><td>${d.title}</td><td>${d.stage}</td><td>${fmtMoney(d.value)}</td><td>${fmt(d.closeDate)}</td></tr>`).join("")||"<tr><td colspan='4' style='color:#8fa0b2'>No open deals</td></tr>"}
+    ${deals.filter(d=>d.stage!=="Closed Lost"&&d.stage!=="Closed Won").map(d=>`<tr><td>${escHtml(d.title)}</td><td>${escHtml(d.stage)}</td><td>${fmtMoney(d.value)}</td><td>${fmt(d.closeDate)}</td></tr>`).join("")||"<tr><td colspan='4' style='color:#8fa0b2'>No open deals</td></tr>"}
     </tbody></table>
     <h2>Pending Tasks & Deadlines</h2>
     <table><thead><tr><th>Task</th><th>Priority</th><th>Due Date</th><th>Reminder</th></tr></thead><tbody>
-    ${tasks.sort((a,b)=>a.dueDate>b.dueDate?1:-1).map(t=>`<tr><td>${t.title}</td><td>${t.priority}</td><td>${fmt(t.dueDate)}</td><td>${t.reminderDays?t.reminderDays+" days before":"—"}</td></tr>`).join("")||"<tr><td colspan='4' style='color:#8fa0b2'>No pending tasks</td></tr>"}
+    ${tasks.sort((a,b)=>a.dueDate>b.dueDate?1:-1).map(t=>`<tr><td>${escHtml(t.title)}</td><td>${escHtml(t.priority)}</td><td>${fmt(t.dueDate)}</td><td>${t.reminderDays?t.reminderDays+" days before":"—"}</td></tr>`).join("")||"<tr><td colspan='4' style='color:#8fa0b2'>No pending tasks</td></tr>"}
     </tbody></table>
     <h2>Activity Notes</h2>
-    ${notes.slice(0,10).map(n=>`<div class="note"><div>${n.body}</div><div class="note-date">${fmt(n.createdAt)}</div></div>`).join("")||"<p style='color:#8fa0b2'>No notes</p>"}
+    ${notes.slice(0,10).map(n=>`<div class="note"><div>${escHtml(n.body)}</div><div class="note-date">${fmt(n.createdAt)}</div></div>`).join("")||"<p style='color:#8fa0b2'>No notes</p>"}
     </body></html>`);
     w.document.close();w.focus();setTimeout(()=>w.print(),400);
   };
@@ -1866,7 +1891,7 @@ class ViewErrorBoundary extends Component {
 function buildFamilySnapshot(family,data){
   const fid=family.id;
   const today=new Date(); today.setHours(0,0,0,0);
-  const daysFromNow=d=>{ if(!d)return null; const t=new Date(d); if(isNaN(t.getTime()))return null; const t0=new Date(t.getFullYear(),t.getMonth(),t.getDate()); return Math.round((t0-today)/86400000); };
+  const daysFromNow=d=>{ if(!d)return null; const t=parseLocalDate(d); if(isNaN(t.getTime()))return null; const t0=new Date(t.getFullYear(),t.getMonth(),t.getDate()); return Math.round((t0-today)/86400000); };
   const num=v=>{ const n=Number(v); return Number.isFinite(n)?n:0; };
 
   // The plan the household is on, and whether bill pay is part of it.
@@ -2351,7 +2376,7 @@ function buildFamilySnapshot(family,data){
   }
 
   return {
-    today:today.toISOString().slice(0,10),
+    today:localDayISO(today),
     // servicePlan is stated so the assistant can answer "do you pay my bills?" and "do you run my
     // renewals?" correctly instead of inferring it from the absence of data. Absence of a payment
     // register could mean Core, or it could mean nothing has been recorded yet, and those two
@@ -2933,7 +2958,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   const _byName=(a,b)=>String(a.name||"").localeCompare(String(b.name||""),undefined,{sensitivity:"base"});
   const _ageOf=c=>{
     if(!c.dob)return null;
-    const d=new Date(c.dob); if(isNaN(d.getTime()))return null;
+    const d=parseLocalDate(c.dob); if(isNaN(d.getTime()))return null;
     const t=new Date(); let a=t.getFullYear()-d.getFullYear();
     const m=t.getMonth()-d.getMonth();
     if(m<0||(m===0&&t.getDate()<d.getDate()))a--;
@@ -3414,7 +3439,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
                     below its content width, which is what pushed the action buttons off
                     the edge rather than wrapping them. */}
                 <div style={{flex:"1 1 200px",minWidth:0}}>
-                  <div style={{fontWeight:600,color:B.navy,fontSize:13}}>{c.name}{c.dob&&(()=>{const d=new Date(c.dob);if(isNaN(d))return null;const t=new Date();let a=t.getFullYear()-d.getFullYear();const m=t.getMonth()-d.getMonth();if(m<0||(m===0&&t.getDate()<d.getDate()))a--;return a>=0?<span style={{fontWeight:400,color:B.textSoft,fontSize:11,marginLeft:6}}>· {a} yrs</span>:null;})()}
+                  <div style={{fontWeight:600,color:B.navy,fontSize:13}}>{c.name}{c.dob&&(()=>{const d=parseLocalDate(c.dob);if(isNaN(d))return null;const t=new Date();let a=t.getFullYear()-d.getFullYear();const m=t.getMonth()-d.getMonth();if(m<0||(m===0&&t.getDate()<d.getDate()))a--;return a>=0?<span style={{fontWeight:400,color:B.textSoft,fontSize:11,marginLeft:6}}>· {a} yrs</span>:null;})()}
                     {c.isPrimary&&<span style={{fontSize:9.5,fontWeight:700,letterSpacing:0.4,color:B.navy,background:"rgba(206,182,132,0.3)",border:`1px solid ${B.gold}`,borderRadius:4,padding:"1px 5px",marginLeft:7,verticalAlign:"middle"}}>PRIMARY</span>}
                     {/* Deliberately quieter than PRIMARY — an outline rather than a
                         fill. The two are not equivalent: only the primary is copied
@@ -4504,7 +4529,7 @@ function CashFlowReport({family,projectionMonths,projectionMode,filingStatus,bas
     </style></head><body>
     <div class="header">
       <div><img src="${BRAND.logo}" alt="${BRAND.name}" class="logo-img"/></div>
-      <div style="text-align:right"><h1>Cash Flow Projection</h1><div class="sub">${family.name}</div><div class="date">${new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</div></div>
+      <div style="text-align:right"><h1>Cash Flow Projection</h1><div class="sub">${escHtml(family.name)}</div><div class="date">${new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</div></div>
     </div>
     <div class="assumptions">
       <div><div class="a-l">Projection</div><div class="a-v">${projectionLabel}</div></div>
@@ -4536,14 +4561,14 @@ function CashFlowReport({family,projectionMonths,projectionMode,filingStatus,bas
     ${incomeEvents.map(e=>{
       const treatLabel=CF_TAX_TREATMENTS.find(t=>t.value===e.taxTreatment)?.label.split(" (")[0]||e.taxTreatment;
       const freqLabel=CF_FREQUENCIES.find(fr=>fr.value===e.frequency)?.label||e.frequency;
-      return`<tr><td>${e.eventType}</td><td>${e.description||"—"}</td><td>${freqLabel}</td><td>${fmt(e.startDate)}</td><td class="num">${fmtUSD(e.amount)}</td><td>${treatLabel}</td><td class="num">${fmtUSD(e.projectedNet||0)}</td></tr>`;
+      return`<tr><td>${escHtml(e.eventType)}</td><td>${escHtml(e.description||"—")}</td><td>${escHtml(freqLabel)}</td><td>${fmt(e.startDate)}</td><td class="num">${fmtUSD(e.amount)}</td><td>${escHtml(treatLabel)}</td><td class="num">${fmtUSD(e.projectedNet||0)}</td></tr>`;
     }).join("")}
     </tbody></table>`:""}
     ${expenseEvents.length>0?`<h2>Expense Items</h2>
     <table><thead><tr><th>Category</th><th>Description</th><th>Frequency</th><th>Start</th><th class="num">Amount</th><th class="num">Total (proj.)</th></tr></thead><tbody>
     ${expenseEvents.map(e=>{
       const freqLabel=CF_FREQUENCIES.find(fr=>fr.value===e.frequency)?.label||e.frequency;
-      return`<tr><td>${e.eventType}</td><td>${e.description||"—"}</td><td>${freqLabel}</td><td>${fmt(e.startDate)}</td><td class="num neg">−${fmtUSD(e.amount)}</td><td class="num neg">−${fmtUSD(Math.abs(e.projectedNet||0))}</td></tr>`;
+      return`<tr><td>${escHtml(e.eventType)}</td><td>${escHtml(e.description||"—")}</td><td>${escHtml(freqLabel)}</td><td>${fmt(e.startDate)}</td><td class="num neg">−${fmtUSD(e.amount)}</td><td class="num neg">−${fmtUSD(Math.abs(e.projectedNet||0))}</td></tr>`;
     }).join("")}
     </tbody></table>`:""}
     <h2>Monthly Breakdown</h2>
@@ -4781,7 +4806,7 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
     </style></head><body>
     <div class="header">
       <div><img src="${BRAND.logo}" alt="${BRAND.name}" class="logo-img"/></div>
-      <div style="text-align:right"><h1>Relocation Tax Comparison</h1><div class="sub">${family.name}</div><div class="date">${new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</div></div>
+      <div style="text-align:right"><h1>Relocation Tax Comparison</h1><div class="sub">${escHtml(family.name)}</div><div class="date">${new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</div></div>
     </div>
     <div class="assumptions">
       <div><div class="a-l">Projection</div><div class="a-v">${projectionLabel}</div></div>
@@ -4792,7 +4817,7 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
     <h2>Scenario Comparison</h2>
     <div class="cols">
       <div class="col">
-        <div class="col-name">${curName}</div>
+        <div class="col-name">${escHtml(curName)}</div>
         <div class="col-meta">Current &middot; ${curRate.toFixed(2)}% state${curLocal>0?` + ${curLocal.toFixed(2)}% local`:""}</div>
         <div class="line"><span class="k">Total Tax</span><span class="v tax">${fmtUSD(totalTax)}</span></div>
         <div class="line"><span class="k">Effective Rate</span><span class="v">${curEff.toFixed(1)}%</span></div>
@@ -4812,7 +4837,7 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
       <div class="verdict-sub">${Math.abs(taxDiff)>0.005?`${fmtUSD(Math.abs(taxDiff))} ${taxDiff>0?"less":"more"} tax`:"Identical tax burden"} &middot; ${settings.projectionMode==="year"?`calendar year ${new Date().getFullYear()}`:`${settings.projectionMonths}-month projection`}</div>
     </div>
     <h2>Monthly Net &mdash; Side by Side</h2>
-    <table><thead><tr><th>Month</th><th class="num">${curName} Net</th><th class="num">${compareState.name} Net</th><th class="num">Difference</th></tr></thead><tbody>
+    <table><thead><tr><th>Month</th><th class="num">${escHtml(curName)} Net</th><th class="num">${compareState.name} Net</th><th class="num">Difference</th></tr></thead><tbody>
     ${rows}
     </tbody><tfoot><tr><td>Total</td><td class="num ${totalNet<0?"neg":""}">${totalNet<0?"−":""}${fmtUSD(Math.abs(totalNet))}</td><td class="num ${cTotalNet<0?"neg":""}">${cTotalNet<0?"−":""}${fmtUSD(Math.abs(cTotalNet))}</td><td class="num ${netDelta<0?"neg":"pos"}">${netDelta>=0?"+":"−"}${fmtUSD(Math.abs(netDelta))}</td></tr></tfoot></table>
     <div class="disclaimer">
@@ -6029,7 +6054,7 @@ function GlobalTaskForm({initial,families=[],contacts=[],onSave,onClose}){
     <Field label="Task" required><Inp maxLength={200} placeholder="Follow up on loan maturity" value={f.title} onChange={set("title")}/></Field>
     <Grid2><Field label="Due Date" optional><Inp type="date" value={f.dueDate||""} onChange={set("dueDate")}/></Field><Field label="Priority"><Sel value={f.priority} onChange={set("priority")}><option>Low</option><option>Medium</option><option>High</option></Sel></Field></Grid2>
     <Field label="Email Reminder"><Sel value={reminderDaysOr7(f.reminderDays)} onChange={e=>setF(p=>({...p,reminderDays:Number(e.target.value)}))}><option value={0}>No reminder</option>{REMINDER_OPTIONS.map(r=><option key={r.days} value={r.days}>{r.label}</option>)}</Sel></Field>
-    {Number(f.reminderDays)>0&&f.dueDate&&<div style={{background:"#e8f0f8",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:12,color:B.navyMid}}>🔔 ORDANIS Expert emailed on {new Date(new Date(f.dueDate).setDate(new Date(f.dueDate).getDate()-Number(f.reminderDays))).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</div>}
+    {Number(f.reminderDays)>0&&f.dueDate&&<div style={{background:"#e8f0f8",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:12,color:B.navyMid}}>🔔 ORDANIS Expert emailed on {new Date(parseLocalDate(f.dueDate).setDate(parseLocalDate(f.dueDate).getDate()-Number(f.reminderDays))).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</div>}
     <RecurrenceField f={f} setF={setF}/>
     {showReq&&<ReqHint/>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save Task"}</Btn></div>
@@ -6376,31 +6401,51 @@ function nextBillDue(startDate,frequency,endDate,fromDate){
   return done(d);
 }
 
-// Bills the firm is responsible for, due inside the window and not yet settled.
-// One-offs carry their own paid flag; recurring bills record each period in
-// cash_flow_payment_log, so the two are checked differently.
+// Bills the firm is responsible for: unpaid ones from the last 90 days (shown as overdue) and
+// those due inside the window. How "paid" is recorded depends on the frequency, and this must
+// match the Cash Flow tab exactly:
+//   * monthly / quarterly / annually: the payment register, one cash_flow_payment_log row per
+//     period, keyed by the FIRST of the due month (getRegisterPeriods). Before 2026-10-14 this
+//     compared the exact due date instead, so only bills due on the 1st ever showed as paid.
+//   * one-offs, weekly, biweekly, semiannual: the single paid flag on the expense itself.
+// Each occurrence is checked separately, so last month's unpaid bill stays on the list as overdue
+// rather than being replaced by next month's date.
+const BILL_REGISTER_FREQS=["monthly","quarterly","annually"];
+const BILL_LOOKBACK_DAYS=90;
 function collectBills({events=[],families=[],paymentLog=[],windowDays=45}){
   const today=new Date(); today.setHours(12,0,0,0);
+  const lookFrom=new Date(today); lookFrom.setDate(lookFrom.getDate()-BILL_LOOKBACK_DAYS);
   const famName=id=>{const f=families.find(x=>x.id===id);return f?f.name:null;};
-  const paidPeriods=new Set((paymentLog||[]).filter(l=>l&&l.paid).map(l=>`${l.eventId}|${l.period}`));
+  const paidPeriods=new Set((paymentLog||[]).filter(l=>l&&l.paid).map(l=>`${l.eventId}|${String(l.period||"").slice(0,10)}`));
+  const periodOf=iso=>iso.slice(0,7)+"-01";
   const out=[];
   (events||[]).forEach(e=>{
     if(!e||e.direction!=="expense"||!e.pcmResponsible)return;
-    const due=nextBillDue(e.startDate,e.frequency,e.endDate,today);
-    if(!due)return;
-    const d=new Date(due+"T12:00:00");
-    const days=Math.round((d-today)/86400000);
-    if(days>windowDays)return;
-    const oneOff=["once","one-time","onetime",""].includes(String(e.frequency||"once").toLowerCase());
-    const settled=oneOff?!!e.paid:paidPeriods.has(`${e.id}|${due}`);
-    if(settled)return;
-    out.push({
-      key:`bill:${e.id}:${due}`,id:e.id,dateISO:due,days,
-      label:e.description||e.eventType||"Bill",
-      amount:Number(e.amount)||0,frequency:e.frequency,category:e.category,
-      familyId:e.familyId,familyName:famName(e.familyId),
-      overdue:days<0,
-    });
+    const freq=String(e.frequency||"once").toLowerCase();
+    const oneOff=["once","one-time","onetime",""].includes(freq);
+    const register=BILL_REGISTER_FREQS.includes(freq);
+    let cursor=new Date(lookFrom);
+    for(let guard=0;guard<120;guard++){
+      const due=nextBillDue(e.startDate,e.frequency,e.endDate,cursor);
+      if(!due)break;
+      const d=new Date(due+"T12:00:00");
+      const days=Math.round((d-today)/86400000);
+      if(days>windowDays)break;
+      const settled=register?paidPeriods.has(`${e.id}|${periodOf(due)}`):!!e.paid;
+      // Weekly and biweekly bills have no per-occurrence record, so only their next date is shown.
+      const pastWithoutRecord=!register&&!oneOff&&days<0;
+      if(!settled&&!pastWithoutRecord){
+        out.push({
+          key:`bill:${e.id}:${due}`,id:e.id,dateISO:due,days,
+          label:e.description||e.eventType||"Bill",
+          amount:Number(e.amount)||0,frequency:e.frequency,category:e.category,
+          familyId:e.familyId,familyName:famName(e.familyId),
+          overdue:days<0,
+        });
+      }
+      if(oneOff)break;
+      cursor=new Date(d); cursor.setDate(cursor.getDate()+1);
+    }
   });
   out.sort((a,b)=>a.days-b.days);
   return out;
@@ -6440,7 +6485,7 @@ function collectDeadlines({tasks=[],properties=[],deals=[],contacts=[],families=
   const ackMap={}; (acks||[]).forEach(a=>{if(a&&a.itemKey)ackMap[a.itemKey]=a;});
   const items=[];
   const pushOnce=(dateStr,label,type,familyId,entityId)=>{
-    if(!dateStr)return; const t=new Date(dateStr); if(isNaN(t.getTime()))return;
+    if(!dateStr)return; const t=parseLocalDate(dateStr); if(isNaN(t.getTime()))return;
     const t0=new Date(t.getFullYear(),t.getMonth(),t.getDate());
     const days=Math.round((t0-today)/86400000);
     if(days>windowDays)return;
@@ -6449,7 +6494,7 @@ function collectDeadlines({tasks=[],properties=[],deals=[],contacts=[],families=
     items.push({key,dateISO,days,label,type,familyName:famName(familyId),overdue:!ack&&days<0,done:!!ack,completedBy:ack?ack.completedBy:null,completedAt:ack?ack.completedAt:null,familyId,occurrenceDate:dateISO});
   };
   const pushAnnual=(dateStr,label,type,familyId,entityId)=>{
-    if(!dateStr)return; const t=new Date(dateStr); if(isNaN(t.getTime()))return;
+    if(!dateStr)return; const t=parseLocalDate(dateStr); if(isNaN(t.getTime()))return;
     let next=new Date(today.getFullYear(),t.getMonth(),t.getDate());
     if(next<today) next=new Date(today.getFullYear()+1,t.getMonth(),t.getDate());
     const days=Math.round((next-today)/86400000);
@@ -7654,7 +7699,7 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
   const recent=[...selfServe].sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0)).slice(0,10);
 
   const fmtWeek=d=>d.toLocaleDateString(undefined,{month:"short",day:"numeric"});
-  const fmtDate=d=>d?new Date(d).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}):"—";
+  const fmtDate=d=>d?asDate(d).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}):"—";
   const backBtnStyle={background:"none",border:`1px solid ${B.border}`,color:B.textSoft,cursor:"pointer",fontSize:12,fontFamily:"inherit",display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:6,marginBottom:16};
 
   // ── Plan drill-down: households on one plan ─────────────────────────────
@@ -8129,7 +8174,7 @@ function VaultSearchResults({hits,searching,query,onDownload,onClear}){
             </div>
             <div style={{fontSize:12,color:B.textMute,marginTop:3}}>
               {h.located_in}{h.file_size?` · ${fmtSize(h.file_size)}`:""}
-              {h.expiry_date?` · expires ${new Date(h.expiry_date).toLocaleDateString("en-US",{day:"numeric",month:"short",year:"numeric"})}`:""}
+              {h.expiry_date?` · expires ${parseLocalDate(h.expiry_date).toLocaleDateString("en-US",{day:"numeric",month:"short",year:"numeric"})}`:""}
             </div>
           </div>
           <Btn small onClick={()=>onDownload({filePath:h.file_path,name:h.name})}>Download</Btn>
@@ -13512,7 +13557,7 @@ const entTd={fontSize:12.5,color:B.text,padding:"9px 10px",borderBottom:`1px sol
 const entMoney0=n=>(Number(n)<0?"-":"")+"$"+Math.abs(Math.round(Number(n)||0)).toLocaleString("en-US");
 const ENT_HOW={signup_code:"Code at signup",client_join:"Client joined with code",admin_move:"Admin move",admin_created:"Admin created"};
 const ENT_EVENT={joined:"Joined",moved:"Moved",removed:"Removed",code_rotated:"Code rotated",default_expert_set:"Default Expert set",skin_linked:"Skin or domain linked",status_changed:"Status changed"};
-const entDay=v=>v?new Date(v).toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"}):"—";
+const entDay=v=>v?asDate(v).toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"}):"—";
 const entCodeLink=code=>`${window.location.origin}/signup?code=${encodeURIComponent(code)}`;
 // Same formula the household's own dashboard uses.
 function entNetWorth(props,accts,vals){
@@ -13850,7 +13895,7 @@ function EntPeople({row,data,toast,onChanged}){
   const[agreed,setAgreed]=useState(false);
   const[note,setNote]=useState("");
   const[busy,setBusy]=useState(false);
-  const todayIso=new Date().toISOString().slice(0,10);
+  const todayIso=localDayISO();
   const blankEnroll={hh:"",owner:"",email:"",plan:"",start:todayIso,agreed:false,how:""};
   const[en,setEn]=useState(blankEnroll);
   const[enBusy,setEnBusy]=useState(false);
@@ -14053,7 +14098,7 @@ function EntContract({row,toast,onChanged}){
       <div style={entLab}>Rebate test</div>
       <p style={{fontSize:12.5,color:B.textSoft,margin:"0 0 12px",lineHeight:1.6,maxWidth:700}}>
         Revenue billed through ORDANIS to this firm's households (plan fees plus usage, from the billing ledger), over the 12 months before the maintenance fee is due. It leaves out the build and maintenance fees the firm itself pays.
-        {w.hasDue?` Window: ${entDay(w.fromISO+"T00:00:00Z")} to ${entDay(w.dueISO+"T00:00:00Z")} (next fee due).`:" Set a maintenance start date to measure the right window. Until then this shows the next 12 months back from the end of this month."}
+        {w.hasDue?` Window: ${entDay(w.fromISO)} to ${entDay(w.dueISO)} (next fee due).`:" Set a maintenance start date to measure the right window. Until then this shows the next 12 months back from the end of this month."}
       </p>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(190px,100%),1fr))",gap:10}}>
         <EntTile label="Revenue in the window" value={win==null?"…":money2(win)} sub={win===0?"Nothing in the ledger yet":undefined}/>

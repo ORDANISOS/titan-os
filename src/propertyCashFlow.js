@@ -36,6 +36,9 @@
 // places at once, which is far easier to notice.
 
 // Monthly amount -> annual, matching FREQ_PER_YEAR in App.jsx.
+// Today as a YYYY-MM-DD date in local time (toISOString() is UTC, which is tomorrow after ~8pm Eastern).
+const localToday = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
 const M = 12;
 
 // Each derived line: what it is, where it comes from, and which category it totals
@@ -127,7 +130,7 @@ export function derivePropertyEvents(properties, { includeRental = true, forProj
         category,
         amount: Math.round(monthly * 100) / 100,
         frequency: "monthly",
-        startDate: new Date().toISOString().slice(0, 10),
+        startDate: localToday(),
         endDate: null,
         taxTreatment: "none",
         notes: `From property record: ${addr}`,
@@ -176,7 +179,7 @@ export function derivePropertyEvents(properties, { includeRental = true, forProj
         description: addr,
         amount: rent,
         frequency: "monthly",
-        startDate: new Date().toISOString().slice(0, 10),
+        startDate: localToday(),
         endDate: null,
         taxTreatment: "ordinary",
         notes: `From property record: ${addr}. Costs are itemised as separate expense lines.`,
