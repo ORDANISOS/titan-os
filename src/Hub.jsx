@@ -16,6 +16,9 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { ASSISTANT_NAME, jarvisMarkSvg, downloadJarvisMark } from "./jarvisMark.js";
+
+const MARK_SRC = `data:image/svg+xml;utf8,${encodeURIComponent(jarvisMarkSvg({ size: 96 }))}`;
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
@@ -110,9 +113,10 @@ function Shell({ children }) {
 
 function Wordmark({ size = 22 }) {
   return (
-    <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-      <span style={{ fontFamily: HEAD, fontSize: size, letterSpacing: "0.32em", color: C.gold }}>ORDANIS</span>
-      <span style={{ ...hudLabel, color: C.mute }}>Command</span>
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <img src={MARK_SRC} alt="" width={size + 14} height={size + 14} style={{ borderRadius: 8 }} />
+      <span style={{ fontFamily: HEAD, fontSize: size, letterSpacing: "0.32em", color: C.gold }}>{ASSISTANT_NAME.toUpperCase()}</span>
+      <span style={{ ...hudLabel, color: C.mute }}>by ORDANIS</span>
     </div>
   );
 }
@@ -145,7 +149,7 @@ function Core({ state, level }) {
   const label = { idle: "Standing by", listening: "Listening", thinking: "Working", speaking: "Speaking", error: "Attention" }[state];
   return (
     <div style={{ position: "relative", width: "min(62vw, 340px)", aspectRatio: "1 / 1", margin: "0 auto" }}>
-      <svg viewBox="0 0 400 400" width="100%" height="100%" role="img" aria-label={`ORDANIS core: ${label}`}
+      <svg viewBox="0 0 400 400" width="100%" height="100%" role="img" aria-label={`${ASSISTANT_NAME}: ${label}`}
         style={{ filter: `drop-shadow(0 0 ${18 * glow}px rgba(201,169,97,${glow}))` }}>
         <defs>
           <radialGradient id="hubOrb" cx="50%" cy="45%" r="55%">
@@ -224,7 +228,7 @@ function SignIn({ onDone }) {
   return (
     <GateCard title="Administrator sign-in">
       <p style={{ color: C.mute, fontSize: 14, lineHeight: 1.5, marginTop: 0 }}>
-        The command hub is for ORDANIS administrators. You'll confirm with your authenticator app next.
+        {ASSISTANT_NAME} is for ORDANIS administrators. You'll confirm with your authenticator app next.
       </p>
       <form onSubmit={submit} style={{ display: "grid", gap: 12 }}>
         <label style={hudLabel}>Email
@@ -327,27 +331,158 @@ function MfaEnroll({ onDone, onSignOut }) {
 }
 
 // ── The console ────────────────────────────────────────────────────────────────
+//
+// Two ways to talk:
+// - Conversation (default where the browser supports speech): tap the core (or press space)
+//   and just talk. A short pause sends what you said; the answer is spoken, and the hub
+//   listens again for a follow-up. Say "that's all" (or stay quiet for a few seconds) to end.
+//   "Never mind" drops what you just said. Tap the core while it's talking to cut in.
+// - Push to talk: hold the mic (or the space bar), release, check the words, press Send.
+// Conversation mode sends without a review step. That's acceptable while every tool is
+// read-only; any future write action gets a spoken read-back and an explicit "yes" first.
 
-function Console({ user, onSignOut }) {
+const ACKS = ["Let me check.", "One moment.", "Looking now.", "Give me a second.", "On it.", "Checking."];
+const HELLOS = ["What do you need?", "What can I look up?", "Go ahead, I'm listening.", "I'm here. What's up?"];
+// "Jarvis, how many…" / "…thanks, Jarvis": the name is a form of address, not part of the command.
+const stripName = (s) => s.replace(new RegExp(`^(hey|ok(ay)?|hi)?[,\\s]*${ASSISTANT_NAME}[,.!?\\s]*|[,\\s]+${ASSISTANT_NAME}[.!?]*$`, "gi"), "").trim();
+const BYES = ["Sounds good. I'll be here.", "Okay. Call me back anytime.", "Got it. I'm here when you need me."];
+const END_RE = /^(ok(ay)?[,.]?\s+)?(thanks?( you)?[,.!]?\s*)?(that'?s (all|it|everything)|i'?m (done|good|all set)|we'?re (done|good)|goodbye|bye|stop listening|end (the )?conversation)[.!]?$/i;
+const THANKS_ONLY_RE = /^(thanks?( you)?|thank you( so much)?|perfect,? thanks?)[.!]?$/i;
+const CANCEL_RE = /^(never ?mind|cancel( that)?|scratch that|forget (it|that))[.!]?$/i;
+const SILENCE_MS = 1400;     // pause that ends a spoken command in conversation mode
+const NO_SPEECH_MS = 8000;   // quiet this long and the conversation closes
+
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+// Sentence split for captions and natural pacing. Only splits where the next sentence starts,
+// so "$4,200.50" or "St. Louis" mid-sentence stay whole.
+const ABBREV_END = /\b(Mr|Mrs|Ms|Dr|St|Jr|Sr|vs|Inc|Co|Ltd|No|Mt)\.$/;
+const splitSentences = (s) => String(s || "").split(/(?<=[.!?])\s+(?=["'(A-Z0-9])/).reduce((out, part) => {
+  const t = part.trim();
+  if (!t) return out;
+  if (out.length && ABBREV_END.test(out[out.length - 1])) out[out.length - 1] += ` ${t}`; else out.push(t);
+  return out;
+}, []);
+
+const timeOfDay = () => { const h = new Date().getHours(); return h < 12 ? "morning" : h < 17 ? "afternoon" : "evening"; };
+
+// Best-sounding voices first: neural/online/enhanced voices beat the robotic defaults.
+function rankVoices(list) {
+  const score = (v) => {
+    if (!/^en/i.test(v.lang)) return -1;
+    let s = 0;
+    if (/natural|neural|online|premium|enhanced/i.test(v.name)) s += 50;
+    if (/Daniel|Ryan|Arthur|Oliver|Thomas|Sonia|Libby|Serena|Kate|Aria|Jenny|Guy|Samantha|Google UK English|Google US English/i.test(v.name)) s += 20;
+    if (/en[-_]GB/i.test(v.lang)) s += 6;
+    if (/albert|bad news|bahh|bells|boing|bubbles|cellos|fred|good news|jester|junior|organ|ralph|superstar|trinoids|whisper|wobble|zarvox|grandma|grandpa|eddy|flo|reed|rocko|sandy|shelley/i.test(v.name)) s -= 80;
+    return s;
+  };
+  return list.filter((v) => score(v) >= 0).sort((a, b) => score(b) - score(a));
+}
+
+function Console({ user, firstName: initialName, onSignOut }) {
   const [text, setText] = useState("");
+  const [heard, setHeard] = useState("");
   const [inputMode, setInputMode] = useState("typed");
   const [coreState, setCoreState] = useState("idle");
   const [level, setLevel] = useState(0);
-  const [answer, setAnswer] = useState("Good to see you. Hold the microphone, or the space bar, and ask me about the platform.");
+  const [name, setName] = useState(initialName || "");
+  const [lines, setLines] = useState(() => [
+    `Good ${timeOfDay()}${initialName ? `, ${initialName}` : ""}.`,
+    SpeechRec ? "Tap the core, or press the space bar, and talk to me." : "Type a question below and I'll look it up.",
+  ]);
+  const [spokenIdx, setSpokenIdx] = useState(-1);
   const [log, setLog] = useState([]); // {at, command, answer, tools, requestId, error}
   const [voiceOn, setVoiceOn] = useState(() => store.get("hub.voiceReplies", true));
+  const [mode, setMode] = useState(() => (SpeechRec ? store.get("hub.mode", "conversation") : "push"));
+  const [voices, setVoices] = useState([]);
+  const [voiceName, setVoiceName] = useState(() => store.get("hub.voice", ""));
+  const [convoOpen, setConvoOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [micErr, setMicErr] = useState("");
+  const [hint, setHint] = useState("");
+
   const recRef = useRef(null);
-  const holdingRef = useRef(false);
+  const listeningRef = useRef(false);
+  const endingRef = useRef(false);
   const finalRef = useRef("");
+  const heardRef = useRef("");
+  const silenceTimer = useRef(null);
+  const noSpeechTimer = useRef(null);
   const audioRef = useRef(null);
   const textRef = useRef(null);
   const historyRef = useRef([]);
+  const speakTokenRef = useRef(0);
+  const interruptRef = useRef(0);
+  const greetedRef = useRef(false);
+  const busyRef = useRef(false);
+  const coreRef = useRef("idle");
+  const convoRef = useRef(false);
+  const modeRef = useRef(mode);
+  const voiceOnRef = useRef(voiceOn);
+  const nameRef = useRef(name);
+  const voiceRef = useRef(null);
+  const sendRef = useRef(null);
+  const onCoreRef = useRef(null);
 
-  useEffect(() => { store.set("hub.voiceReplies", voiceOn); if (!voiceOn && canSpeak) window.speechSynthesis.cancel(); }, [voiceOn]);
+  const voice = voices.find((v) => v.name === voiceName) || voices[0] || null;
+  useEffect(() => { coreRef.current = coreState; }, [coreState]);
+  useEffect(() => { modeRef.current = mode; store.set("hub.mode", mode); }, [mode]);
+  useEffect(() => { nameRef.current = name; }, [name]);
+  useEffect(() => { voiceRef.current = voice; }, [voice]);
+  useEffect(() => {
+    voiceOnRef.current = voiceOn; store.set("hub.voiceReplies", voiceOn);
+    if (!voiceOn && canSpeak) window.speechSynthesis.cancel();
+  }, [voiceOn]);
+  useEffect(() => { if (voiceName) store.set("hub.voice", voiceName); }, [voiceName]);
+  useEffect(() => {
+    if (!canSpeak) return undefined;
+    const load = () => setVoices(rankVoices(window.speechSynthesis.getVoices()));
+    load();
+    window.speechSynthesis.addEventListener("voiceschanged", load);
+    return () => window.speechSynthesis.removeEventListener("voiceschanged", load);
+  }, []);
+  useEffect(() => () => { // leaving the console: stop talking and listening
+    speakTokenRef.current++; if (canSpeak) window.speechSynthesis.cancel();
+    endingRef.current = true; try { recRef.current?.abort(); } catch { /* not running */ }
+  }, []);
 
-  // Mic level for the core while listening (local only; the audio never leaves this tab).
+  const setConvo = (open) => { convoRef.current = open; setConvoOpen(open); };
+  const clearTimers = () => { clearTimeout(silenceTimer.current); clearTimeout(noSpeechTimer.current); };
+  const withName = (s) => (nameRef.current && Math.random() < 0.5 ? s.replace(/^(\S+?)([.,!?])?(\s|$)/, `$1, ${nameRef.current}$2$3`) : s);
+
+  // ── Speaking ──
+  const stopSpeaking = () => { speakTokenRef.current++; if (canSpeak) window.speechSynthesis.cancel(); };
+
+  // Speaks sentence by sentence (natural pacing, and avoids Chrome cutting off long utterances).
+  // Resolves true when it finishes, false if it was cut off.
+  const speakLines = (list, { queue = false, caption = true, core = true } = {}) => new Promise((resolve) => {
+    if (!voiceOnRef.current || !canSpeak || !list.length) { resolve(true); return; }
+    if (!queue) stopSpeaking();
+    const token = speakTokenRef.current;
+    list.forEach((line, i) => {
+      const u = new window.SpeechSynthesisUtterance(line.replace(/[*#_`]/g, ""));
+      if (voiceRef.current) { u.voice = voiceRef.current; u.lang = voiceRef.current.lang; }
+      u.rate = 1.0 + (Math.random() * 0.06 - 0.02);
+      u.pitch = 1;
+      u.onstart = () => {
+        if (token !== speakTokenRef.current) return;
+        if (core) setCoreState("speaking");
+        if (caption) setSpokenIdx(i);
+      };
+      const done = (ok) => {
+        if (!ok || token !== speakTokenRef.current) { resolve(false); return; }
+        if (i === list.length - 1) { if (caption) setSpokenIdx(list.length); resolve(true); }
+      };
+      u.onend = () => done(true);
+      u.onerror = (e) => done(!(e.error === "interrupted" || e.error === "canceled"));
+      window.speechSynthesis.speak(u);
+    });
+  });
+
+  // Words on screen with the sentence being spoken highlighted.
+  const show = (list) => { setLines(list); setSpokenIdx(voiceOnRef.current && canSpeak ? -1 : list.length); };
+
+  // ── Mic level for the core (local only; the audio never leaves this tab) ──
   const startLevel = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -359,91 +494,194 @@ function Console({ user, onSignOut }) {
       const tick = () => { an.getByteTimeDomainData(buf); let s = 0; for (const v of buf) s += Math.abs(v - 128); setLevel(s / buf.length / 24); raf = requestAnimationFrame(tick); };
       tick();
       audioRef.current = () => { cancelAnimationFrame(raf); stream.getTracks().forEach((t) => t.stop()); ctx.close(); setLevel(0); };
-    } catch { /* level meter is decoration; speech recognition reports real mic errors */ }
+    } catch { /* the level meter is decoration; recognition reports real mic errors */ }
   };
   const stopLevel = () => { if (audioRef.current) { audioRef.current(); audioRef.current = null; } };
 
-  const startListening = useCallback(() => {
-    if (!SpeechRec || holdingRef.current || busy) return;
-    if (canSpeak) window.speechSynthesis.cancel();
-    holdingRef.current = true;
-    setMicErr("");
-    finalRef.current = "";
+  // ── Listening ──
+  const startListening = () => {
+    if (!SpeechRec || listeningRef.current || busyRef.current) return;
+    stopSpeaking();
+    setMicErr(""); setHint("");
+    const convo = modeRef.current === "conversation";
+    listeningRef.current = true; endingRef.current = false;
+    finalRef.current = ""; heardRef.current = ""; setHeard("");
     const rec = new SpeechRec();
     rec.lang = "en-US"; rec.interimResults = true; rec.continuous = true;
+    clearTimers();
+    if (convo) noSpeechTimer.current = setTimeout(() => { if (!heardRef.current.trim()) endListening("timeout"); }, NO_SPEECH_MS);
     rec.onresult = (ev) => {
       let interim = "";
       for (let i = ev.resultIndex; i < ev.results.length; i++) {
         const r = ev.results[i];
         if (r.isFinal) finalRef.current += r[0].transcript; else interim += r[0].transcript;
       }
-      setText((finalRef.current + interim).trimStart());
+      const t = (finalRef.current + interim).trim();
+      heardRef.current = t; setHeard(t); setText(t);
+      if (convo && t) { clearTimeout(silenceTimer.current); silenceTimer.current = setTimeout(() => endListening("pause"), SILENCE_MS); }
     };
     rec.onerror = (ev) => {
-      if (ev.error === "not-allowed" || ev.error === "service-not-allowed") setMicErr("Microphone access is blocked. Allow it in the browser, or type instead.");
-      else if (ev.error !== "no-speech" && ev.error !== "aborted") setMicErr("I couldn't hear that clearly. Try again or type it.");
+      if (ev.error === "not-allowed" || ev.error === "service-not-allowed") {
+        setMicErr("Microphone access is blocked. Allow it in the browser, or type instead.");
+        endingRef.current = true; setConvo(false);
+      } else if (ev.error !== "no-speech" && ev.error !== "aborted") setMicErr("I couldn't hear that clearly. Try again or type it.");
     };
-    rec.onend = () => { setCoreState((s) => (s === "listening" ? "idle" : s)); stopLevel(); };
+    rec.onend = () => {
+      // Chrome stops recognition on its own after a while; keep going while we're still listening.
+      if (listeningRef.current && convo && !endingRef.current) { try { rec.start(); return; } catch { /* fall through */ } }
+      listeningRef.current = false; stopLevel(); clearTimers();
+      setCoreState((s) => (s === "listening" ? "idle" : s));
+    };
     recRef.current = rec;
-    try { rec.start(); setCoreState("listening"); setInputMode("voice"); startLevel(); } catch { holdingRef.current = false; }
-  }, [busy]);
-
-  const stopListening = useCallback(() => {
-    if (!holdingRef.current) return;
-    holdingRef.current = false;
-    try { recRef.current?.stop(); } catch { /* already stopped */ }
-    setTimeout(() => textRef.current?.focus(), 50);
-  }, []);
-
-  // Space bar push-to-talk when focus isn't in a text field.
-  useEffect(() => {
-    const typing = (el) => el && (el.tagName === "TEXTAREA" || el.tagName === "INPUT" || el.isContentEditable);
-    const down = (e) => { if (e.code === "Space" && !e.repeat && !typing(document.activeElement)) { e.preventDefault(); startListening(); } };
-    const up = (e) => { if (e.code === "Space" && holdingRef.current) { e.preventDefault(); stopListening(); } };
-    window.addEventListener("keydown", down); window.addEventListener("keyup", up);
-    return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
-  }, [startListening, stopListening]);
-
-  const speak = (s) => {
-    if (!voiceOn || !canSpeak || !s) { setCoreState("idle"); return; }
-    const u = new window.SpeechSynthesisUtterance(s.replace(/[*#_`]/g, ""));
-    const voices = window.speechSynthesis.getVoices();
-    u.voice = voices.find((v) => /Daniel|Google UK English Male|Arthur/i.test(v.name))
-      || voices.find((v) => v.lang === "en-GB") || voices.find((v) => v.lang?.startsWith("en")) || null;
-    u.rate = 1.02; u.pitch = 0.95;
-    u.onstart = () => setCoreState("speaking");
-    u.onend = u.onerror = () => setCoreState("idle");
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(u);
+    try { rec.start(); setCoreState("listening"); setInputMode("voice"); startLevel(); } catch { listeningRef.current = false; }
   };
 
-  const send = async (override) => {
+  // why: pause | tap | release | timeout
+  const endListening = (why) => {
+    if (!listeningRef.current) return;
+    clearTimers(); endingRef.current = true; listeningRef.current = false;
+    try { recRef.current?.stop(); } catch { /* already stopped */ }
+    stopLevel(); setCoreState("idle");
+    const said = heardRef.current.trim();
+    setHeard("");
+    if (modeRef.current !== "conversation") { setTimeout(() => textRef.current?.focus(), 50); return; } // push to talk: review, then Send
+    if (why === "timeout" || !said) {
+      setConvo(false); setText("");
+      setHint("I'll be here. Tap the core when you need me.");
+      return;
+    }
+    handleUtterance(said);
+  };
+
+  const handleUtterance = async (raw) => {
+    const said = stripName(raw) || raw;
+    if (CANCEL_RE.test(said)) {
+      setText("");
+      await speakLines([pick(["Okay.", "Sure, dropping that.", "No problem."])], { caption: false });
+      if (convoRef.current) startListening();
+      return;
+    }
+    if (END_RE.test(said) || THANKS_ONLY_RE.test(said)) {
+      setText(""); setConvo(false);
+      const bye = THANKS_ONLY_RE.test(said) ? withName(pick(["You're welcome.", "Anytime.", "Happy to help."])) : withName(pick(BYES));
+      show([bye]);
+      await speakLines([bye]);
+      setCoreState("idle");
+      return;
+    }
+    sendRef.current(said, "voice");
+  };
+
+  // ── Sending ──
+  const send = async (override, how) => {
     const command = (override ?? text).trim();
-    if (!command || busy) return;
-    const mode = override ? "typed" : inputMode;
-    setBusy(true); setCoreState("thinking"); setAnswer("");
+    if (!command || busyRef.current) return;
+    if (listeningRef.current) { clearTimers(); endingRef.current = true; listeningRef.current = false; try { recRef.current?.stop(); } catch { /* stopped */ } stopLevel(); }
+    window.dispatchEvent(new window.Event("hub-activity")); // talking counts as activity for the idle lock
+    const sentMode = how || (override ? "typed" : inputMode);
+    const interruptsAtSend = interruptRef.current;
+    busyRef.current = true; setBusy(true); setCoreState("thinking"); setHint(""); setHeard("");
+    stopSpeaking();
+    // A short spoken acknowledgement if the answer takes more than a moment, so there's no dead air.
+    const ackTimer = voiceOnRef.current && canSpeak
+      ? setTimeout(() => speakLines([pick(ACKS)], { caption: false, core: false }), 700) : null;
+
     let out;
     try {
       const { data, error } = await sb.functions.invoke("hub-command", {
-        body: { command, inputMode: mode, module: "platform", history: historyRef.current.slice(-6) },
+        body: { command, inputMode: sentMode, module: "platform", history: historyRef.current.slice(-10) },
       });
       if (error) {
         let body = {};
         try { body = await error.context.json(); } catch { /* non-JSON error */ }
         out = { error: body.error || "I couldn't reach the hub just now.", requestId: body.request_id, mfa: body.mfa_required };
-      } else out = { answer: data.answer, tools: data.tools || [], requestId: data.request_id };
+      } else out = { answer: data.answer, tools: data.tools || [], requestId: data.request_id, firstName: data.first_name };
     } catch {
       out = { error: "I couldn't reach the hub just now." };
     }
-    setBusy(false);
+    clearTimeout(ackTimer);
+    busyRef.current = false; setBusy(false);
     setLog((l) => [{ at: new Date(), command, ...out }, ...l].slice(0, 30));
     if (out.mfa) { onSignOut(); return; }
-    if (out.error) { setAnswer(out.error); setCoreState("error"); setTimeout(() => setCoreState("idle"), 2500); return; }
-    historyRef.current = [...historyRef.current, { role: "user", content: command }, { role: "assistant", content: out.answer }].slice(-6);
-    setAnswer(out.answer);
     setText(""); setInputMode("typed");
-    speak(out.answer);
+
+    if (out.error) {
+      setConvo(false);
+      show([out.error]); setCoreState("error");
+      await speakLines([out.error], { queue: true, core: false });
+      setTimeout(() => setCoreState((s) => (s === "error" ? "idle" : s)), 1500);
+      return;
+    }
+    if (out.firstName && !nameRef.current) setName(out.firstName);
+    historyRef.current = [...historyRef.current, { role: "user", content: command }, { role: "assistant", content: out.answer }].slice(-10);
+    const said = splitSentences(out.answer);
+    show(said);
+    // If they cut in while we were working, show the answer but don't talk over them.
+    if (interruptRef.current === interruptsAtSend) {
+      const finished = await speakLines(said, { queue: true });
+      if (!finished) return;
+    }
+    setCoreState("idle");
+    if (convoRef.current && modeRef.current === "conversation") setTimeout(() => startListening(), 250);
   };
+  sendRef.current = send;
+
+  // ── The core is the main control ──
+  const onCore = async () => {
+    if (!SpeechRec) { textRef.current?.focus(); return; }
+    if (coreRef.current === "speaking") { // cut in
+      interruptRef.current++; stopSpeaking(); setCoreState("idle");
+      if (modeRef.current === "conversation") { setConvo(true); startListening(); }
+      return;
+    }
+    if (listeningRef.current) { endListening("tap"); return; }
+    if (busyRef.current) return;
+    if (modeRef.current === "conversation") {
+      setConvo(true);
+      if (!greetedRef.current && voiceOnRef.current && canSpeak) {
+        greetedRef.current = true;
+        const hi = `Hi${nameRef.current ? ` ${nameRef.current}` : ""}, ${ASSISTANT_NAME} here. ${pick(HELLOS)}`;
+        await speakLines([hi], { caption: false });
+      }
+      startListening();
+    } else startListening();
+  };
+  onCoreRef.current = onCore;
+
+  const endConversation = () => {
+    setConvo(false); interruptRef.current++; stopSpeaking();
+    if (listeningRef.current) { clearTimers(); endingRef.current = true; listeningRef.current = false; try { recRef.current?.abort(); } catch { /* stopped */ } stopLevel(); }
+    setHeard(""); setCoreState("idle"); setHint("Conversation ended. Tap the core to start again.");
+  };
+
+  // Space bar: tap to talk in conversation mode, hold to talk in push-to-talk mode.
+  useEffect(() => {
+    const typing = (el) => el && (el.tagName === "TEXTAREA" || el.tagName === "INPUT" || el.tagName === "SELECT" || el.isContentEditable);
+    const down = (e) => {
+      if (e.code !== "Space" || e.repeat || typing(document.activeElement)) return;
+      e.preventDefault();
+      if (modeRef.current === "conversation") onCoreRef.current();
+      else startListening();
+    };
+    const up = (e) => {
+      if (e.code === "Space" && modeRef.current !== "conversation" && listeningRef.current) { e.preventDefault(); endListening("release"); }
+    };
+    window.addEventListener("keydown", down); window.addEventListener("keyup", up);
+    return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
+  });
+
+  const coreHint = coreState === "listening"
+    ? (mode === "conversation" ? "I'm listening. Pause when you're done." : "Listening. Release when you're done.")
+    : coreState === "speaking" ? "Tap to cut in."
+    : coreState === "thinking" ? "" : hint || (SpeechRec ? (mode === "conversation" ? "Tap the core to talk." : "Hold the mic or space bar to talk.") : "");
+
+  const segBtn = (key, label) => (
+    <button key={key} className="hub-btn" onClick={() => { if (key !== mode) { endConversation(); setHint(""); setMode(key); } }}
+      aria-pressed={mode === key} disabled={!SpeechRec} style={{
+        fontFamily: BODY, fontSize: 11, letterSpacing: "0.08em", padding: "6px 12px", border: 0, cursor: SpeechRec ? "pointer" : "default",
+        background: mode === key ? C.gold : "transparent", color: mode === key ? C.navy : C.gold, fontWeight: 700,
+      }}>{label}</button>
+  );
 
   return (
     <Shell>
@@ -477,57 +715,107 @@ function Console({ user, onSignOut }) {
           <div style={{ ...hudLabel, marginTop: 20 }}>Try asking</div>
           <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
             {SUGGESTIONS.map((s) => (
-              <button key={s} className="hub-btn" disabled={busy} onClick={() => send(s)} style={{
+              <button key={s} className="hub-btn" disabled={busy} onClick={() => send(s, "typed")} style={{
                 textAlign: "left", background: "none", border: `1px dashed ${C.line}`, borderRadius: 8, color: C.paper,
                 fontSize: 12, padding: "8px 10px", cursor: "pointer", fontFamily: BODY, lineHeight: 1.35,
               }}>{s}</button>
             ))}
           </div>
+          <div style={{ ...hudLabel, marginTop: 20 }}>Logo</div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8 }}>
+            <img src={MARK_SRC} alt={`${ASSISTANT_NAME} logo`} width={52} height={52} style={{ borderRadius: 10, border: `1px solid ${C.line}` }} />
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <GoldButton kind="ghost" onClick={() => downloadJarvisMark("svg")} style={{ padding: "5px 12px", fontSize: 11 }}>SVG</GoldButton>
+              <GoldButton kind="ghost" onClick={() => downloadJarvisMark("png", 1024)} style={{ padding: "5px 12px", fontSize: 11 }}>PNG</GoldButton>
+            </div>
+          </div>
         </aside>
 
-        <section style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18, minWidth: 0 }}>
-          <Core state={coreState} level={level} />
+        <section style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, minWidth: 0 }}>
+          <button className="hub-btn" onClick={() => onCore()} aria-label={
+            coreState === "speaking" ? "Interrupt" : coreState === "listening" ? "Stop listening" : `Talk to ${ASSISTANT_NAME}`}
+            style={{ background: "none", border: 0, padding: 0, cursor: SpeechRec ? "pointer" : "default", borderRadius: "50%", width: "100%" }}>
+            <Core state={coreState} level={level} />
+          </button>
+
+          <div aria-live="polite" style={{ minHeight: 48, textAlign: "center", maxWidth: 620, padding: "0 8px" }}>
+            {coreState === "listening" && heard
+              ? <span style={{ fontFamily: HEAD, fontStyle: "italic", fontSize: 20, color: C.gold }}>“{heard}”</span>
+              : <span style={{ fontSize: 13, color: C.mute }}>{coreHint}</span>}
+            {convoOpen && (
+              <div style={{ marginTop: 6 }}>
+                <button className="hub-btn" onClick={endConversation} style={{ background: "none", border: 0, color: C.mute, fontSize: 12, textDecoration: "underline", cursor: "pointer" }}>
+                  End conversation
+                </button>
+              </div>
+            )}
+          </div>
+
           <div aria-live="polite" style={{ ...panel, width: "100%", maxWidth: 680, minHeight: 84, boxSizing: "border-box" }}>
-            <div style={hudLabel}>Response</div>
-            <p style={{ fontFamily: HEAD, fontSize: 18, lineHeight: 1.55, margin: "8px 0 0", whiteSpace: "pre-wrap" }}>
-              {busy ? <span style={{ color: C.mute }}>Looking that up…</span> : answer}
+            <div style={hudLabel}>{ASSISTANT_NAME}</div>
+            <p style={{ fontFamily: HEAD, fontSize: 19, lineHeight: 1.6, margin: "8px 0 0" }}>
+              {busy ? <span style={{ color: C.mute }}>Looking that up…</span> : lines.map((l, i) => (
+                <span key={i} style={{
+                  color: spokenIdx === -1 || i <= spokenIdx || spokenIdx >= lines.length ? C.paper : "rgba(248,246,241,0.38)",
+                  textShadow: i === spokenIdx && coreState === "speaking" ? "0 0 14px rgba(201,169,97,0.55)" : "none",
+                  transition: "color 300ms, text-shadow 300ms",
+                }}>{l}{i < lines.length - 1 ? " " : ""}</span>
+              ))}
             </p>
           </div>
 
           <div style={{ ...panel, width: "100%", maxWidth: 680, boxSizing: "border-box" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span style={hudLabel}>Command {inputMode === "voice" && text ? "· heard — edit if needed" : ""}</span>
-              <label style={{ fontSize: 12, color: C.mute, display: "flex", gap: 6, alignItems: "center", cursor: canSpeak ? "pointer" : "default" }}>
-                <input type="checkbox" checked={voiceOn && canSpeak} disabled={!canSpeak} onChange={(e) => setVoiceOn(e.target.checked)} />
-                Read replies aloud
-              </label>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div role="group" aria-label="How to talk" style={{ display: "inline-flex", border: `1px solid ${C.gold}`, borderRadius: 999, overflow: "hidden", opacity: SpeechRec ? 1 : 0.4 }}>
+                {segBtn("conversation", "Conversation")}
+                {segBtn("push", "Push to talk")}
+              </div>
+              <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                {canSpeak && voices.length > 0 && (
+                  <label style={{ fontSize: 12, color: C.mute, display: "flex", gap: 6, alignItems: "center" }}>
+                    Voice
+                    <select value={voice?.name || ""} onChange={(e) => {
+                      setVoiceName(e.target.value);
+                      const v = voices.find((x) => x.name === e.target.value);
+                      if (v && voiceOnRef.current) { voiceRef.current = v; speakLines([`Hi${nameRef.current ? ` ${nameRef.current}` : ""}, this is ${ASSISTANT_NAME}. This is how I sound.`], { caption: false }); }
+                    }} style={{ background: "rgba(2,10,20,0.6)", color: C.paper, border: `1px solid ${C.line}`, borderRadius: 6, padding: "4px 6px", fontSize: 12, maxWidth: 170 }}>
+                      {voices.slice(0, 15).map((v) => <option key={v.name} value={v.name}>{v.name.replace(/^Microsoft\s|\s\(.*\)$/g, "")}</option>)}
+                    </select>
+                  </label>
+                )}
+                <label style={{ fontSize: 12, color: C.mute, display: "flex", gap: 6, alignItems: "center", cursor: canSpeak ? "pointer" : "default" }}>
+                  <input type="checkbox" checked={voiceOn && canSpeak} disabled={!canSpeak} onChange={(e) => setVoiceOn(e.target.checked)} />
+                  Speak replies
+                </label>
+              </div>
             </div>
-            <textarea ref={textRef} className="hub-input" rows={2} value={text} placeholder="Ask about households, obligations, tasks, plan changes…"
+            <textarea ref={textRef} className="hub-input" rows={2} value={text} placeholder="Or type: households, obligations, tasks, plan changes…"
               onChange={(e) => { setText(e.target.value); if (!e.target.value) setInputMode("typed"); }}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-              style={{ ...inputStyle, marginTop: 10, resize: "vertical", minHeight: 56 }} maxLength={1000} />
+              style={{ ...inputStyle, marginTop: 12, resize: "vertical", minHeight: 56 }} maxLength={1000} />
             <div style={{ display: "flex", gap: 12, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}>
-              {SpeechRec ? (
+              {SpeechRec && mode === "push" && (
                 <button className="hub-btn" aria-label="Hold to talk" disabled={busy}
                   onPointerDown={(e) => { e.preventDefault(); startListening(); }}
-                  onPointerUp={stopListening} onPointerLeave={stopListening} onPointerCancel={stopListening}
+                  onPointerUp={() => endListening("release")} onPointerLeave={() => endListening("release")} onPointerCancel={() => endListening("release")}
                   onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !e.repeat) { e.preventDefault(); startListening(); } }}
-                  onKeyUp={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); stopListening(); } }}
+                  onKeyUp={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); endListening("release"); } }}
                   style={{
-                    width: 64, height: 64, borderRadius: "50%", cursor: "pointer", touchAction: "none",
+                    width: 56, height: 56, borderRadius: "50%", cursor: "pointer", touchAction: "none",
                     border: `2px solid ${C.gold}`, color: coreState === "listening" ? C.navy : C.gold,
                     background: coreState === "listening" ? C.gold : "rgba(201,169,97,0.08)",
                     boxShadow: coreState === "listening" ? `0 0 24px ${C.gold}` : "none", transition: "all 120ms",
                   }}>
-                  <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
                   </svg>
                 </button>
-              ) : null}
+              )}
               <div style={{ flex: 1, minWidth: 160, fontSize: 12, color: C.mute, lineHeight: 1.45 }}>
-                {SpeechRec
-                  ? <>Hold to talk (or hold the space bar), release, check the words, then send. In Chrome, speech is processed by Google.</>
-                  : <>Voice isn't available in this browser. Type your command instead.</>}
+                {!SpeechRec ? <>Voice isn't available in this browser. Type your question instead.</>
+                  : mode === "conversation"
+                    ? <>Just talk; a short pause sends it. Say “never mind” to drop it, or “that's all” to finish. In Chrome, speech is processed by Google.</>
+                    : <>Hold to talk, release, check the words, then send. In Chrome, speech is processed by Google.</>}
                 {micErr && <div role="alert" style={{ color: C.red, marginTop: 4 }}>{micErr}</div>}
               </div>
               <GoldButton onClick={() => send()} disabled={busy || !text.trim()}>{busy ? "Working…" : "Send"}</GoldButton>
@@ -566,6 +854,7 @@ export default function Hub() {
   const [phase, setPhase] = useState("loading"); // loading | signin | denied | enroll | verify | ready | unconfigured
   const [user, setUser] = useState(null);
   const [factorId, setFactorId] = useState(null);
+  const [firstName, setFirstName] = useState("");
 
   const evaluate = useCallback(async () => {
     if (!sb) { setPhase("unconfigured"); return; }
@@ -573,8 +862,9 @@ export default function Hub() {
     if (!session) { setPhase("signin"); return; }
     const u = session.user;
     setUser(u);
-    const { data: prof } = await sb.from("user_profiles").select("role,active").eq("id", u.id).maybeSingle();
+    const { data: prof } = await sb.from("user_profiles").select("role,active,full_name").eq("id", u.id).maybeSingle();
     if (prof?.role !== "admin" || prof?.active === false) { setPhase("denied"); return; }
+    setFirstName(String(prof?.full_name || "").trim().split(/\s+/)[0] || "");
     const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
     if (aal?.currentLevel === "aal2") { setPhase("ready"); return; }
     const { data: factors } = await sb.auth.mfa.listFactors();
@@ -595,28 +885,28 @@ export default function Hub() {
     if (phase !== "ready") return;
     let timer = setTimeout(signOut, IDLE_LOCK_MS);
     const bump = () => { clearTimeout(timer); timer = setTimeout(signOut, IDLE_LOCK_MS); };
-    const evs = ["pointerdown", "keydown", "wheel", "touchstart"];
+    const evs = ["pointerdown", "keydown", "wheel", "touchstart", "hub-activity"]; // hub-activity: a voice command was sent
     evs.forEach((e) => window.addEventListener(e, bump, { passive: true }));
     return () => { clearTimeout(timer); evs.forEach((e) => window.removeEventListener(e, bump)); };
   }, [phase, signOut]);
 
-  useEffect(() => { document.title = "ORDANIS Command"; }, []);
+  useEffect(() => { document.title = `${ASSISTANT_NAME} · ORDANIS`; }, []);
 
   // Local design preview of the console (dev server only; stripped from production builds).
   // It has no session, so any command it sends is refused by hub-command.
   if (import.meta.env.DEV && window.location.search.includes("preview=console")) {
-    return <Console user={{ email: "preview@localhost" }} onSignOut={() => window.location.assign("/hub")} />;
+    return <Console user={{ email: "preview@localhost" }} firstName="Will" onSignOut={() => window.location.assign("/hub")} />;
   }
   if (phase === "loading") return <Shell><div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}><Core state="thinking" level={0} /></div></Shell>;
   if (phase === "unconfigured") return <GateCard title="Not configured"><p style={{ color: C.mute }}>This build has no Supabase connection set.</p></GateCard>;
   if (phase === "signin") return <SignIn onDone={evaluate} />;
   if (phase === "denied") return (
     <GateCard title="Administrators only">
-      <p style={{ color: C.mute, fontSize: 14, lineHeight: 1.5 }}>This account can't use the command hub. Your portal is still at the main address.</p>
+      <p style={{ color: C.mute, fontSize: 14, lineHeight: 1.5 }}>This account can't use {ASSISTANT_NAME}. Your portal is still at the main address.</p>
       <GoldButton kind="ghost" onClick={signOut}>Sign out</GoldButton>
     </GateCard>
   );
   if (phase === "enroll") return <MfaEnroll onDone={evaluate} onSignOut={signOut} />;
   if (phase === "verify") return <MfaVerify factorId={factorId} onDone={evaluate} onSignOut={signOut} />;
-  return <Console user={user} onSignOut={signOut} />;
+  return <Console user={user} firstName={firstName} onSignOut={signOut} />;
 }

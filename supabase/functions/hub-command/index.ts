@@ -268,11 +268,18 @@ async function runTool(db: SupabaseClient, name: string, input: Record<string, u
 }
 
 const SYSTEM_PROMPT = [
-  "You are the ORDANIS command hub: a voice console used by an ORDANIS platform administrator.",
-  "Answer the administrator's question about the platform using the read-only tools. Your reply is read aloud, so:",
-  "- Lead with the answer in one or two short spoken sentences. Then add only the detail that helps, up to about 80 words unless asked for more.",
-  "- No markdown tables, headings or code. Short plain lists are fine when naming several items.",
-  "- Say dates naturally (\"Tuesday, October 21\") and money with dollar amounts rounded sensibly.",
+  "You are Jarvis, the voice assistant in the ORDANIS command hub, talking with an ORDANIS platform administrator. If asked who you are, you're Jarvis, ORDANIS's platform assistant.",
+  "Answer questions about the platform using the read-only tools. This is a spoken conversation, so sound like a sharp, warm chief of staff talking across the desk, not a report:",
+  "- Lead with the answer in a sentence or two, the way a person would say it. Add only the detail that helps. Aim for under 60 words unless asked for more.",
+  "- Use contractions and everyday words. Vary how you open; don't start every reply the same way, and skip filler like \"Great question\" or \"Certainly!\".",
+  "- Use the administrator's first name now and then, when it feels natural, not in every reply.",
+  "- When there's an obvious next step, end with one short offer, like \"Want me to read them out?\" or \"Should I check their tasks too?\". Don't ask a question every time.",
+  "- If a request is unclear, ask one short clarifying question instead of guessing.",
+  "- Follow-ups like \"what about Premier?\" or \"and the Hendersons?\" refer to the earlier turns. Use them.",
+  "- Never read out IDs, UUIDs, emails or raw field names. Say names, counts, dates and amounts.",
+  "- No markdown, bullets, tables, headings or emoji: everything you write is spoken. For several items, say them as a natural list (\"three of them: the Smiths, the Lees and the Parks\").",
+  "- Say dates naturally (\"next Tuesday\", \"October 21\") and round money sensibly (\"about forty-two hundred dollars\" is fine when exact cents don't matter).",
+  "- If the administrator says thanks or chats, reply briefly and warmly.",
   "",
   "Rules:",
   "- You are read-only in this phase. You cannot create, change, send, delete, restore or email anything. If asked to, say that this hub can only look things up for now, and say what you can look up instead. Never say or imply that you did something.",
@@ -331,7 +338,9 @@ Deno.serve(async (req) => {
     const module = typeof payload?.module === "string" ? payload.module : "platform";
     audit.module = ["platform", "demo", "email", "backup"].includes(module) ? module : "platform";
 
-    const { data: prof } = await admin.from("user_profiles").select("role,active").eq("id", user.id).maybeSingle();
+    const { data: prof } = await admin.from("user_profiles").select("role,active,full_name").eq("id", user.id).maybeSingle();
+    // First name only, letters only, so the name field can't carry instructions into the prompt.
+    const firstName = String(prof?.full_name ?? "").trim().split(/\s+/)[0].replace(/[^\p{L}'-]/gu, "").slice(0, 30);
     audit.user_role = prof?.role ?? null;
 
     if (prof?.role !== "admin" || prof?.active === false) {
@@ -368,7 +377,7 @@ Deno.serve(async (req) => {
     // ── Conversation: the last few plain-text turns from this hub session ────────
     const messages: Anthropic.Beta.BetaMessageParam[] = [];
     if (Array.isArray(payload?.history)) {
-      for (const h of payload.history.slice(-6)) {
+      for (const h of payload.history.slice(-10)) {
         if (h && (h.role === "user" || h.role === "assistant") && typeof h.content === "string" && h.content.trim()) {
           messages.push({ role: h.role, content: h.content.slice(0, 2000) });
         }
@@ -377,7 +386,8 @@ Deno.serve(async (req) => {
     // The API wants the first message from the user.
     while (messages.length && messages[0].role !== "user") messages.shift();
     const today = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "America/New_York" });
-    messages.push({ role: "user", content: `(Today is ${today}.)\n\n${command}` });
+    const who = firstName ? ` The administrator's first name is ${firstName}.` : "";
+    messages.push({ role: "user", content: `(Today is ${today}.${who})\n\n${command}` });
 
     // ── Tool loop ───────────────────────────────────────────────────────────────
     const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
@@ -435,7 +445,7 @@ Deno.serve(async (req) => {
       // An unlogged answer is not returned: the audit trail comes first.
       return json({ error: "I couldn't record that command, so I won't answer it. Please try again.", request_id: requestId }, 500);
     }
-    return json({ answer, request_id: requestId, tools: toolLog.map((t) => ({ name: t.name, rows: t.rows, ok: t.ok })) });
+    return json({ answer, first_name: firstName || null, request_id: requestId, tools: toolLog.map((t) => ({ name: t.name, rows: t.rows, ok: t.ok })) });
   } catch (e) {
     console.error("hub-command error", e);
     await writeAudit({ status: "error", error: String((e as Error)?.message ?? e).slice(0, 500) });
