@@ -18,6 +18,7 @@
 import Anthropic from "npm:@anthropic-ai/sdk@0.133.0";
 import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2.49.4";
 import postgres from "npm:postgres@3.4.9";
+import { loadVapid, sendPush, PUSH_ENDPOINT, type Vapid } from "./webpush.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -27,6 +28,19 @@ const MODEL = Deno.env.get("HUB_MODEL") || "claude-opus-5-5";
 // Email portal (separate Supabase project), reached through its read-only `jarvis_reader` database
 // login. See ordanis-jarvis/connectors/email_portal_reader.sql. Unset = email lookups say so.
 const EMAILPORTAL_DB_URL = Deno.env.get("EMAILPORTAL_DB_URL") ?? "";
+// Lock-screen notifications (Web Push). Unset = notifications are skipped; briefings still work.
+const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY") ?? "";
+const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY") ?? "";
+const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") || "https://jarvis.ordanisos.com";
+
+// Never let a credential reach the logs or the audit trail. Database connection errors can include
+// the full connection string (user:password@host); every logged error passes through redact().
+const redact = (v: unknown): string =>
+  String(v instanceof Error ? (v.stack || v.message) : typeof v === "string" ? v : (() => { try { return JSON.stringify(v); } catch { return String(v); } })())
+    .replace(/(postgres(?:ql)?:\/\/)[^@\s'"]*@/gi, "$1***@")
+    .replace(/(password|passwd|pwd)=([^&\s'"]+)/gi, "$1=***");
+const consoleError = console.error.bind(console);
+console.error = (...args: unknown[]) => consoleError(...args.map((a) => (typeof a === "number" || typeof a === "boolean" ? a : redact(a))));
 
 const MAX_COMMAND_CHARS = 1000;
 const MAX_TOOL_ROUNDS = 6;
@@ -689,6 +703,10 @@ type EmailCtx = { userEmail: string; sql?: ReturnType<typeof postgres>; member?:
 
 async function emailSql(ctx: EmailCtx) {
   if (!EMAILPORTAL_DB_URL) throw new Error("email portal not connected (EMAILPORTAL_DB_URL unset)");
+  // Check the setting's shape first, so a bad value fails with a plain message (no URL echoed).
+  let host = "";
+  try { host = new URL(EMAILPORTAL_DB_URL).hostname; } catch { /* handled below */ }
+  if (!host) throw new Error("email connection setting is incomplete (missing server address)");
   ctx.sql ??= postgres(EMAILPORTAL_DB_URL, { max: 1, prepare: false, ssl: "require", idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
   return ctx.sql;
 }
@@ -993,6 +1011,53 @@ function dayAllowed(iso: number) {
 }
 const slotLabel = (t: string) => { const [h, m] = t.split(":").map(Number); return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`; };
 
+// ── Lock-screen notifications ────────────────────────────────────────────────────
+// The text shows on a locked phone, so it carries counts only: never names, amounts or details.
+let vapidCache: Promise<Vapid | null> | null = null;
+const vapid = () => (vapidCache ??= loadVapid(VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT).catch((e) => {
+  console.error("VAPID keys unusable", e);
+  return null;
+}));
+
+function briefingPushText(label: string, counts: Record<string, number>) {
+  const critical = counts.critical ?? 0;
+  const need = critical + (counts.high ?? 0) + (counts.medium ?? 0);
+  const tail = need === 0 ? "nothing needs you" : `${need} need${need === 1 ? "s" : ""} you${critical ? ` (${critical} critical)` : ""}`;
+  return { title: "Jarvis", body: `${label} briefing ready · ${tail}`, tag: "jarvis-briefing" };
+}
+
+type PushResult = { name: "web_push"; ok: boolean; devices: number; sent: number; removed: number; failed: number; skipped?: string };
+
+async function pushToUser(admin: SupabaseClient, userId: string, msg: { title: string; body: string; tag: string }, urgency: "normal" | "high" = "normal"): Promise<PushResult> {
+  const r: PushResult = { name: "web_push", ok: true, devices: 0, sent: 0, removed: 0, failed: 0 };
+  const v = await vapid();
+  if (!v) return { ...r, skipped: "push keys not set" };
+  const { data: subs, error } = await admin.from("jarvis_push_subscriptions").select("id,endpoint,p256dh,auth")
+    .eq("user_id", userId).order("created_at", { ascending: false }).limit(10);
+  if (error) return { ...r, ok: false, skipped: "could not read devices" };
+  r.devices = subs?.length ?? 0;
+  for (const s of subs ?? []) {
+    try {
+      const status = await sendPush(v, s, msg, { urgency });
+      if (status >= 200 && status < 300) {
+        r.sent++;
+        await admin.from("jarvis_push_subscriptions").update({ last_success_at: new Date().toISOString(), last_error: null }).eq("id", s.id);
+      } else if (status === 404 || status === 410) {
+        r.removed++; // the device unsubscribed or the app was removed
+        await admin.from("jarvis_push_subscriptions").delete().eq("id", s.id);
+      } else {
+        r.failed++;
+        await admin.from("jarvis_push_subscriptions").update({ last_error: `HTTP ${status}` }).eq("id", s.id);
+      }
+    } catch (e) {
+      r.failed++;
+      await admin.from("jarvis_push_subscriptions").update({ last_error: String((e as Error)?.message ?? e).slice(0, 200) }).eq("id", s.id);
+    }
+  }
+  r.ok = r.failed === 0;
+  return r;
+}
+
 async function runScheduledBriefings(admin: SupabaseClient, secret: string, requestId: string): Promise<Response> {
   const { data: ok, error } = await admin.rpc("jarvis_cron_ok", { p_secret: secret });
   if (error || ok !== true) return json({ error: "not allowed" }, 401);
@@ -1018,10 +1083,12 @@ async function runScheduledBriefings(admin: SupabaseClient, secret: string, requ
       const { error: insErr } = await admin.from("jarvis_briefings").insert({
         user_id: a.id, slot: slotKey, slot_label: slotLabel(slot), answer: b.answer, display: b.display, findings: b.findings, counts: b.counts, email_checked: scan.email_connected,
       });
+      const push = insErr ? null : await pushToUser(admin, a.id, briefingPushText(slotLabel(slot), b.counts), (b.counts.critical ?? 0) > 0 ? "high" : "normal")
+        .catch((e) => { console.error("briefing push failed", a.id, e); return null; });
       await admin.from("audit_log").insert({
         request_id: crypto.randomUUID(), source: "hub", module: "briefing-scheduled", command: `[scheduled ${slotLabel(slot)} briefing]`,
         user_id: a.id, user_email: a.email, user_role: "admin", aal: null, status: insErr ? "error" : "ok", error: insErr ? String(insErr.message).slice(0, 300) : null,
-        tool_calls: [{ name: "attention_scan", ok: scan.scan_errors.length === 0, rows: scan.items.length, failed_checks: scan.scan_errors }],
+        tool_calls: [{ name: "attention_scan", ok: scan.scan_errors.length === 0, rows: scan.items.length, failed_checks: scan.scan_errors }, ...(push ? [push] : [])],
         result_summary: `${b.answer}\n${JSON.stringify(b.counts)}`.slice(0, 2000), model: MODEL, environment: ENVIRONMENT,
       });
       results.push({ user: a.id, ok: !insErr, items: scan.items.length });
@@ -1141,6 +1208,53 @@ Deno.serve(async (req) => {
       audit.command = `[shared visual] ${title}`;
       const ok = await writeAudit({ status: "ok", result_summary: `Shared from the device via ${channel}.` });
       return json({ ok, request_id: requestId }, ok ? 200 : 500);
+    }
+    // Lock-screen notifications for this device: config (public key), subscribe, unsubscribe, test.
+    // Only the caller's own devices; every change and test is in the audit log.
+    if (typeof payload?.push === "string") {
+      const action = payload.push;
+      audit.module = "push";
+      if (action === "config") {
+        return json({ public_key: (await vapid()) ? VAPID_PUBLIC_KEY.trim() : null, request_id: requestId });
+      }
+      const sub = (payload.subscription ?? {}) as Record<string, unknown>;
+      const keys = (sub.keys ?? {}) as Record<string, unknown>;
+      const endpoint = typeof sub.endpoint === "string" ? sub.endpoint.slice(0, 1000) : "";
+      const device = clean(payload.device, 60) || null;
+      if (action === "subscribe") {
+        audit.command = "[notifications on]";
+        if (!PUSH_ENDPOINT.test(endpoint) || typeof keys.p256dh !== "string" || typeof keys.auth !== "string") {
+          await writeAudit({ status: "error", error: "not a supported push subscription" });
+          return json({ error: "This browser's notification service isn't supported.", request_id: requestId }, 400);
+        }
+        // Same device again (or an old row for it): replace it, owned by the caller.
+        await admin.from("jarvis_push_subscriptions").delete().eq("endpoint", endpoint);
+        const { error: insErr } = await admin.from("jarvis_push_subscriptions").insert({
+          user_id: user.id, endpoint, p256dh: keys.p256dh, auth: keys.auth, device_label: device,
+        });
+        const ok = await writeAudit({ status: insErr ? "error" : "ok", error: insErr ? String(insErr.message).slice(0, 300) : null, result_summary: `Notifications turned on${device ? ` for ${device}` : ""}.` });
+        return json({ ok: !insErr && ok, request_id: requestId }, insErr ? 400 : 200);
+      }
+      if (action === "unsubscribe") {
+        audit.command = "[notifications off]";
+        const { error: delErr } = await admin.from("jarvis_push_subscriptions").delete().eq("user_id", user.id).eq("endpoint", endpoint);
+        await writeAudit({ status: delErr ? "error" : "ok", error: delErr ? String(delErr.message).slice(0, 300) : null, result_summary: `Notifications turned off${device ? ` for ${device}` : ""}.` });
+        return json({ ok: !delErr, request_id: requestId });
+      }
+      if (action === "test") {
+        audit.command = "[test notification]";
+        const { count: recentTests } = await admin.from("audit_log").select("id", { count: "exact", head: true })
+          .eq("user_id", user.id).eq("module", "push").eq("command", "[test notification]").gte("created_at", new Date(Date.now() - 60_000).toISOString());
+        if ((recentTests ?? 0) >= 3) {
+          await writeAudit({ status: "rate_limited" });
+          return json({ error: "Give it a minute before sending another test.", request_id: requestId }, 429);
+        }
+        const r = await pushToUser(admin, user.id, { title: "Jarvis", body: "Test notification · alerts are working", tag: "jarvis-test" });
+        audit.tool_calls = [r];
+        await writeAudit({ status: r.ok && !r.skipped ? "ok" : "error", error: r.skipped ?? (r.failed ? `${r.failed} device(s) failed` : null), result_summary: `Test sent to ${r.sent} of ${r.devices} device(s).` });
+        return json({ ...r, request_id: requestId });
+      }
+      return json({ error: "Unknown notification action.", request_id: requestId }, 400);
     }
     // The executive briefing. quiet = background rescan (no model call, returns findings only, so
     // the app can notice new items); otherwise the full spoken briefing plus an on-screen table.
@@ -1283,7 +1397,7 @@ Deno.serve(async (req) => {
     return json({ answer, display, first_name: firstName || null, request_id: requestId, tools: toolLog.map((t) => ({ name: t.name, rows: t.rows, ok: t.ok })) });
   } catch (e) {
     console.error("hub-command error", e);
-    await writeAudit({ status: "error", error: String((e as Error)?.message ?? e).slice(0, 500) });
+    await writeAudit({ status: "error", error: redact((e as Error)?.message ?? e).slice(0, 500) });
     return json({ error: "Something went wrong on my end. Please try again.", request_id: requestId }, 500);
   }
 });
