@@ -342,16 +342,15 @@ Deno.serve(async (req) => {
         },
         quantity: 1,
       }],
-      // Managed Payments is on by default for this Stripe account and requires a tax code on
-      // every Product used in a session -- these sessions build the line item inline via
-      // price_data rather than a pre-configured Price/Product with a tax code set, so Stripe
-      // refuses to start Checkout without this. Disabling it here is a deliberate, temporary
-      // choice (confirmed with the account owner): it unblocks self-serve checkout now, at the
-      // cost of Stripe not auto-calculating/collecting sales tax on these subscriptions. Revisit
-      // by setting tax codes on the Basic/Core/Premier Stripe Products and removing this instead.
+      // Managed Payments ON (owner's decision, 2026-10-15): Stripe handles sales tax for these
+      // subscriptions. It was switched off earlier only because the test-mode products had no tax
+      // code and Stripe refused to start Checkout. Managed Payments needs a tax code on EVERY product
+      // used here (the Basic/Core/Premier products in plan_features.stripe_product_id); if Checkout
+      // fails with a tax-code error, set the product's tax code in Stripe -- do not switch this off.
+      // Set explicitly, not left to the account default, so it is never quietly turned off again.
       // @ts-ignore -- managed_payments is a newer Checkout Session field not yet in this SDK
       // version's TypeScript types, but it is a real, documented API parameter.
-      managed_payments: { enabled: false },
+      managed_payments: { enabled: true },
       success_url,
       cancel_url,
       // No family_id yet -- these are what stripe-webhook's checkout.session.completed handler

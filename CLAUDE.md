@@ -69,17 +69,25 @@ The OpenArc intelligence brief and any litigation/competitor content must never 
 - Claude Doc "ORDANIS Production Release Plan" (id 783795c4-596a-47c3-a956-4efc59cdf789): steps 0-4, 6 done; Step 5 app deployed;
   Step 7 (firm notice) waits for the first firm. Phase 5 (domains/DNS) and Phase 10 (expert dashboard filter, pilot) are parked.
 - In this repo: `FEATURES.md`, `docs/HANDOFF-*.md`, `docs/RUNBOOK-*.md`, `supabase/migrations/`.
+- Jarvis (admins' voice console) is a SEPARATE app: `~/Documents/GitHub/ordanis-jarvis` -> jarvis.ordanisos.com. Never add it to
+  the portal (no /hub route) or to the email portal. Its back end lives here: `supabase/functions/hub-command` and
+  `public.audit_log` (migration `20261014130000_hub_audit_log`), both live on production since 2026-10-14.
 
-## Open items (as of 2026-10-13)
-1. Assistant-name rules on production: table, functions and blocklist (incl. suck/sucks/sucka) are applied. STILL TO DO: Will runs in the SQL
-   editor: `drop trigger if exists families_check_assistant_name on public.families; create trigger families_check_assistant_name before insert or update of assistant_name on public.families for each row execute function public.trg_check_assistant_name();`
-   then record migration 20261012110000 `assistant_name_rules` in `supabase_migrations.schema_migrations`.
-2. Delete the three retired stub functions (inert, return 410): `debug-stripe-info`, `debug-stripe-info-v2`, `cleanup-delete-user-once`
-   via `supabase functions delete <name> --project-ref xreeruxuwtmjhvvxvjts`.
-3. Confirm `VITE_BRAND_RUNTIME=1` and no `VITE_HIDE_SIGNUP` on the production Vercel project.
+## Open items (as of 2026-10-14)
+1. DONE 2026-10-15: assistant-name rules fully live on production (trigger in place and verified, migration 20261012110000 recorded).
+   One existing household still carries a blocked name (TEST PEREZ PHONE, "sucka"); the rule only checks new or changed names (see item 8).
+2. DONE (confirmed 2026-10-15): the three retired stub functions (`debug-stripe-info`, `debug-stripe-info-v2`,
+   `cleanup-delete-user-once`) no longer exist on production.
+3. DONE 2026-10-14: production Vercel has `VITE_BRAND_RUNTIME=1` (live login calls `brand_for_host`) and no `VITE_HIDE_SIGNUP`.
+   Note: `VITE_BRAND_RUNTIME` targets production only, so preview builds use the bundled skin.
 4. Test Expert-assist on production with Will's own card-paid Core household, then refund the $25.
 5. Stripe end-to-end test (8b) still parked; Stripe live-mode gates parked.
 6. Demo has none of the plan-video feature (needs the migration + a Videos bucket on the demo project).
 7. Parked security items: service-role key in a cron job, anon execute on some privileged functions, unpinned search paths, pg_net in public.
 8. Household decisions pending: TEST PEREZ PHONE (assistant name "sucka"), archived Harrington/Okonkwo/TEST 8b (purge is Will's call), demo junk obligations.
 9. Counsel review of the Expert paragraph refund line and the SMS consent wording. Repo rename off titan-os is parked.
+
+## Go-live checklist (do these when the platform goes live, not before)
+- Switch on the daily task/bill reminders job (production cron job 2, 13:00 UTC). It is ready: the function is
+  deployed and reads its secret from Vault (`cron_secret`, matching function secret `CRON_SECRET`). Will runs in the
+  SQL editor: `select cron.alter_job(2, active := true);` then confirm the next run in `cron.job_run_details`.
