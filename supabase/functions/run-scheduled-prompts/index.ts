@@ -49,6 +49,49 @@ const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const MODEL = Deno.env.get("ASSISTANT_MODEL") || "claude-sonnet-4-6";
 
 const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+// Shared secret for the scheduled job (same CRON_SECRET / Vault cron_secret as send-task-reminders).
+const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
+
+// Who may call this (2026-10-15). It used to check nothing, so anyone holding the public anon key could
+// run the hourly batch at will or force any user's prompt over and over (Anthropic web-search cost, and
+// email to the owner). Now:
+//   * the scheduled run: only the cron job (x-cron-secret) or the service role;
+//   * "Run now" on one prompt: the cron job / service role, or a signed-in user who owns that prompt,
+//     or an ORDANIS admin.
+function safeEqual(a: string, b: string): boolean {
+  if (!a || !b || a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
+function isSystemCaller(req: Request): boolean {
+  const cron = (req.headers.get("x-cron-secret") ?? "").trim();
+  const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  return (!!CRON_SECRET && safeEqual(cron, CRON_SECRET)) || safeEqual(bearer, SUPABASE_SERVICE_KEY);
+}
+async function callerMayRun(req: Request, promptOwnerId: string | null): Promise<boolean> {
+  if (isSystemCaller(req)) return true;
+  const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  if (!token) return false;
+  const { data: { user } } = await sb.auth.getUser(token);
+  if (!user) return false;
+  if (promptOwnerId && user.id === promptOwnerId) return true;
+  const { data: prof } = await sb.from("user_profiles").select("role").eq("id", user.id).maybeSingle();
+  return prof?.role === "admin";
+}
+
+// The hour and weekday in Eastern Time right now, daylight saving included. Schedules are saved as
+// "Eastern hour + 5" (the winter UTC offset), and used to be matched against the raw UTC hour, so from
+// March to November every prompt ran an hour late. Matching against Eastern time keeps the saved
+// values as they are and makes "8:00 AM ET" mean 8 AM Eastern all year.
+function easternNow(now: Date): { hourKey: number; dow: number } {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hour12: false, weekday: "short" })
+    .formatToParts(now);
+  const h = Number(parts.find((p) => p.type === "hour")?.value ?? "0") % 24;
+  const wd = parts.find((p) => p.type === "weekday")?.value ?? "Sun";
+  const dow = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(wd);
+  return { hourKey: (h + 5) % 24, dow };
+}
 
 // Per-project env config. These stay as legitimate deployment settings; what was
 // removed are the hardcoded product/first-tenant literals that used to sit behind
@@ -1121,10 +1164,16 @@ Deno.serve(async (req) => {
     const forcePromptId = payload?.forcePromptId;
 
     let due: any[] = [];
+    if (!forcePromptId && !isSystemCaller(req)) {
+      return json({ success: false, error: "Unauthorized" }, 401);
+    }
     if (forcePromptId) {
       const { data, error } = await sb.from("scheduled_prompts").select("*").eq("id", forcePromptId).limit(1);
       if (error) throw error;
       due = data || [];
+      if (due.length && !(await callerMayRun(req, due[0].owner_user_id ?? null))) {
+        return json({ success: false, error: "You can only run your own prompts." }, 403);
+      }
       // A forced run that matches nothing must NOT report success. Returning {success:true,
       // queued:0} is what let this fail silently: the UI said "Running now — you'll get an email",
       // no row was touched, and there was nothing anywhere to show what had happened.
@@ -1137,9 +1186,8 @@ Deno.serve(async (req) => {
       }
     } else {
       const now = new Date();
-      const hour = now.getUTCHours();
-      const dow = now.getUTCDay();
-      const startOfHour = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hour, 0, 0, 0));
+      const { hourKey: hour, dow } = easternNow(now);
+      const startOfHour = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), 0, 0, 0));
 
       const { data, error } = await sb
         .from("scheduled_prompts")

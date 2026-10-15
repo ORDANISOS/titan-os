@@ -1154,7 +1154,7 @@ function AccountBalancesPanel({account,family,history,documents,reload,toast,can
     setBusy(false);
   };
 
-  const removeEntry=async(row)=>{
+  const removeEntry=async(row)=>{if(!confirm("Remove this balance entry? This can't be undone."))return;
     setBusy(true);
     try{
       const{error}=await sb.from("account_balances").delete().eq("id",row.id);
@@ -3140,15 +3140,15 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
     if(error){toast(error.message,"error");return;}
     if(marking&&t.recurrence){
       const nd=nextRecurrence(t.dueDate,t.recurrence,t.recurrenceInterval,t.recurrenceUnit);
-      if(nd){await sb.from("tasks").insert({family_id:t.familyId||family.id,contact_id:t.contactId||null,title:t.title,due_date:nd,priority:t.priority,reminder_days:reminderDaysOr7(t.reminderDays),done:false,recurrence:t.recurrence,recurrence_interval:t.recurrence==="Custom"?(t.recurrenceInterval||1):null,recurrence_unit:t.recurrence==="Custom"?(t.recurrenceUnit||"week"):null});toast("Next occurrence: "+fmt(nd));}
+      if(nd)await scheduleNextOccurrence(t,t.familyId||family.id,nd,toast);
     }
     reload("tasks");
   };
-  const delTask=async(id)=>{
+  const delTask=async(id)=>{if(!confirm("Delete this task? This can't be undone."))return;
     const{error}=await sb.from("tasks").delete().eq("id",id);
     if(error)toast(error.message,"error");else reload("tasks");
   };
-  const delNote=async(id)=>{
+  const delNote=async(id)=>{if(!confirm("Delete this note? This can't be undone."))return;
     const{error}=await sb.from("notes").delete().eq("id",id);
     if(error)toast(error.message,"error");else reload("notes");
   };
@@ -3158,7 +3158,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
     const{error}=await sb.from("contacts").insert({family_id:family.id,name:f.name,email:f.email||null,phone:f.phone||null,company:f.company||null,type:f.type||"Individual",dob:f.dob||null,anniversary:f.anniversary||null,address:f.address||null,is_advisor:!!f.isAdvisor,tags:null});
     if(error){toast(error.message,"error");return false;}else{toast("Member added. Welcome to the household record.");reload("contacts");}
   };
-  const delMember=async(id)=>{
+  const delMember=async(id)=>{if(!confirm("Remove this family member? This can't be undone."))return;
     const{error}=await sb.from("contacts").delete().eq("id",id);
     if(error)toast(error.message,"error");else{toast("Member removed");reload("contacts");}
   };
@@ -3239,7 +3239,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   });
   const addFamilyContact=async(f)=>{const{error}=await sb.from("family_contacts").insert({family_id:family.id,name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,is_advisor:!!f.isAdvisor,notes:f.notes||null});if(error){toast(error.message,"error");return false;}else{toast("Contact added. Your team is easy to find now.");reload("family_contacts");}};
   const editFamilyContact=async(f)=>{const{error}=await sb.from("family_contacts").update({name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,is_advisor:!!f.isAdvisor,notes:f.notes||null}).eq("id",editFC.id);if(error){toast(error.message,"error");return false;}else{toast("Contact updated. All saved.");reload("family_contacts");}};
-  const delFamilyContact=async(id)=>{const{error}=await sb.from("family_contacts").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Contact removed");reload("family_contacts");}};
+  const delFamilyContact=async(id)=>{if(!confirm("Remove this contact from the household? This can't be undone."))return;const{error}=await sb.from("family_contacts").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Contact removed");reload("family_contacts");}};
   const toggleFCAdvisor=async(c)=>{if(!c.email){toast("Add an email to this contact first — the client emails them here.","error");return;}const{error}=await sb.from("family_contacts").update({is_advisor:!c.isAdvisor}).eq("id",c.id);if(error)toast(error.message,"error");else{toast(!c.isAdvisor?"Marked as an emailable ORDANIS Expert":"Removed as ORDANIS Expert option");reload("family_contacts");}};
 
   const propContactsFor=(pid)=>(data.property_contacts||[]).filter(pc=>pc.propertyId===pid);
@@ -3250,7 +3250,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   const valuablesPolicyDoc=()=>(data.documents||[]).find(d=>d.familyId===family.id&&d.propertySection==="valuables_schedule");
   const addPropertyContact=async(pid,f)=>{const{error}=await sb.from("property_contacts").insert({property_id:pid,family_id:family.id,name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,notes:f.notes||null});if(error){toast(error.message,"error");return false;}else{toast("Contact added. Your team is easy to find now.");reload("property_contacts");}};
   const editPropertyContact=async(id,f)=>{const{error}=await sb.from("property_contacts").update({name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,notes:f.notes||null}).eq("id",id);if(error){toast(error.message,"error");return false;}else{toast("Contact updated. All saved.");reload("property_contacts");}};
-  const delPropertyContact=async(id)=>{const{error}=await sb.from("property_contacts").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Contact removed");reload("property_contacts");}};
+  const delPropertyContact=async(id)=>{if(!confirm("Remove this contact from the property? This can't be undone."))return;const{error}=await sb.from("property_contacts").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Contact removed");reload("property_contacts");}};
 
   // Add property
   const addProperty=async(f)=>{
@@ -3263,7 +3263,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
     const{error}=await sb.from("properties").update(row).eq("id",id);
     if(error){toast(error.message,"error");return false;}else{toast("Property updated. All saved.");reload("properties");}
   };
-  const delProperty=async(id)=>{
+  const delProperty=async(id)=>{if(!confirm("Delete this property and its details? This can't be undone."))return;
     const{error}=await sb.from("properties").delete().eq("id",id);
     if(error)toast(error.message,"error");else reload("properties");
   };
@@ -3282,14 +3282,14 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
 
   // Add valuable
   const addValuable=async(f)=>{
-    const{error}=await sb.from("valuables").insert({family_id:family.id,category:f.category,description:f.description,make_model:f.makeModel||null,year:f.year||null,estimated_value:f.estimatedValue||null,insured:!!f.insured,insurance_company:f.insuranceCompany||null,notes:f.notes||null});
+    const{error}=await sb.from("valuables").insert({family_id:family.id,category:f.category,description:f.description,make_model:f.makeModel||null,year:f.year||null,estimated_value:numOrNull(f.estimatedValue),insured:!!f.insured,insurance_company:f.insuranceCompany||null,notes:f.notes||null});
     if(error){toast(error.message,"error");return false;}else{toast("Valuable added. One more thing safely on file.");reload("valuables");}
   };
   const editValuable=async(id,f)=>{
-    const{error}=await sb.from("valuables").update({category:f.category,description:f.description,make_model:f.makeModel||null,year:f.year||null,estimated_value:f.estimatedValue||null,insured:!!f.insured,insurance_company:f.insuranceCompany||null,notes:f.notes||null}).eq("id",id);
+    const{error}=await sb.from("valuables").update({category:f.category,description:f.description,make_model:f.makeModel||null,year:f.year||null,estimated_value:numOrNull(f.estimatedValue),insured:!!f.insured,insurance_company:f.insuranceCompany||null,notes:f.notes||null}).eq("id",id);
     if(error){toast(error.message,"error");return false;}else{toast("Valuable updated. All saved.");reload("valuables");}
   };
-  const delValuable=async(id)=>{
+  const delValuable=async(id)=>{if(!confirm("Delete this valuable? This can't be undone."))return;
     const{error}=await sb.from("valuables").delete().eq("id",id);
     if(error)toast(error.message,"error");else reload("valuables");
   };
@@ -3304,21 +3304,21 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
     const{error}=await sb.from("deals").update({stage:next}).eq("id",deal.id);
     if(error)toast(error.message,"error");else reload("deals");
   };
-  const delDeal=async(id)=>{
+  const delDeal=async(id)=>{if(!confirm("Delete this deal? This can't be undone."))return;
     const{error}=await sb.from("deals").delete().eq("id",id);
     if(error)toast(error.message,"error");else reload("deals");
   };
 
   // Add portfolio account
   const addAccount=async(f)=>{
-    const{error}=await sb.from("portfolio_accounts").insert({family_id:family.id,institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,account_advisor_name:f.accountAdvisorName||null,account_advisor_phone:f.accountAdvisorPhone||null,account_advisor_email:f.accountAdvisorEmail||null,notes:f.notes||null});
+    const{error}=await sb.from("portfolio_accounts").insert({family_id:family.id,institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:numOrNull(f.startingBalance),current_balance:numOrNull(f.currentBalance),account_advisor_name:f.accountAdvisorName||null,account_advisor_phone:f.accountAdvisorPhone||null,account_advisor_email:f.accountAdvisorEmail||null,notes:f.notes||null});
     if(error){toast(error.message,"error");return false;}else{toast("Account added. Your record is looking more complete.");reload("portfolio_accounts");}
   };
   const editAccount=async(id,f)=>{
-    const{error}=await sb.from("portfolio_accounts").update({institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,account_advisor_name:f.accountAdvisorName||null,account_advisor_phone:f.accountAdvisorPhone||null,account_advisor_email:f.accountAdvisorEmail||null,notes:f.notes||null}).eq("id",id);
+    const{error}=await sb.from("portfolio_accounts").update({institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:numOrNull(f.startingBalance),current_balance:numOrNull(f.currentBalance),account_advisor_name:f.accountAdvisorName||null,account_advisor_phone:f.accountAdvisorPhone||null,account_advisor_email:f.accountAdvisorEmail||null,notes:f.notes||null}).eq("id",id);
     if(error){toast(error.message,"error");return false;}else{toast("Account updated. All saved.");reload("portfolio_accounts");}
   };
-  const delAccount=async(id)=>{
+  const delAccount=async(id)=>{if(!confirm("Delete this account? This can't be undone."))return;
     const{error}=await sb.from("portfolio_accounts").delete().eq("id",id);
     if(error)toast(error.message,"error");else reload("portfolio_accounts");
   };
@@ -4043,6 +4043,23 @@ function MemberForm({initial,onSave,onClose}){
 
 // ── TASK FORM (with reminder) ─────────────────────────────────────────────────
 // Compute the next due date for a recurring task. Returns YYYY-MM-DD or null.
+// Creates the next occurrence of a recurring task, once. Unticking and re-ticking a task used to insert
+// another copy each time, and a failed insert was never checked while the toast still announced the
+// next date, so a recurring obligation could quietly stop. Now: if that next occurrence already exists
+// (same household, contact, title and date, not done) nothing is added, and a failure is reported.
+async function scheduleNextOccurrence(t,familyId,nd,toast){
+  let q=sb.from("tasks").select("id").eq("title",t.title).eq("due_date",nd).eq("done",false).limit(1);
+  q=familyId?q.eq("family_id",familyId):q.is("family_id",null);
+  q=t.contactId?q.eq("contact_id",t.contactId):q.is("contact_id",null);
+  const{data:existing}=await q;
+  if(existing&&existing.length){toast&&toast("Next occurrence already scheduled: "+fmt(nd));return;}
+  const{error}=await sb.from("tasks").insert({family_id:familyId,contact_id:t.contactId||null,title:t.title,due_date:nd,priority:t.priority,
+    reminder_days:reminderDaysOr7(t.reminderDays),done:false,recurrence:t.recurrence,
+    recurrence_interval:t.recurrence==="Custom"?(t.recurrenceInterval||1):null,
+    recurrence_unit:t.recurrence==="Custom"?(t.recurrenceUnit||"week"):null});
+  if(error){toast&&toast("Done, but the next occurrence could not be created: "+error.message+". Add it by hand so it isn't missed.","error");return;}
+  toast&&toast("Next occurrence: "+fmt(nd));
+}
 function nextRecurrence(dateStr,recurrence,interval,unit){
   if(!recurrence)return null;
   const base=dateStr?new Date(dateStr+"T00:00:00"):new Date();
@@ -5589,9 +5606,9 @@ function PortfolioView({data,reload,toast,userProfile}){
   const totalStart=accounts.reduce((s,a)=>s+(Number(a.startingBalance)||0),0);
   const totalPct=totalStart>0?(((totalValue-totalStart)/totalStart)*100).toFixed(2):null;
 
-  const add=async f=>{const{error}=await sb.from("portfolio_accounts").insert({family_id:f.familyId||null,institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,notes:f.notes||null});if(error){toast(error.message,"error");return false;}else{toast("Account added. Your record is looking more complete.");reload("portfolio_accounts");}};
-  const edit=async f=>{const{error}=await sb.from("portfolio_accounts").update({family_id:f.familyId||null,institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,notes:f.notes||null}).eq("id",modal.id);if(error){toast(error.message,"error");return false;}else{toast("Updated");reload("portfolio_accounts");setSelected({...selected,...f});}};
-  const del=async id=>{const{error}=await sb.from("portfolio_accounts").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Deleted");reload("portfolio_accounts");if(selected?.id===id)setSelected(null);}};
+  const add=async f=>{const{error}=await sb.from("portfolio_accounts").insert({family_id:f.familyId||null,institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:numOrNull(f.startingBalance),current_balance:numOrNull(f.currentBalance),notes:f.notes||null});if(error){toast(error.message,"error");return false;}else{toast("Account added. Your record is looking more complete.");reload("portfolio_accounts");}};
+  const edit=async f=>{const{error}=await sb.from("portfolio_accounts").update({family_id:f.familyId||null,institution:f.institution,banker_name:f.bankerName||null,account_type:f.accountType,starting_balance:numOrNull(f.startingBalance),current_balance:numOrNull(f.currentBalance),notes:f.notes||null}).eq("id",modal.id);if(error){toast(error.message,"error");return false;}else{toast("Updated");reload("portfolio_accounts");setSelected({...selected,...f});}};
+  const del=async id=>{if(!confirm("Delete this account? This can't be undone."))return;const{error}=await sb.from("portfolio_accounts").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Deleted");reload("portfolio_accounts");if(selected?.id===id)setSelected(null);}};
 
   return <div style={{display:"flex",height:"100%",minHeight:0}}>
     {/* List (hidden on mobile when detail is showing) */}
@@ -5709,7 +5726,7 @@ function NotesView({data,reload,toast,userProfile,prospectMode=false}){
     setBody("");setPendingFiles([]);setSaving(false);
     reload("notes");reload("note_attachments");
   };
-  const del=async id=>{const{error}=await sb.from("notes").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Deleted");reload("notes");reload("note_attachments");}};
+  const del=async id=>{if(!confirm("Delete this note? This can't be undone."))return;const{error}=await sb.from("notes").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Deleted");reload("notes");reload("note_attachments");}};
   const saveEdit=async id=>{if(!editBody.trim())return;const{error}=await sb.from("notes").update({body:editBody}).eq("id",id);if(error)toast(error.message,"error");else{toast("Note updated. All saved.");setEditId(null);setEditBody("");reload("notes");}};
   const download=async(att)=>{
     if(!await firmDocGate(att.filePath,att.name,"download_document")){toast(FIRM_GATE_MSG,"error");return;}
@@ -5734,7 +5751,7 @@ function NotesView({data,reload,toast,userProfile,prospectMode=false}){
     if(advisorFilter&&(advisorOfNote(n)?.email||"")!==advisorFilter)return false;
     if(prospectMode&&userProfile?.role!=="admin"&&(advisorOfNote(n)?.email||"").toLowerCase()!==(userProfile?.email||"").toLowerCase())return false;
     if(!prospectMode&&cmAdvScope&&(gf(n.familyId)?.advisorEmail||"").toLowerCase()!==cmAdvScope)return false;
-    return n.body.toLowerCase().includes(search.toLowerCase())||(gc(n.contactId)?.name||"").toLowerCase().includes(search.toLowerCase())||(gf(n.familyId)?.name||"").toLowerCase().includes(search.toLowerCase());
+    return String(n.body||"").toLowerCase().includes(search.toLowerCase())||(gc(n.contactId)?.name||"").toLowerCase().includes(search.toLowerCase())||(gf(n.familyId)?.name||"").toLowerCase().includes(search.toLowerCase());
   });
   if(adminProspect&&viewMode==="advisors"){
     return <div style={{height:"100%",display:"flex",flexDirection:"column",minHeight:0}}>
@@ -5959,8 +5976,8 @@ function TasksView({data,reload,toast,userProfile,prospectMode=false}){
   },[tasks,contacts,advisors]);
 
   const add=async f=>{const{error}=await sb.from("tasks").insert({family_id:f.familyId||null,contact_id:f.contactId||null,title:f.title,due_date:f.dueDate||null,priority:f.priority,reminder_days:reminderDaysOr7(f.reminderDays),done:false,recurrence:f.recurrence||null,recurrence_interval:f.recurrence==="Custom"?(Number(f.recurrenceInterval)||1):null,recurrence_unit:f.recurrence==="Custom"?(f.recurrenceUnit||"week"):null});if(error){toast(error.message,"error");return false;}else{toast("Task added. You're all set.");reload("tasks");}};
-  const tog=async t=>{const marking=!t.done;const{error}=await sb.from("tasks").update(marking?{done:true,completed_at:new Date().toISOString(),completed_by:CURRENT_USER_LABEL||null}:{done:false,completed_at:null,completed_by:null}).eq("id",t.id);if(error){toast(error.message,"error");return;}if(marking&&t.recurrence){const nd=nextRecurrence(t.dueDate,t.recurrence,t.recurrenceInterval,t.recurrenceUnit);if(nd){await sb.from("tasks").insert({family_id:t.familyId||null,contact_id:t.contactId||null,title:t.title,due_date:nd,priority:t.priority,reminder_days:reminderDaysOr7(t.reminderDays),done:false,recurrence:t.recurrence,recurrence_interval:t.recurrence==="Custom"?(t.recurrenceInterval||1):null,recurrence_unit:t.recurrence==="Custom"?(t.recurrenceUnit||"week"):null});toast("Next occurrence: "+fmt(nd));}}reload("tasks");};
-  const del=async id=>{const{error}=await sb.from("tasks").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Deleted");reload("tasks");}};
+  const tog=async t=>{const marking=!t.done;const{error}=await sb.from("tasks").update(marking?{done:true,completed_at:new Date().toISOString(),completed_by:CURRENT_USER_LABEL||null}:{done:false,completed_at:null,completed_by:null}).eq("id",t.id);if(error){toast(error.message,"error");return;}if(marking&&t.recurrence){const nd=nextRecurrence(t.dueDate,t.recurrence,t.recurrenceInterval,t.recurrenceUnit);if(nd)await scheduleNextOccurrence(t,t.familyId||null,nd,toast);}reload("tasks");};
+  const del=async id=>{if(!confirm("Delete this task? This can't be undone."))return;const{error}=await sb.from("tasks").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Deleted");reload("tasks");}};
 
 
   if(adminProspect&&viewMode==="advisors"){
@@ -6133,7 +6150,7 @@ function ProspectContactsView({data,reload,toast,userProfile}){
   },[prospects,data.deals,advisors]);
   const add=async f=>{const{error}=await sb.from("contacts").insert({family_id:null,name:f.name,company:f.company||null,email:f.email||null,phone:f.phone||null,type:f.type,tags:f.tags||null,advisor_email:f.advisorEmail||null,advisor_name:f.advisorName||null});if(error){toast(error.message,"error");return false;}else{toast("Contact added. Your team is easy to find now.");reload("contacts");}};
   const edit=async f=>{const{error}=await sb.from("contacts").update({name:f.name,company:f.company||null,email:f.email||null,phone:f.phone||null,type:f.type,tags:f.tags||null,advisor_email:f.advisorEmail||null,advisor_name:f.advisorName||null}).eq("id",modal.id);if(error){toast(error.message,"error");return false;}else{toast("Updated");reload("contacts");setSelected({...selected,...f});}};
-  const del=async id=>{const{error}=await sb.from("contacts").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Deleted");reload("contacts");if(selected?.id===id)setSelected(null);}};
+  const del=async id=>{if(!confirm("Delete this contact? This can't be undone."))return;const{error}=await sb.from("contacts").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Deleted");reload("contacts");if(selected?.id===id)setSelected(null);}};
 
   if(isAdmin&&viewMode==="advisors"){
     return <div style={{height:"100%",display:"flex",flexDirection:"column",minHeight:0}}>
@@ -6279,7 +6296,7 @@ function ProspectPipelineView({data,reload,toast,userProfile}){
 
   const add=async f=>{const{error}=await sb.from("deals").insert({family_id:null,contact_id:f.contactId||null,title:f.title,value:f.value||null,stage:f.stage,close_date:f.closeDate||null,advisor_email:f.advisorEmail||null,advisor_name:f.advisorName||null});if(error){toast(error.message,"error");return false;}else{toast("Opportunity added");reload("deals");}};
   const edit=async f=>{const{error}=await sb.from("deals").update({contact_id:f.contactId||null,title:f.title,value:f.value||null,stage:f.stage,close_date:f.closeDate||null,advisor_email:f.advisorEmail||null,advisor_name:f.advisorName||null}).eq("id",modal.id);if(error){toast(error.message,"error");return false;}else{toast("Updated");reload("deals");}};
-  const del=async id=>{const{error}=await sb.from("deals").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Deleted");reload("deals");}};
+  const del=async id=>{if(!confirm("Delete this deal? This can't be undone."))return;const{error}=await sb.from("deals").delete().eq("id",id);if(error)toast(error.message,"error");else{toast("Deleted");reload("deals");}};
   const move=async(deal,dir)=>{const idx=STAGES.indexOf(deal.stage);const next=STAGES[idx+dir];if(!next)return;const{error}=await sb.from("deals").update({stage:next}).eq("id",deal.id);if(error)toast(error.message,"error");else reload("deals");};
 
   if(isAdmin&&viewMode==="advisors"){
@@ -6658,7 +6675,7 @@ function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
         const t=d.task;
         const{error}=await sb.from("tasks").update({done:true,completed_at:new Date().toISOString(),completed_by:userLabel||null}).eq("id",t.id);
         if(error)throw error;
-        if(t.recurrence){const nd=nextRecurrence(t.dueDate,t.recurrence,t.recurrenceInterval,t.recurrenceUnit);if(nd){await sb.from("tasks").insert({family_id:t.familyId||null,contact_id:t.contactId||null,title:t.title,due_date:nd,priority:t.priority,reminder_days:reminderDaysOr7(t.reminderDays),done:false,recurrence:t.recurrence,recurrence_interval:t.recurrence==="Custom"?(t.recurrenceInterval||1):null,recurrence_unit:t.recurrence==="Custom"?(t.recurrenceUnit||"week"):null});}}
+        if(t.recurrence){const nd=nextRecurrence(t.dueDate,t.recurrence,t.recurrenceInterval,t.recurrenceUnit);if(nd)await scheduleNextOccurrence(t,t.familyId||null,nd,toast);}
         if(reload)reload("tasks");
         if(toast)toast("Task completed");
       } else {
@@ -6941,8 +6958,12 @@ function UserManagementView({userProfile,data={},toast}){
     if(newRole==="enterprise_admin"&&!newFirm)return toast("Choose which firm this administrator belongs to","error");
     if(newPassword.length<MIN_PASSWORD_LENGTH)return toast(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`,"error");
     setCreating(true);
-    // Sign up the new user
-    const{data:authData,error:authError}=await sb.auth.signUp({
+    // Sign up the new user on a throwaway client that never stores a session. On the shared client, a
+    // sign-up that returns a session (email confirmation off) signed THIS browser in as the new user:
+    // the admin was silently switched, and the profile write below then ran as the new user and was
+    // refused. The admin's own session stays untouched this way.
+    const signupClient=createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false,storageKey:"ordanis-admin-create-user"}});
+    const{data:authData,error:authError}=await signupClient.auth.signUp({
       email:newEmail.trim(),
       password:newPassword,
       options:{data:{full_name:newName,role:newRole}}
@@ -6950,8 +6971,12 @@ function UserManagementView({userProfile,data={},toast}){
     if(authError){setCreating(false);return toast(authError.message,"error");}
     // Insert/update their profile with role and family
     const userId=authData?.user?.id;
+    // Both writes are checked. They used to be ignored, so "User Created!" showed even when the role or
+    // household never saved, leaving the person as a plain client with no household.
+    const problems=[];
+    if(!userId)problems.push("the sign-in account was not returned");
     if(userId){
-      await sb.from("user_profiles").upsert({
+      const{error:profErr}=await sb.from("user_profiles").upsert({
         id:userId,
         email:newEmail.trim(),
         full_name:newName||newEmail.trim(),
@@ -6961,11 +6986,18 @@ function UserManagementView({userProfile,data={},toast}){
         active:true,
         can_run_scheduled_prompts:newRole==="partner"?newCanRunPrompts:false,
       });
+      if(profErr)problems.push("their role and household were not saved ("+profErr.message+")");
       if(newRole==="partner"&&newPartnerFamilies.length>0){
-        await sb.from("family_partners").insert(newPartnerFamilies.map(fid=>({user_id:userId,family_id:fid})));
+        const{error:linkErr}=await sb.from("family_partners").insert(newPartnerFamilies.map(fid=>({user_id:userId,family_id:fid})));
+        if(linkErr)problems.push("their household links were not saved ("+linkErr.message+")");
       }
     }
     setCreating(false);
+    if(problems.length){
+      toast(`The login for ${newEmail.trim()} was created, but ${problems.join("; ")}. Set it from their row in Users before sharing the login.`,"error");
+      setTimeout(()=>{loadUsers();loadFamilyPartners();},800);
+      return;
+    }
     setCreated({email:newEmail,role:newRole,password:newPassword});
     setNewEmail("");setNewName("");setNewRole("advisor");setNewFamily("");setNewFirm("");setNewPartnerFamilies([]);setNewCanRunPrompts(false);setNewPassword("");
     setTimeout(()=>{loadUsers();loadFamilyPartners();},1500);
@@ -8303,7 +8335,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     toast(`Folder "${v.name}" added`);
   };
 
-  const removeFolder=async row=>{
+  const removeFolder=async row=>{if(!confirm("Delete this folder? This can't be undone."))return;
     const gate=canDeleteFolder(row);
     if(!gate.ok){toast(gate.reason,"error");return;}
     const f=customFolders.find(x=>x.name===row.name);
@@ -8591,9 +8623,15 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     }catch(e){toast("Download failed: "+e.message,"error");}
   };
 
-  const del=async(doc)=>{
-    await sb.storage.from("documents").remove([doc.filePath]);
-    await sb.from("documents").delete().eq("id",doc.id);
+  const del=async(doc)=>{if(!confirm("Delete this document? The file is removed permanently."))return;
+    // Record first, file second, and both checked. The file used to go first with neither result looked at,
+    // so a refused delete still said "Document deleted" and left a record pointing at a file that was gone.
+    const{error:rowErr}=await sb.from("documents").delete().eq("id",doc.id);
+    if(rowErr){toast(rowErr.message||"Could not delete the document.","error");return;}
+    if(doc.filePath){
+      const{error:fileErr}=await sb.storage.from("documents").remove([doc.filePath]);
+      if(fileErr)console.error("document file not removed",doc.filePath,fileErr.message);
+    }
     toast("Document deleted");loadDocs();
     if(reload)reload("documents");
   };
@@ -9595,18 +9633,18 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     if(error){toast(error.message,"error");return false;}else{toast("Property added. Your record is looking more complete.");await reload("properties");}
   };
   const addAccount=async f=>{
-    const{error}=await sb.from("portfolio_accounts").insert({family_id:family.id,institution:f.institution,account_type:f.accountType,starting_balance:f.startingBalance||null,current_balance:f.currentBalance||null,account_advisor_name:f.accountAdvisorName||null,account_advisor_phone:f.accountAdvisorPhone||null,account_advisor_email:f.accountAdvisorEmail||null,notes:f.notes||null});
+    const{error}=await sb.from("portfolio_accounts").insert({family_id:family.id,institution:f.institution,account_type:f.accountType,starting_balance:numOrNull(f.startingBalance),current_balance:numOrNull(f.currentBalance),account_advisor_name:f.accountAdvisorName||null,account_advisor_phone:f.accountAdvisorPhone||null,account_advisor_email:f.accountAdvisorEmail||null,notes:f.notes||null});
     if(error){toast(error.message,"error");return false;}else{toast("Account added. Your record is looking more complete.");await reload("portfolio_accounts");}
   };
   const addValuable=async f=>{
-    const{error}=await sb.from("valuables").insert({family_id:family.id,category:f.category,description:f.description,make_model:f.makeModel||null,year:f.year||null,estimated_value:f.estimatedValue||null,notes:f.notes||null});
+    const{error}=await sb.from("valuables").insert({family_id:family.id,category:f.category,description:f.description,make_model:f.makeModel||null,year:f.year||null,estimated_value:numOrNull(f.estimatedValue),notes:f.notes||null});
     if(error){toast(error.message,"error");return false;}else{toast("Valuable added. One more thing safely on file.");await reload("valuables");}
   };
   const addMember=async f=>{
     const{error}=await sb.from("contacts").insert({family_id:family.id,name:f.name,relationship:f.relationship||null,email:f.email||null,phone:f.phone||null,type:"Individual"});
     if(error){toast(error.message,"error");return false;}else{toast("Member added. Welcome to the household record.");await reload("contacts");}
   };
-  const delMember=async id=>{
+  const delMember=async id=>{if(!confirm("Remove this family member? This can't be undone."))return;
     const{error}=await sb.from("contacts").delete().eq("id",id);
     if(error)toast(error.message,"error");else{toast("Member removed");await reload("contacts");}
   };
@@ -9614,7 +9652,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     const{error}=await sb.from("family_contacts").insert({family_id:family.id,name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,is_advisor:false});
     if(error){toast(error.message,"error");return false;}else{toast("Contact added. Your team is easy to find now.");await reload("family_contacts");}
   };
-  const delProfessional=async id=>{
+  const delProfessional=async id=>{if(!confirm("Remove this professional? This can't be undone."))return;
     const{error}=await sb.from("family_contacts").delete().eq("id",id);
     if(error)toast(error.message,"error");else{toast("Contact removed");await reload("family_contacts");}
   };
@@ -10925,7 +10963,7 @@ function ScheduledPromptsSection({userProfile,families,toast,lockFamilyId}){
     const{error}=await sb.from("scheduled_prompts").update({active:!p.active}).eq("id",p.id);
     if(error)toast(error.message,"error");else{toast(p.active?"Paused":"Resumed");load();}
   };
-  const del=async p=>{
+  const del=async p=>{if(!confirm("Delete this scheduled prompt? This can't be undone."))return;
     const{error}=await sb.from("scheduled_prompts").delete().eq("id",p.id);
     if(error)toast(error.message,"error");else{toast("Deleted");load();}
   };
