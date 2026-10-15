@@ -11509,7 +11509,12 @@ async function generateWorkflowCycle({template,obligation,dueDate,familyId}){
 
   const{error:sErr}=await sb.from("workflow_instance_steps")
     .insert(rows.map(r=>({...r,instance_id:inst.id,family_id:familyId})));
-  if(sErr)throw new Error(sErr.message);
+  if(sErr){
+    // Undo the cycle row so a failed start does not leave an empty, active cycle behind: it would hold
+    // a workflow slot (or the monthly extra-workflow charge) and could never be completed.
+    await sb.from("workflow_instances").delete().eq("id",inst.id);
+    throw new Error(sErr.message);
+  }
   return inst;
 }
 

@@ -134,8 +134,24 @@ async function syncFamilyFromSubscription(sub: Stripe.Subscription) {
   const mapped = mapStripeStatus(sub.status);
   const patch: Record<string, unknown> = { stripe_subscription_id: sub.id };
   if (mapped) {
-    patch.subscription_state = mapped;
-    patch.past_due_since = mapped === "past_due" ? new Date().toISOString().slice(0, 10) : null;
+    // Decisions made here, not by Stripe, must survive routine Stripe events (2026-10-14):
+    //  * archived stays archived;
+    //  * final_notice is not knocked back to past_due by another failed-payment status;
+    //  * past_due_since is set once, when the household first falls behind, and kept while it stays
+    //    behind. It used to be reset to today on every event, so the dunning cadence never advanced.
+    const { data: cur } = await admin.from("families")
+      .select("subscription_state, past_due_since").eq("id", familyId).maybeSingle();
+    const state = cur?.subscription_state ?? null;
+    const behind = state === "past_due" || state === "final_notice";
+    if (state === "archived") {
+      // leave the state alone; only the subscription id is refreshed
+    } else if (mapped === "past_due") {
+      if (state !== "final_notice") patch.subscription_state = "past_due";
+      patch.past_due_since = behind && cur?.past_due_since ? cur.past_due_since : new Date().toISOString().slice(0, 10);
+    } else {
+      patch.subscription_state = mapped;
+      patch.past_due_since = null;
+    }
   }
 
   const { error } = await admin.from("families").update(patch).eq("id", familyId);
@@ -613,9 +629,16 @@ Deno.serve(async (req) => {
           : null;
         const familyId = await familyIdForSubscription(sub);
         if (familyId) {
-          await admin.from("families")
-            .update({ subscription_state: "past_due", past_due_since: new Date().toISOString().slice(0, 10) })
-            .eq("id", familyId);
+          // Stripe retries a failed payment several times, and each retry lands here. Only the FIRST
+          // failure starts the past-due clock; later ones leave it (and an archived or final-notice
+          // household) alone, so the dunning cadence can actually move forward.
+          const { data: cur } = await admin.from("families")
+            .select("subscription_state").eq("id", familyId).maybeSingle();
+          if (cur && !["past_due", "final_notice", "archived"].includes(String(cur.subscription_state))) {
+            await admin.from("families")
+              .update({ subscription_state: "past_due", past_due_since: new Date().toISOString().slice(0, 10) })
+              .eq("id", familyId);
+          }
           await logDunning(familyId, "payment_failed", 0, { sent_to: invoice.customer_email ?? null });
         }
         break;

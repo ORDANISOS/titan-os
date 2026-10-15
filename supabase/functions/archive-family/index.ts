@@ -14,6 +14,12 @@
 //   - writes a family_deletion_log row (action:'archived') that survives even if the family is
 //     later purged entirely
 //
+// Confirmation: the caller must pass confirmName matching the household's exact name, the same
+// pattern purge-family already used. This function used to only need one click server-side --
+// an unconfirmed one-click delete elsewhere in the admin UI caused a real accidental deletion, so
+// this now requires the same typed confirmation as the permanent-delete step, both in the UI and
+// re-checked here (never trust the client alone for an action that cancels real billing).
+//
 // Permanently erasing the household's data is a deliberate, separate second step -- see
 // purge-family, which refuses to run unless a family is already archived. See that function's
 // header, and the family_deletion migration, for why this is split in two rather than one button.
@@ -72,6 +78,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => null);
     const familyId = String(body?.familyId || "").trim();
+    const confirmName = String(body?.confirmName || "").trim();
     const reason = body?.reason ? String(body.reason).slice(0, 2000) : null;
     if (!familyId) return json({ error: "Missing familyId." }, 400);
 
@@ -85,9 +92,15 @@ Deno.serve(async (req) => {
       return json({ ok: true, alreadyArchived: true });
     }
 
-    // Cancel billing immediately. Not fatal if Stripe errors (e.g. already canceled on Stripe's
-    // side) -- the household still needs to end up archived either way, so this is reported back
-    // rather than aborting the whole action.
+    if (!confirmName || confirmName !== family.name) {
+      return json({ error: "Confirmation text does not match the family name." }, 400);
+    }
+
+    // Cancel billing immediately. A cancel that errors because the subscription is already over is
+    // fine; one that leaves it still charging is not. Before 2026-10-14 any error was ignored and the
+    // household was archived anyway, so it could be purged later while Stripe kept billing the card
+    // with nothing left on our side to reconcile against. Now a still-live subscription stops the
+    // archive here, before any login is blocked, and says why.
     let stripeError: string | null = null;
     if (family.stripe_subscription_id) {
       try {
@@ -95,6 +108,19 @@ Deno.serve(async (req) => {
       } catch (e) {
         stripeError = e instanceof Error ? e.message : String(e);
         console.error("archive-family: stripe cancel failed", familyId, stripeError);
+        let stillLive = true;
+        try {
+          const sub = await stripe.subscriptions.retrieve(family.stripe_subscription_id);
+          stillLive = !["canceled", "incomplete_expired"].includes(sub.status);
+        } catch (e2) {
+          const err = e2 as { code?: string; statusCode?: number };
+          if (err?.code === "resource_missing" || err?.statusCode === 404) stillLive = false;
+        }
+        if (stillLive) {
+          return json({
+            error: `Billing could not be cancelled in Stripe, so the household was not archived (it would keep being charged). Stripe said: ${stripeError}. Try again, or cancel the subscription in Stripe first.`,
+          }, 502);
+        }
       }
     }
 

@@ -53,6 +53,12 @@ function monthLabel(period: string): string {
   return d.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 }
 
+// Short, stable fingerprint of a string (first 16 hex chars of SHA-256), for Stripe idempotency keys.
+async function shortHash(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -103,15 +109,29 @@ Deno.serve(async (req) => {
         continue;
       }
       try {
+        // Idempotency key built from the exact charge rows being billed. A retry, a second admin running
+        // this at the same moment, or a re-run after the status update below failed all reach Stripe with
+        // the same key and get the SAME invoice item back, instead of charging the household twice.
+        // Before 2026-10-14 there was no key, and a failed status update left the rows pending to be
+        // billed again on the next run.
+        const idemKey = `wf-overage:${period}:${familyId}:${await shortHash([...entry.ids].sort().join(","))}`;
         const item = await stripe.invoiceItems.create({
           customer: family.stripe_customer_id,
           amount: Math.round(entry.total * 100),
           currency: "usd",
           description: `${entry.ids.length} additional workflow instance${entry.ids.length === 1 ? "" : "s"} beyond your plan's monthly allowance -- ${monthLabel(period)}`,
-        });
-        await admin.from("workflow_overage_charges")
+        }, { idempotencyKey: idemKey });
+        const { error: markErr } = await admin.from("workflow_overage_charges")
           .update({ status: "invoiced", invoiced_at: new Date().toISOString(), stripe_invoice_item_id: item.id })
-          .in("id", entry.ids);
+          .in("id", entry.ids).eq("status", "pending");
+        if (markErr) {
+          // Stripe has the item; our rows still say pending. Re-running is safe (same key, same item),
+          // but someone must look, so this is reported as a failure, not a success.
+          console.error(`overage rows not marked invoiced for ${familyId} (Stripe item ${item.id}):`, markErr.message);
+          results.push({ family_id: familyId, family_name: family.name, invoiced: true, needs_attention: true, stripe_invoice_item_id: item.id,
+            reason: `Charged in Stripe, but the charges could not be marked invoiced here: ${markErr.message}. Re-running this is safe.` });
+          continue;
+        }
         results.push({ family_id: familyId, family_name: family.name, invoiced: true, amount: entry.total, count: entry.ids.length, stripe_invoice_item_id: item.id });
       } catch (e) {
         results.push({ family_id: familyId, family_name: family.name, skipped: true, reason: `Stripe error: ${e instanceof Error ? e.message : String(e)}` });

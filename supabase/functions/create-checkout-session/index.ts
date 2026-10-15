@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
 
   const { data: family, error: familyErr } = await sb
     .from("families")
-    .select("id, name, plan, stripe_customer_id")
+    .select("id, name, plan, stripe_customer_id, stripe_subscription_id")
     .eq("id", family_id)
     .maybeSingle();
 
@@ -99,6 +99,30 @@ Deno.serve(async (req) => {
 
   try {
     let customerId = family.stripe_customer_id as string | null;
+
+    // One live subscription per household. Opening a second Checkout for a household that already pays
+    // created a second subscription: the webhook then pointed the household at the new one and the old
+    // one kept charging with nothing tracking it. Checked against Stripe itself (the subscription on
+    // record AND anything else live on this customer), not just our own column. Plan changes go through
+    // change-subscription-plan instead.
+    const LIVE = new Set(["active", "trialing", "past_due", "unpaid", "incomplete"]);
+    const live: string[] = [];
+    if (family.stripe_subscription_id) {
+      try {
+        const sub = await stripe.subscriptions.retrieve(String(family.stripe_subscription_id));
+        if (LIVE.has(sub.status)) live.push(sub.id);
+      } catch (_e) { /* gone in Stripe: not live */ }
+    }
+    if (customerId) {
+      const subs = await stripe.subscriptions.list({ customer: customerId, status: "all", limit: 20 });
+      for (const sub of subs.data) if (LIVE.has(sub.status) && !live.includes(sub.id)) live.push(sub.id);
+    }
+    if (live.length) {
+      return json({
+        error: "This household already has a subscription. To change its plan, use Change plan instead of starting a new checkout.",
+        subscription_ids: live,
+      }, 409);
+    }
 
     if (!customerId) {
       const customer = await stripe.customers.create({

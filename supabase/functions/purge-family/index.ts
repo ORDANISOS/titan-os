@@ -32,6 +32,7 @@
 // Deploy: supabase functions deploy purge-family
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import Stripe from "npm:stripe@17.4.0";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
@@ -71,7 +72,7 @@ Deno.serve(async (req) => {
     if (!familyId) return json({ error: "Missing familyId." }, 400);
 
     const { data: family, error: fErr } = await admin.from("families")
-      .select("id,name,customer_number,plan,archived_at")
+      .select("id,name,customer_number,plan,archived_at,stripe_subscription_id,stripe_customer_id")
       .eq("id", familyId).maybeSingle();
     if (fErr) return json({ error: fErr.message }, 500);
     if (!family) return json({ error: "Family not found." }, 404);
@@ -81,6 +82,37 @@ Deno.serve(async (req) => {
     }
     if (!confirmName || confirmName !== family.name) {
       return json({ error: "Confirmation text does not match the family name." }, 400);
+    }
+
+    // Never purge a household that Stripe is still billing: once the rows are gone there is nothing
+    // left to reconcile a charge against. Checked against Stripe itself, not our own status column,
+    // because an archive whose cancel failed used to leave the subscription live (2026-10-14).
+    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
+    if (family.stripe_subscription_id || family.stripe_customer_id) {
+      if (!stripeKey) return json({ error: "Cannot confirm billing has stopped (Stripe is not configured), so nothing was deleted." }, 500);
+      const stripe = new Stripe(stripeKey, { apiVersion: "2024-06-20", httpClient: Stripe.createFetchHttpClient() });
+      const LIVE = new Set(["active", "trialing", "past_due", "unpaid", "incomplete"]);
+      const live: string[] = [];
+      try {
+        if (family.stripe_subscription_id) {
+          try {
+            const sub = await stripe.subscriptions.retrieve(String(family.stripe_subscription_id));
+            if (LIVE.has(sub.status)) live.push(sub.id);
+          } catch (e) {
+            const err = e as { code?: string; statusCode?: number };
+            if (!(err?.code === "resource_missing" || err?.statusCode === 404)) throw e;
+          }
+        }
+        if (family.stripe_customer_id) {
+          const subs = await stripe.subscriptions.list({ customer: String(family.stripe_customer_id), status: "all", limit: 20 });
+          for (const sub of subs.data) if (LIVE.has(sub.status) && !live.includes(sub.id)) live.push(sub.id);
+        }
+      } catch (e) {
+        return json({ error: `Could not confirm with Stripe that billing has stopped, so nothing was deleted: ${e instanceof Error ? e.message : String(e)}` }, 502);
+      }
+      if (live.length) {
+        return json({ error: `Stripe is still billing this household (${live.join(", ")}). Cancel it in Stripe first; nothing was deleted.` }, 409);
+      }
     }
 
     const performedBy = callerProfile.email || user.email || user.id;
