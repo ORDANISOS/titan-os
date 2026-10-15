@@ -3046,6 +3046,9 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   const startAttach=(propertyId,section)=>{setAttachIntent({propertyId,section});setActiveTab("vault");};
   useEffect(()=>{
     if(!family?.id)return;
+    // Firm administrators have view-only access and no assistant (the Ask ORDANIS tab is removed for
+    // them above). The greeting embeds a working assistant, so it must not open for them either.
+    if(userProfile?.role==="enterprise_admin")return;
     if(_greetedFamilies.has(family.id))return;   // already greeted this session
     _greetedFamilies.add(family.id);
     setShowWelcome(true);
@@ -3059,7 +3062,10 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   // Upload a single file as an attachment to a given note
   const uploadNoteAttachment=async(noteId,file,category)=>{
     const ext=file.name.split(".").pop();
-    const path=`note-attachments/${family.id}/${Date.now()}_${Math.random().toString(36).slice(2,8)}_${file.name.replace(/\s+/g,"_")}`;
+    // Household folder FIRST: every storage rule (read, upload, delete, the firm gate and the storage
+    // quota) reads the household from the first folder of the path. Under note-attachments/<household>/
+    // only admins could upload or open these, and a firm admin's download always failed.
+    const path=`${family.id}/note-attachments/${Date.now()}_${Math.random().toString(36).slice(2,8)}_${file.name.replace(/\s+/g,"_")}`;
     const{error:uploadError}=await sb.storage.from("documents").upload(path,file,{upsert:false});
     if(uploadError)throw new Error(uploadError.message);
     const{error:dbError}=await sb.from("note_attachments").insert({note_id:noteId,name:file.name,category:category||"General",file_path:path,file_size:file.size,file_type:file.type||ext});
@@ -5680,7 +5686,8 @@ function NotesView({data,reload,toast,userProfile,prospectMode=false}){
   },[notes,contacts,advisors]);
   const uploadAttachment=async(noteId,file,category,familyIdForPath)=>{
     const ext=file.name.split(".").pop();
-    const path=`note-attachments/${familyIdForPath||"general"}/${Date.now()}_${Math.random().toString(36).slice(2,8)}_${file.name.replace(/[^A-Za-z0-9._-]+/g,"_")}`;
+    // Household folder first, for the same reason as the household Notes tab (see addNote's path).
+    const path=`${familyIdForPath||"general"}/note-attachments/${Date.now()}_${Math.random().toString(36).slice(2,8)}_${file.name.replace(/[^A-Za-z0-9._-]+/g,"_")}`;
     const{error:uploadError}=await sb.storage.from("documents").upload(path,file,{upsert:false});
     if(uploadError)throw new Error(uploadError.message);
     const{error:dbError}=await sb.from("note_attachments").insert({note_id:noteId,name:file.name,category:category||"General",file_path:path,file_size:file.size,file_type:file.type||ext});
