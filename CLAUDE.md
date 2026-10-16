@@ -69,7 +69,9 @@ The OpenArc intelligence brief and any litigation/competitor content must never 
 - Claude Doc "ORDANIS Production Release Plan" (id 783795c4-596a-47c3-a956-4efc59cdf789): steps 0-4, 6 done; Step 5 app deployed;
   Step 7 (firm notice) waits for the first firm. Phase 5 (domains/DNS) and Phase 10 (expert dashboard filter, pilot) are parked.
 - In this repo: `FEATURES.md`, `docs/HANDOFF-*.md`, `docs/RUNBOOK-*.md`, `supabase/migrations/`.
-- Jarvis (admins' voice console) is a SEPARATE app: `~/Documents/GitHub/ordanis-jarvis` -> jarvis.ordanisos.com. Never add it to
+- ELIOT (Executive Liaison for Inbox, Operations & Tasks; formerly "Jarvis", renamed 2026-10-16), the admins' voice console, is a
+  SEPARATE app: `~/Documents/GitHub/ordanis-jarvis` -> eliot.ordanisos.com (jarvis.ordanisos.com was removed from Vercel
+  on 2026-10-16). Never use the old name in anything people see. Never add it to
   the portal (no /hub route) or to the email portal. Its back end lives here: `supabase/functions/hub-command` and
   `public.audit_log` (migration `20261014130000_hub_audit_log`), both live on production since 2026-10-14.
 

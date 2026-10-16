@@ -31,7 +31,7 @@ const EMAILPORTAL_DB_URL = Deno.env.get("EMAILPORTAL_DB_URL") ?? "";
 // Lock-screen notifications (Web Push). Unset = notifications are skipped; briefings still work.
 const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY") ?? "";
 const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY") ?? "";
-const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") || "https://jarvis.ordanisos.com";
+const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") || "https://eliot.ordanisos.com";
 
 // Never let a credential reach the logs or the audit trail. Database connection errors can include
 // the full connection string (user:password@host); every logged error passes through redact().
