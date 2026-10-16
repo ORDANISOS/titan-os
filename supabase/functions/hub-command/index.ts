@@ -960,7 +960,7 @@ function briefingDisplay(items: Finding[]): Display | null {
 }
 
 const BRIEFING_PROMPT = [
-  "You are Jarvis, the world's best executive assistant, briefing an ORDANIS administrator out loud.",
+  "You are Eliot (ELIOT: Executive Liaison for Inbox, Operations & Tasks), the world's best executive assistant, briefing an ORDANIS administrator out loud.",
   "You get a ranked list of findings (already prioritized: critical, high, medium, info). Write the spoken briefing:",
   "- Open with a short, warm greeting using their first name if given, and how many things need them (count critical + high + medium; mention info items only if nothing else).",
   "- Then the most important two or three items, in order, each in one plain sentence saying what it is and why it matters now. Lead with anything critical.",
@@ -1023,7 +1023,7 @@ function briefingPushText(label: string, counts: Record<string, number>) {
   const critical = counts.critical ?? 0;
   const need = critical + (counts.high ?? 0) + (counts.medium ?? 0);
   const tail = need === 0 ? "nothing needs you" : `${need} need${need === 1 ? "s" : ""} you${critical ? ` (${critical} critical)` : ""}`;
-  return { title: "Jarvis", body: `${label} briefing ready · ${tail}`, tag: "jarvis-briefing" };
+  return { title: "ELIOT", body: `${label} briefing ready · ${tail}`, tag: "eliot-briefing" };
 }
 
 type PushResult = { name: "web_push"; ok: boolean; devices: number; sent: number; removed: number; failed: number; skipped?: string };
@@ -1066,7 +1066,7 @@ async function runScheduledBriefings(admin: SupabaseClient, secret: string, requ
   if (!slot || !dayAllowed(et.weekday)) return json({ skipped: "not a briefing time" });
   const slotKey = `${et.date} ${slot}`;
 
-  // Recipients: active admins who use Jarvis (have at least one hub command on record).
+  // Recipients: active admins who use Eliot (have at least one hub command on record).
   const { data: admins } = await admin.from("user_profiles").select("id,email,full_name").eq("role", "admin").neq("active", false);
   const results: Array<Record<string, unknown>> = [];
   for (const a of admins ?? []) {
@@ -1103,7 +1103,7 @@ async function runScheduledBriefings(admin: SupabaseClient, secret: string, requ
 }
 
 const SYSTEM_PROMPT = [
-  "You are Jarvis, the voice assistant in the ORDANIS command hub, talking with an ORDANIS platform administrator. If asked who you are, you're Jarvis, ORDANIS's platform assistant.",
+  "You are Eliot, the voice assistant in the ORDANIS command hub, talking with an ORDANIS platform administrator. Your name stands for ELIOT: Executive Liaison for Inbox, Operations & Tasks. If asked who you are, you're Eliot, ORDANIS's executive liaison. Never call yourself by any other name; if someone uses an old name, just answer.",
   "Answer questions about the platform using the read-only tools. This is a spoken conversation, so sound like a sharp, warm chief of staff talking across the desk, not a report:",
   "- Lead with the answer in a sentence or two, the way a person would say it. Add only the detail that helps. Aim for under 60 words unless asked for more.",
   "- Use contractions and everyday words. Vary how you open; don't start every reply the same way, and skip filler like \"Great question\" or \"Certainly!\".",
@@ -1200,7 +1200,7 @@ Deno.serve(async (req) => {
       return json({ error: "Verify with your authenticator app to use the hub.", mfa_required: true, request_id: requestId }, 403);
     }
     // A shared visual (image sent by email or message from the device). Nothing is sent from here;
-    // this only records, for the books, that firm or client figures left Jarvis and how.
+    // this only records, for the books, that firm or client figures left Eliot and how.
     if (payload?.share && typeof payload.share === "object") {
       const title = clean((payload.share as Record<string, unknown>).title, 120) || "(untitled visual)";
       const channel = clean((payload.share as Record<string, unknown>).channel, 40) || "unknown";
@@ -1249,7 +1249,7 @@ Deno.serve(async (req) => {
           await writeAudit({ status: "rate_limited" });
           return json({ error: "Give it a minute before sending another test.", request_id: requestId }, 429);
         }
-        const r = await pushToUser(admin, user.id, { title: "Jarvis", body: "Test notification · alerts are working", tag: "jarvis-test" });
+        const r = await pushToUser(admin, user.id, { title: "ELIOT", body: "Test notification · alerts are working", tag: "eliot-test" });
         audit.tool_calls = [r];
         await writeAudit({ status: r.ok && !r.skipped ? "ok" : "error", error: r.skipped ?? (r.failed ? `${r.failed} device(s) failed` : null), result_summary: `Test sent to ${r.sent} of ${r.devices} device(s).` });
         return json({ ...r, request_id: requestId });
