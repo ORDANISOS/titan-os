@@ -41,6 +41,8 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// Stripe API version for Checkout Sessions with Managed Payments (needs 2025-03-31.basil or later).
+const MANAGED_PAYMENTS_API_VERSION = "2025-03-31.basil";
 const stripe = new Stripe(STRIPE_SECRET_KEY, {
   apiVersion: "2024-06-20",
   httpClient: Stripe.createFetchHttpClient(),
@@ -167,6 +169,11 @@ Deno.serve(async (req) => {
       cancel_url,
       metadata: { family_id: family.id, plan: tier.plan },
       subscription_data: { metadata: { family_id: family.id, plan: tier.plan } },
+    }, {
+      // Managed Payments only exists on Stripe API 2025-03-31.basil and later. Only THIS request uses
+      // the newer version; the rest of the function stays on 2024-06-20, because basil changes the
+      // shape of other objects (invoices, subscription periods) that this codebase reads.
+      apiVersion: MANAGED_PAYMENTS_API_VERSION,
     });
 
     return json({ url: session.url });
