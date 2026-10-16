@@ -831,7 +831,7 @@ async function firmDocGate(path,name,action="open_document"){
 const FIRM_GATE_MSG="This access could not be recorded, so the file was not opened.";
 // Display-only rename: the underlying role value stored in the DB/permissions stays "advisor";
 // only the label shown to users reads "ORDANIS Expert".
-const ROLE_LABELS={admin:"Admin",advisor:"ORDANIS Expert",client:"Client",partner:"Partner",enterprise_admin:"Firm Administrator"};
+const ROLE_LABELS={admin:"Admin",advisor:"ORDANIS Expert",analyst:"ORDANIS Analyst",client:"Client",partner:"Partner",enterprise_admin:"Firm Administrator"};
 const roleLabel=r=>ROLE_LABELS[(r||"").toLowerCase()]||r;
 
 
@@ -3017,7 +3017,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
 
   // Scheduled Prompts is visible to every ORDANIS Expert/Admin, and to a Partner
   // only when an admin has flipped their can_run_scheduled_prompts toggle on.
-  const canSeePrompts=userProfile?.role==="advisor"||userProfile?.role==="admin"||(userProfile?.role==="partner"&&userProfile?.canRunScheduledPrompts);
+  const canSeePrompts=userProfile?.role==="advisor"||userProfile?.role==="analyst"||userProfile?.role==="admin"||(userProfile?.role==="partner"&&userProfile?.canRunScheduledPrompts);
   // ORDER MATTERS: familyRow and plan must stay ABOVE TABS, which reads plan to decide whether the
   // Obligations tab exists. Declared after it, the const would sit in its temporal dead zone and
   // every render would throw "Cannot access 'plan' before initialization" — the exact failure that
@@ -3420,7 +3420,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
         {/* OVERVIEW TAB */}
         {activeTab==="overview"&&<div style={{padding:isMobile?"16px 14px":"24px 28px"}}>
           {userProfile?.role==="admin"&&<FirmMembershipCard familyRow={familyRow} toast={toast} reload={reload}/>}
-          {familyRow.enterprise_id&&(userProfile?.role==="admin"||userProfile?.role==="advisor")&&<PayerCard familyRow={familyRow} userProfile={userProfile} toast={toast} reload={reload}/>}
+          {familyRow.enterprise_id&&(userProfile?.role==="admin"||userProfile?.role==="advisor"||userProfile?.role==="analyst")&&<PayerCard familyRow={familyRow} userProfile={userProfile} toast={toast} reload={reload}/>}
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(140px,100%),1fr))",gap:14,marginBottom:24}}>
             <StatBox label="Net Worth Est." value={fmtMoney(netWorth)} accent={B.navy}/>
             <StatBox label="Real Estate" value={fmtMoney(totalRE)} accent={B.gold}/>
@@ -6648,7 +6648,9 @@ function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
   const isAdmin=userProfile?.role==="admin";
   const myEmail=(userProfile?.email||"").toLowerCase();
   // Admins default to "All ORDANIS Experts" and can switch; non-admins are locked to their own scope so unscoped prospect records (family_id null) don't leak in.
-  const[scope,setScope]=useState(isAdmin?"":myEmail);
+  // An Analyst's households all belong to other people (their Experts), so an own-email scope would show
+  // nothing; their data is already limited to their Experts' households by the database.
+  const[scope,setScope]=useState(isAdmin||userProfile?.role==="analyst"?"":myEmail);
   const _families=(_allFamilies||[]).filter(f=>!(f.archived_at||f.archivedAt));
   const _famIds=new Set(_families.filter(f=>!scope||(f.advisorEmail||"").toLowerCase()===scope).map(f=>f.id));
   const _cAdv=id=>{const c=_contacts.find(x=>x.id===id);return (c?.advisorEmail||"").toLowerCase();};
@@ -6847,6 +6849,22 @@ function UserManagementView({userProfile,data={},toast}){
     const{data:rows}=await sb.from("family_partners").select("*");
     if(rows)setFamilyPartners(rows);
   };
+  // Expert -> Analyst links (expert_analysts): each Expert has one Analyst, an Analyst may support several
+  // Experts and automatically has all of their households. The Expert stays the point person.
+  const[expertAnalysts,setExpertAnalysts]=useState([]);
+  const loadExpertAnalysts=async()=>{
+    const{data:rows,error}=await sb.from("expert_analysts").select("expert_id,analyst_id");
+    if(!error)setExpertAnalysts(rows||[]);
+  };
+  const analystOf=expertId=>(expertAnalysts.find(r=>r.expert_id===expertId)||{}).analyst_id||"";
+  const expertsOfAnalyst=analystId=>expertAnalysts.filter(r=>r.analyst_id===analystId).map(r=>users.find(u=>u.id===r.expert_id)).filter(Boolean);
+  const setAnalystFor=async(expert,analystId)=>{
+    const{error}=analystId
+      ?await sb.from("expert_analysts").upsert({expert_id:expert.id,analyst_id:analystId},{onConflict:"expert_id"})
+      :await sb.from("expert_analysts").delete().eq("expert_id",expert.id);
+    if(error){toast(error.message,"error");return;}
+    toast(analystId?"Analyst assigned":"Analyst removed");loadExpertAnalysts();
+  };
 
   // Household name alone isn't always enough to tell two families apart (similar names, a
   // household renamed, etc.) -- when linking a partner to families, or assigning a client to one,
@@ -6875,7 +6893,7 @@ function UserManagementView({userProfile,data={},toast}){
       setPlatformCfg(row||null);
     }catch(_e){setPlatformCfg(null);}
   };
-  useEffect(()=>{loadUsers();loadFamilyPartners();loadPlatformCfg();sb.from("enterprises").select("id,name").order("name").then(r=>{if(!r.error)setFirms(r.data||[]);});},[]);
+  useEffect(()=>{loadUsers();loadFamilyPartners();loadExpertAnalysts();loadPlatformCfg();sb.from("enterprises").select("id,name").order("name").then(r=>{if(!r.error)setFirms(r.data||[]);});},[]);
 
   const toggleActive=async u=>{
     const{error}=await sb.from("user_profiles").update({active:!u.active}).eq("id",u.id);
@@ -7073,6 +7091,7 @@ function UserManagementView({userProfile,data={},toast}){
                 :<select value={u.role||"advisor"} onChange={e=>changeRole(u,e.target.value)} style={{background:B.bg,border:`1px solid ${B.border}`,borderRadius:6,padding:"4px 8px",fontSize:12,color:B.text,outline:"none",fontFamily:"inherit",cursor:"pointer",width:"100%"}}>
                   <option value="admin">Admin</option>
                   <option value="advisor">ORDANIS Expert</option>
+                  <option value="analyst">ORDANIS Analyst</option>
                   <option value="partner">Partner</option>
                   <option value="client">Client</option>
                   {u.role==="enterprise_admin"&&<option value="enterprise_admin">Firm Administrator</option>}
@@ -7094,6 +7113,14 @@ function UserManagementView({userProfile,data={},toast}){
               </span>
             </div>
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {u.role==="advisor"&&<select value={analystOf(u.id)} onChange={e=>setAnalystFor(u,e.target.value)} title="This Expert's Analyst: same access to the Expert's households. The Expert stays the point person."
+                style={{background:B.bg,border:`1px solid ${B.border}`,borderRadius:6,padding:"3px 6px",fontSize:11,color:B.textMid,fontFamily:"inherit",maxWidth:170}}>
+                <option value="">Analyst: none</option>
+                {users.filter(a=>a.role==="analyst"&&a.active!==false).map(a=><option key={a.id} value={a.id}>Analyst: {a.full_name||a.email}</option>)}
+              </select>}
+              {u.role==="analyst"&&<span title="Experts this Analyst supports" style={{fontSize:11,color:B.textMute,whiteSpace:"nowrap"}}>
+                Supports: {expertsOfAnalyst(u.id).map(x=>x.full_name||x.email).join(", ")||"no Expert yet"}
+              </span>}
               {/* Load against cap, editable in place. Only for roles that hold
                   families - a client or partner has no capacity to speak of. */}
               {(u.role==="advisor"||u.role==="admin")&&(()=>{
@@ -7169,6 +7196,7 @@ function UserManagementView({userProfile,data={},toast}){
         const GROUPS=[
           {key:"admin",label:"Admins",accent:B.navy,desc:"Full access to all families, users, and settings"},
           {key:"advisor",label:"ORDANIS Experts",accent:B.gold,desc:"Scoped to their assigned families and prospects"},
+          {key:"analyst",label:"ORDANIS Analysts",accent:"#5b7a99",desc:"Work alongside their Expert, with the same access to all of that Expert's households"},
           {key:"partner",label:"Partners",accent:"#7a8fa6",desc:"View-only across linked families; can upload & download documents"},
           {key:"client",label:"Clients",accent:B.navyMid,desc:"Read-only portal access to their own family"},
         ];
@@ -7185,6 +7213,11 @@ function UserManagementView({userProfile,data={},toast}){
           if(role==="advisor"){
             const fam=families.find(f=>f.id===familyFilter);
             return!!fam&&(fam.advisorEmail||"").toLowerCase()===(u.email||"").toLowerCase();
+          }
+          if(role==="analyst"){
+            const fam=families.find(f=>f.id===familyFilter);
+            const mine=new Set(expertsOfAnalyst(u.id).map(x=>(x.email||"").toLowerCase()));
+            return!!fam&&mine.has((fam.advisorEmail||"").toLowerCase());
           }
           return role==="admin"; // admins have access to every family regardless of filter
         };
@@ -7238,6 +7271,7 @@ function UserManagementView({userProfile,data={},toast}){
               <Field label="Role">
                 <Sel value={newRole} onChange={e=>setNewRole(e.target.value)}>
                   <option value="advisor">ORDANIS Expert — sees assigned families</option>
+                  <option value="analyst">ORDANIS Analyst — same access as their Expert; assign the Expert after creating</option>
                   <option value="partner">Partner — view-only, upload/download docs only</option>
                   <option value="admin">Admin — sees everything</option>
                   <option value="client">Client — read-only portal</option>
@@ -9365,6 +9399,26 @@ function OnboardingWizard({onClose,addMember,addProfessional,addBusinessPartner,
   );
 }
 
+// The household's ORDANIS team as the client sees it: their Expert (the point person) and, under them,
+// the Expert's Analyst. From household_team(), which only answers for households the viewer can see.
+function HouseholdTeamCard({familyId}){
+  const[team,setTeam]=useState([]);
+  useEffect(()=>{
+    let stopped=false;
+    if(!familyId)return;
+    sb.rpc("household_team",{p_family_id:familyId}).then(({data:rows,error})=>{if(!stopped&&!error)setTeam(rows||[]);});
+    return()=>{stopped=true;};
+  },[familyId]);
+  const expert=team.find(t=>t.member_role==="expert");
+  if(!expert)return null;
+  const analysts=team.filter(t=>t.member_role==="analyst");
+  return <div style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:12,padding:"14px 18px",marginBottom:20,display:"flex",gap:24,flexWrap:"wrap",alignItems:"baseline"}}>
+    <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>Your {BRAND.name} team</div>
+    <div style={{fontSize:13.5,color:B.text}}><strong style={{color:B.navy}}>{expert.full_name}</strong> <span style={{color:B.textSoft}}>· {roleLabel("advisor")}, your point person</span></div>
+    {analysts.map(a=><div key={a.email} style={{fontSize:13.5,color:B.text}}>{a.full_name} <span style={{color:B.textSoft}}>· {roleLabel("analyst")}</span></div>)}
+  </div>;
+}
+
 function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const isMobile=useIsMobile();
   // Needed because this view renders CashFlowView too. The client view is read-only, so
@@ -9874,6 +9928,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           Good {new Date().getHours()<12?"Morning":new Date().getHours()<17?"Afternoon":"Evening"}
         </div>
         <div style={{color:B.textSoft,fontSize:14,marginBottom:24}}>Here is your financial overview as of {new Date().toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}</div>
+        <HouseholdTeamCard familyId={family.id}/>
 
         {/* Net Worth Hero */}
         <div style={{background:B.white,border:`1px solid ${B.borderLight}`,borderTop:`4px solid ${B.gold}`,borderRadius:16,padding:isMobile?"22px 20px":"32px 36px",marginBottom:isMobile?16:24,position:"relative",overflow:"hidden",boxShadow:B.shadow}}>
@@ -14348,9 +14403,12 @@ export default function App(){
   const fetchTable=useCallback(async table=>{
     const prof=profileRef.current;
     let q=sb.from(table).select("*").order("created_at",{ascending:false});
-    if(prof?.role==="advisor"){
+    if(prof?.role==="advisor"||prof?.role==="analyst"){
       if(table==="families"){
-        q=q.eq("advisor_email",prof.email);
+        // An Expert sees the households they lead. An Analyst sees every household of the Experts they
+        // support; the database rules (current_user_allowed_family_ids) return exactly those, so no
+        // extra filter here.
+        if(prof.role==="advisor")q=q.eq("advisor_email",prof.email);
       } else if(FAMILY_SCOPED.includes(table)){
         const ids=allowedFamilyIdsRef.current||[];
         const idList=ids.length?ids.join(","):"00000000-0000-0000-0000-000000000000";
@@ -14373,7 +14431,7 @@ export default function App(){
     }
     const{data:rows,error}=await q;
     if(error){showToast(`Error loading ${table}`,"error");return;}
-    if(table==="families"&&prof?.role==="advisor")allowedFamilyIdsRef.current=rows.map(r=>r.id);
+    if(table==="families"&&(prof?.role==="advisor"||prof?.role==="analyst"))allowedFamilyIdsRef.current=rows.map(r=>r.id);
     setData(p=>({...p,[table]:rows.map(toClient)}));
   },[showToast]);
 

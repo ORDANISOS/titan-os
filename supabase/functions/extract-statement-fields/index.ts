@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
     const { data: profile, error: pErr } = await asUser
       .from("user_profiles").select("role").eq("id", user.id).maybeSingle();
     if (pErr) return json({ error: "Could not verify your account permissions." }, 403);
-    if (!profile || !["admin", "advisor"].includes(String(profile.role))) {
+    if (!profile || !["admin", "advisor", "analyst"].includes(String(profile.role))) {
       return json({ error: "Reading statements is available to advisors and administrators only." }, 403);
     }
 

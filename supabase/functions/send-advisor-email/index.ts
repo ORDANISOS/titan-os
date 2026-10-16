@@ -178,9 +178,12 @@ Deno.serve(async (req) => {
     const primaryEmail = (fam?.advisor_email || "").trim().toLowerCase();
     const primaryName = clean(fam?.advisor_name);
 
-    const { data: staffRows } = await admin.from("user_profiles").select("email").in("role", ["advisor", "admin"]).eq("active", true);
+    const { data: staffRows } = await admin.from("user_profiles").select("email").in("role", ["advisor", "analyst", "admin"]).eq("active", true);
     const staffEmails = new Set((staffRows || []).map((r: { email: string }) => (r.email || "").trim().toLowerCase()).filter(Boolean));
-    const blocked = toEmails.filter((e) => e !== primaryEmail && staffEmails.has(e));
+    // The household's own team may be emailed: its Expert and that Expert's Analyst. Other staff may not.
+    const { data: team } = await admin.rpc("household_team", { p_family_id: familyId });
+    const teamEmails = new Set(((team || []) as { email: string }[]).map((t) => (t.email || "").trim().toLowerCase()).filter(Boolean));
+    const blocked = toEmails.filter((e) => e !== primaryEmail && !teamEmails.has(e) && staffEmails.has(e));
     if (blocked.length) return json({ error: "You can only email your designated ORDANIS Expert from the firm — not other ORDANIS Experts directly." }, 403);
 
     const cc = (primaryEmail && !toEmails.includes(primaryEmail)) ? [primaryEmail] : undefined;

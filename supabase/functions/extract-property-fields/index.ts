@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
     if (profErr || !profile) {
       return json({ error: "Could not verify your account permissions." }, 403);
     }
-    if (profile.role !== "advisor" && profile.role !== "admin") {
+    if (profile.role !== "advisor" && profile.role !== "analyst" && profile.role !== "admin") {
       return json({ error: "Document extraction is available to advisors only." }, 403);
     }
 
