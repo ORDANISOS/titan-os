@@ -70,7 +70,7 @@ The OpenArc intelligence brief and any litigation/competitor content must never 
   Step 7 (firm notice) waits for the first firm. Phase 5 (domains/DNS) and Phase 10 (expert dashboard filter, pilot) are parked.
 - In this repo: `FEATURES.md`, `docs/HANDOFF-*.md`, `docs/RUNBOOK-*.md`, `supabase/migrations/`.
 - ELIOT (Executive Liaison for Inbox, Operations & Tasks; formerly "Jarvis", renamed 2026-10-16), the admins' voice console, is a
-  SEPARATE app: `~/Documents/GitHub/ordanis-jarvis` -> eliot.ordanisos.com (jarvis.ordanisos.com was removed from Vercel
+  SEPARATE app: `~/Documents/GitHub/ordanis-eliot` (repo ORDANISOS/ordanis-eliot) -> eliot.ordanisos.com (jarvis.ordanisos.com was removed from Vercel
   on 2026-10-16). Never use the old name in anything people see. Never add it to
   the portal (no /hub route) or to the email portal. Its back end lives here: `supabase/functions/hub-command` and
   `public.audit_log` (migration `20261014130000_hub_audit_log`), both live on production since 2026-10-14.
