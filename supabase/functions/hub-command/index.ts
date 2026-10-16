@@ -182,12 +182,12 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
   },
   {
     name: "user_directory",
-    description: "Users: search people by name, email or household; filter by role (client, advisor = ORDANIS Expert, partner, enterprise_admin, admin), by their household's subscription state, and by whether the account itself is active. Includes household, plan and last sign-in. With no filters, returns counts by role and state.",
+    description: "Users: search people by name, email or household; filter by role (client, advisor = ORDANIS Expert, analyst = ORDANIS Analyst, partner, enterprise_admin, admin), by their household's subscription state, and by whether the account itself is active. Includes household, plan and last sign-in. With no filters, returns counts by role and state.",
     input_schema: {
       type: "object",
       properties: {
         search: { type: "string", description: "Part of a name or email." },
-        role: { type: "string", enum: ["client", "advisor", "partner", "enterprise_admin", "admin"] },
+        role: { type: "string", enum: ["client", "advisor", "analyst", "partner", "enterprise_admin", "admin"] },
         subscription_state: { type: "string", enum: ["active", "past_due", "final_notice", "archived", "cancelled"], description: "The household's billing state." },
         account_active: { type: "boolean", description: "true = enabled accounts only, false = disabled accounts only." },
         limit: { type: "integer", minimum: 1, maximum: 50 },
@@ -1433,6 +1433,16 @@ Deno.serve(async (req) => {
         const names = await familyNames(admin, (data ?? []).map((t) => t.family_id).filter(Boolean));
         const team = await activeAdmins(admin);
         return json({ tasks: (data ?? []).map((t) => ({ ...t, family_name: names[String(t.family_id)] ?? null })), team, me: user.id, request_id: requestId });
+      }
+      // A household's team, for reference on a task card: the ORDANIS Expert (point person) and any
+      // ORDANIS Analyst supporting them. Names only; task owners stay ORDANIS admins.
+      if (action === "team") {
+        const fid = String(payload.family_id ?? "");
+        if (!UUID_RE.test(fid)) return json({ team: [] });
+        const { data, error } = await admin.rpc("household_team", { p_family_id: fid });
+        if (error) return json({ team: [], request_id: requestId });
+        return json({ team: (data ?? []).map((m: Record<string, unknown>) => ({ role: m.member_role === "analyst" ? "analyst" : "expert",
+          name: String(m.full_name || "").trim() || null, point: m.is_point_person === true })), request_id: requestId });
       }
       if (action === "families") {
         const q = clean(payload.q, 60).replace(/[%_]/g, "");
