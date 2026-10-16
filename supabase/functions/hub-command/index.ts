@@ -338,8 +338,27 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
   },
   {
     name: "attention_scan",
-    description: "Scan production and the email portal for everything that needs the administrator's attention right now, ranked by priority (critical, high, medium, info): billing problems, overdue or imminent bills, overdue tasks and workflows, plan-change requests, onboarding follow-ups, state rules needing judgement, failed scheduled prompts, suspicious or unassigned email. Use for 'what needs me', 'brief me', 'anything urgent'.",
+    description: "Scan production and the email portal for everything that needs the administrator's attention right now, ranked by priority (critical, high, medium, info): billing problems, overdue or imminent bills, overdue tasks and workflows, the administrator's own overdue or due-today team tasks, plan-change requests, onboarding follow-ups, state rules needing judgement, failed scheduled prompts, suspicious or unassigned email. Use for 'what needs me', 'brief me', 'anything urgent'.",
     input_schema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "propose_task",
+    description: "Draft a task for the ORDANIS team's internal task list (households never see it) when the administrator asks to add, create or remember a task or to-do. This SAVES NOTHING: it puts a draft on the administrator's screen, and they confirm by saying yes or tapping Save. Resolve relative dates (\"Friday\", \"next week\") yourself using today's date. If they named a household, pass the name as spoken; if the result lists several matches, ask which one and call again. After it succeeds, read the draft back in one short sentence (task, household if any, due date, owner if not them, phone reminder) and end with a yes-or-no question like \"Save it?\". If they gave a due date but said nothing about a reminder, the draft includes a phone reminder at 9 AM on the due date; mention it so they can say \"no reminder\".",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "The task, short and in the administrator's words (under 120 characters)." },
+        household: { type: "string", description: "Household (family) name as spoken, if the task is about one." },
+        due_date: { type: "string", description: "Due date, YYYY-MM-DD (Eastern)." },
+        priority: { type: "string", enum: ["low", "normal", "high"] },
+        owner: { type: "string", description: "Teammate's name if it is for someone else; omit for the administrator." },
+        reminder: { type: "string", enum: ["none", "morning_of", "day_before", "at"], description: "morning_of = 9 AM on the due date; day_before = 5 PM the day before; at = reminder_at." },
+        reminder_at: { type: "string", description: "With reminder 'at': YYYY-MM-DDTHH:MM in Eastern time." },
+        notes: { type: "string" },
+      },
+      required: ["title"],
+      additionalProperties: false,
+    },
   },
 ];
 
@@ -822,7 +841,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 const fewNames = (xs: string[], n = 3) => { const u = [...new Set(xs.filter(Boolean))]; return u.slice(0, n).join(", ") + (u.length > n ? ` and ${u.length - n} more` : ""); };
 const daysAgo = (t: string | null | undefined) => (t ? Math.floor((Date.now() - Date.parse(t)) / 86_400_000) : 0);
 
-async function attentionScan(db: SupabaseClient, emailCtx: EmailCtx, since: string | null, opts: { service?: boolean } = {}) {
+async function attentionScan(db: SupabaseClient, emailCtx: EmailCtx, since: string | null, opts: { service?: boolean; userId?: string } = {}) {
   const items: Finding[] = [];
   const errors: string[] = [];
   const today = isoDate(new Date());
@@ -856,6 +875,18 @@ async function attentionScan(db: SupabaseClient, emailCtx: EmailCtx, since: stri
         const names = await familyNames(db, data.map((t) => t.family_id));
         items.push({ key: `tasks-overdue:${data.length}`, source: "production", severity: 2, title: `${plural(data.length, "task")} overdue`, detail: fewNames(data.map((t) => `${t.title}${names[t.family_id] ? ` (${names[t.family_id]})` : ""}`)) });
       }
+    }),
+    check("team tasks", async () => {
+      if (!opts.userId) return;
+      const todayEt = etParts().date;
+      const { data, error } = await db.from("eliot_team_tasks").select("title,due_date,family_id").eq("done", false).eq("owner_id", opts.userId).lte("due_date", todayEt).limit(300);
+      if (error) throw error;
+      const names = await familyNames(db, (data ?? []).map((t) => t.family_id).filter(Boolean));
+      const label = (t: Record<string, unknown>) => `${t.title}${names[String(t.family_id)] ? ` (${names[String(t.family_id)]})` : ""}`;
+      const overdue = (data ?? []).filter((t) => t.due_date < todayEt);
+      const today = (data ?? []).filter((t) => t.due_date === todayEt);
+      if (overdue.length) items.push({ key: `team-overdue:${overdue.length}`, source: "production", severity: 3, title: `${plural(overdue.length, "of your team tasks", "of your team tasks")} overdue`, detail: fewNames(overdue.map(label)) });
+      if (today.length) items.push({ key: `team-today:${today.length}:${todayEt}`, source: "production", severity: 2, title: `${plural(today.length, "team task")} due today`, detail: fewNames(today.map(label)) });
     }),
     check("plan requests", async () => {
       const { data, error } = await db.from("plan_change_requests").select("family_id,from_plan,to_plan,created_at").eq("status", "pending").limit(100);
@@ -1058,12 +1089,144 @@ async function pushToUser(admin: SupabaseClient, userId: string, msg: { title: s
   return r;
 }
 
+// ── Team tasks ─────────────────────────────────────────────────────────────────────
+// The ORDANIS team's own list (eliot_team_tasks). Internal: never the household's portal `tasks`.
+// Only this function writes it (service role), after the admin + MFA checks, and every change is
+// audit-logged. Voice adds are drafts: the app shows and reads them back, and a confirmed draft
+// comes back here and is checked again before it is saved.
+type TaskInput = { id?: string; title?: string; notes?: string | null; family_id?: string | null; due_date?: string | null;
+  priority?: string; owner_id?: string | null; reminder?: { mode?: string; at?: string | null } | null };
+
+// Eastern wall-clock time to an ISO UTC instant (handles daylight saving).
+function etToUtcIso(date: string, hm: string): string | null {
+  const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date); const t = /^(\d{2}):(\d{2})$/.exec(hm);
+  if (!d || !t) return null;
+  const want = Date.UTC(+d[1], +d[2] - 1, +d[3], +t[1], +t[2]);
+  let guess = want;
+  const f = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+  for (let i = 0; i < 2; i++) {
+    const p = Object.fromEntries(f.formatToParts(new Date(guess)).map((x) => [x.type, x.value]));
+    guess += want - Date.UTC(+p.year, +p.month - 1, +p.day, Number(p.hour) % 24, +p.minute);
+  }
+  return new Date(guess).toISOString();
+}
+const validDate = (v: unknown) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T12:00:00Z`));
+const dayBefore = (date: string) => { const d = new Date(`${date}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); };
+
+async function activeAdmins(admin: SupabaseClient) {
+  const { data } = await admin.from("user_profiles").select("id,full_name,email").eq("role", "admin").neq("active", false);
+  return (data ?? []).map((a) => ({ id: String(a.id), name: String(a.full_name || a.email || "Admin").trim() }));
+}
+
+function reminderAt(mode: string | undefined, due: string | null, at: string | null | undefined): { remind_at: string | null; error?: string } {
+  if (!mode || mode === "none") return { remind_at: null };
+  if ((mode === "morning_of" || mode === "day_before") && !due) return { remind_at: null, error: "A reminder on the due date needs a due date." };
+  let iso: string | null = null;
+  if (mode === "morning_of") iso = etToUtcIso(due!, "09:00");
+  else if (mode === "day_before") iso = etToUtcIso(dayBefore(due!), "17:00");
+  else if (mode === "at") {
+    const m = typeof at === "string" ? /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(at) : null;
+    iso = m ? etToUtcIso(m[1], m[2]) : null;
+  } else return { remind_at: null, error: "Unknown reminder choice." };
+  if (!iso) return { remind_at: null, error: "That reminder time isn't valid." };
+  const t = Date.parse(iso);
+  if (t < Date.now() - 5 * 60_000) return { remind_at: null, error: "That reminder time has already passed." };
+  if (t > Date.now() + 400 * 86_400_000) return { remind_at: null, error: "Reminders can be up to a year ahead." };
+  return { remind_at: iso };
+}
+
+// Checks a task from the app (typed, or a confirmed voice draft) and returns the row to write.
+async function validateTask(admin: SupabaseClient, input: TaskInput, userId: string): Promise<{ row?: Record<string, unknown>; error?: string }> {
+  const title = clean(input.title, 300);
+  if (!title) return { error: "The task needs a title." };
+  const notes = input.notes ? String(input.notes).slice(0, 2000) : null;
+  const priority = ["low", "normal", "high"].includes(String(input.priority)) ? String(input.priority) : "normal";
+  const due = input.due_date ? (validDate(input.due_date) ? String(input.due_date) : null) : null;
+  if (input.due_date && !due) return { error: "That due date isn't valid." };
+  let family_id: string | null = null;
+  if (input.family_id) {
+    if (!UUID_RE.test(String(input.family_id))) return { error: "Unknown household." };
+    const { data: fam } = await admin.from("families").select("id").eq("id", input.family_id).is("archived_at", null).maybeSingle();
+    if (!fam) return { error: "That household isn't available." };
+    family_id = String(fam.id);
+  }
+  let owner_id = userId;
+  if (input.owner_id && input.owner_id !== userId) {
+    const team = await activeAdmins(admin);
+    if (!team.some((a) => a.id === input.owner_id)) return { error: "Tasks can only be assigned to an active ORDANIS admin." };
+    owner_id = String(input.owner_id);
+  }
+  const r = reminderAt(input.reminder?.mode, due, input.reminder?.at);
+  if (r.error) return { error: r.error };
+  return { row: { title, notes, priority, due_date: due, family_id, owner_id, remind_at: r.remind_at, reminder_sent_at: null, updated_at: new Date().toISOString() } };
+}
+
+// The model's propose_task: resolves the household and owner by name and returns a draft. Saves nothing.
+async function draftTask(admin: SupabaseClient, input: Record<string, unknown>, userId: string): Promise<{ draft?: Record<string, unknown>; message: string }> {
+  const title = clean(input.title, 300);
+  if (!title) return { message: "No task title given; ask what the task is." };
+  let family: { id: string; name: string } | null = null;
+  const spoken = clean(input.household, 80);
+  if (spoken) {
+    const { data } = await admin.from("families").select("id,name").is("archived_at", null).ilike("name", `%${spoken.replace(/[%_]/g, "")}%`).order("name").limit(6);
+    if (!data?.length) return { message: `No active household matches "${spoken}". Ask the administrator to say the household name again, or offer to add the task without one.` };
+    if (data.length > 1) return { message: `Several households match "${spoken}": ${data.map((f) => f.name).join("; ")}. Ask which one, then call propose_task again with that name.` };
+    family = { id: String(data[0].id), name: String(data[0].name) };
+  }
+  const team = await activeAdmins(admin);
+  let owner = team.find((a) => a.id === userId) ?? { id: userId, name: "you" };
+  const ownerSpoken = clean(input.owner, 80).toLowerCase();
+  if (ownerSpoken) {
+    const hits = team.filter((a) => a.name.toLowerCase().includes(ownerSpoken));
+    if (hits.length !== 1) return { message: hits.length ? `Several teammates match "${input.owner}": ${hits.map((h) => h.name).join("; ")}. Ask which one.` : `No active ORDANIS admin is called "${input.owner}". Tasks can only go to admins for now.` };
+    owner = hits[0];
+  }
+  const due = validDate(input.due_date) ? String(input.due_date) : null;
+  const mode = typeof input.reminder === "string" ? String(input.reminder) : due ? "morning_of" : "none";
+  const at = typeof input.reminder_at === "string" ? String(input.reminder_at) : null;
+  const r = reminderAt(mode, due, at);
+  if (r.error) return { message: `${r.error} Ask for a different reminder time, or no reminder.` };
+  const draft = {
+    title, notes: input.notes ? String(input.notes).slice(0, 2000) : null,
+    priority: ["low", "normal", "high"].includes(String(input.priority)) ? String(input.priority) : "normal",
+    due_date: due, family_id: family?.id ?? null, family_name: family?.name ?? null,
+    owner_id: owner.id, owner_name: owner.id === userId ? null : owner.name,
+    reminder: { mode, at: mode === "at" ? at : null }, remind_at: r.remind_at,
+  };
+  const when = r.remind_at ? new Date(r.remind_at).toLocaleString("en-US", { timeZone: "America/New_York", weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : null;
+  return { draft, message: `Draft on screen, NOT saved: "${title}"${family ? ` for the ${family.name} household` : ""}${due ? `, due ${due}` : ""}${draft.owner_name ? `, assigned to ${draft.owner_name}` : ""}${when ? `, phone reminder ${when} Eastern` : ", no phone reminder"}. Read it back and ask "Save it?".` };
+}
+
+// Due reminders: claim them (stamp reminder_sent_at first, so overlapping runs never double-send),
+// then send each owner one lock-screen alert with a count only.
+async function sendTaskReminders(admin: SupabaseClient) {
+  const { data: due } = await admin.from("eliot_team_tasks").select("id,owner_id")
+    .eq("done", false).is("reminder_sent_at", null).lte("remind_at", new Date().toISOString()).limit(200);
+  if (!due?.length) return { owners: 0, tasks: 0 };
+  const { data: claimed } = await admin.from("eliot_team_tasks").update({ reminder_sent_at: new Date().toISOString() })
+    .in("id", due.map((t) => t.id)).is("reminder_sent_at", null).select("id,owner_id");
+  const byOwner = new Map<string, number>();
+  for (const t of claimed ?? []) byOwner.set(String(t.owner_id), (byOwner.get(String(t.owner_id)) ?? 0) + 1);
+  for (const [owner, n] of byOwner) {
+    const push = await pushToUser(admin, owner, { title: "ELIOT", body: n === 1 ? "Task reminder · 1 task needs you" : `Task reminders · ${n} tasks need you`, tag: "eliot-task" }, "high")
+      .catch((e) => { console.error("task reminder push failed", e); return null; });
+    await admin.from("audit_log").insert({
+      request_id: crypto.randomUUID(), source: "hub", module: "task-reminder", command: "[task reminder]",
+      user_id: owner, user_role: "admin", status: push && !push.skipped ? "ok" : "error", error: push?.skipped ?? null,
+      tool_calls: push ? [push] : [], result_summary: `${plural(n, "task reminder")} sent.`, model: null, environment: ENVIRONMENT,
+    });
+  }
+  return { owners: byOwner.size, tasks: claimed?.length ?? 0 };
+}
+
 async function runScheduledBriefings(admin: SupabaseClient, secret: string, requestId: string): Promise<Response> {
   const { data: ok, error } = await admin.rpc("eliot_cron_ok", { p_secret: secret });
   if (error || ok !== true) return json({ error: "not allowed" }, 401);
+  // Task reminders go out on every run; briefings only at the briefing times.
+  const reminders = await sendTaskReminders(admin).catch((e) => { console.error("task reminders failed", e); return { error: true }; });
   const et = etParts();
   const slot = BRIEFING_TIMES.find((t) => { const [h, m] = t.split(":").map(Number); const at = h * 60 + m; return et.minutes >= at && et.minutes < at + 30; });
-  if (!slot || !dayAllowed(et.weekday)) return json({ skipped: "not a briefing time" });
+  if (!slot || !dayAllowed(et.weekday)) return json({ skipped: "not a briefing time", reminders });
   const slotKey = `${et.date} ${slot}`;
 
   // Recipients: active admins who use Eliot (have at least one hub command on record).
@@ -1078,7 +1241,7 @@ async function runScheduledBriefings(admin: SupabaseClient, secret: string, requ
     const firstName = String(a.full_name ?? "").trim().split(/\s+/)[0].replace(/[^\p{L}'-]/gu, "").slice(0, 30);
     try {
       const { data: last } = await admin.from("eliot_briefings").select("created_at").eq("user_id", a.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
-      const scan = await attentionScan(admin, emailCtx, last?.created_at ?? null, { service: true });
+      const scan = await attentionScan(admin, emailCtx, last?.created_at ?? null, { service: true, userId: a.id });
       const b = await composeBriefing(scan, firstName, slotLabel(slot));
       const { error: insErr } = await admin.from("eliot_briefings").insert({
         user_id: a.id, slot: slotKey, slot_label: slotLabel(slot), answer: b.answer, display: b.display, findings: b.findings, counts: b.counts, email_checked: scan.email_connected,
@@ -1128,6 +1291,7 @@ const SYSTEM_PROMPT = [
   "- Only state facts the tools returned. If the tools don't cover a question, say so plainly.",
   "- Results are capped at 50 rows; if a result has 50 rows, say the list may be longer.",
   "- Do not give investment, tax or legal advice.",
+  "- Team tasks: you can draft tasks for the ORDANIS team's internal list with propose_task (households never see them). You never save a task yourself: say the draft is on screen, read it back, and ask a yes-or-no question. If they then say yes or no, the app handles it. Phone reminders are lock-screen alerts that show a count only, never the task text.",
 ].join("\n");
 
 // ── Handler ────────────────────────────────────────────────────────────────────
@@ -1257,6 +1421,62 @@ Deno.serve(async (req) => {
       }
       return json({ error: "Unknown notification action.", request_id: requestId }, 400);
     }
+    // Team tasks from the app: list, households search, save (add or edit), done/undone, remove.
+    if (typeof payload?.tasks === "string") {
+      const action = payload.tasks;
+      audit.module = "tasks";
+      if (action === "list") {
+        const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+        const { data, error } = await admin.from("eliot_team_tasks")
+          .select("id,created_at,created_by,owner_id,title,notes,family_id,due_date,priority,remind_at,reminder_sent_at,done,done_at")
+          .or(`done.eq.false,done_at.gte.${since}`).order("due_date", { ascending: true, nullsFirst: false }).limit(300);
+        if (error) return json({ error: "Couldn't load team tasks.", request_id: requestId }, 500);
+        const names = await familyNames(admin, (data ?? []).map((t) => t.family_id).filter(Boolean));
+        const team = await activeAdmins(admin);
+        return json({ tasks: (data ?? []).map((t) => ({ ...t, family_name: names[String(t.family_id)] ?? null })), team, me: user.id, request_id: requestId });
+      }
+      if (action === "families") {
+        const q = clean(payload.q, 60).replace(/[%_]/g, "");
+        if (q.length < 2) return json({ families: [] });
+        const { data } = await admin.from("families").select("id,name").is("archived_at", null).ilike("name", `%${q}%`).order("name").limit(8);
+        return json({ families: data ?? [], request_id: requestId });
+      }
+      if (action === "save") {
+        const input = (payload.task ?? {}) as TaskInput;
+        const v = await validateTask(admin, input, user.id);
+        audit.command = `[task ${input.id ? "updated" : "added"}] ${clean(input.title, 200)}`;
+        if (!v.row) { await writeAudit({ status: "error", error: v.error }); return json({ error: v.error, request_id: requestId }, 400); }
+        let saved; let err;
+        if (input.id) {
+          if (!UUID_RE.test(String(input.id))) return json({ error: "Unknown task." }, 400);
+          ({ data: saved, error: err } = await admin.from("eliot_team_tasks").update(v.row).eq("id", input.id).select().maybeSingle());
+        } else {
+          ({ data: saved, error: err } = await admin.from("eliot_team_tasks").insert({ ...v.row, created_by: user.id }).select().maybeSingle());
+        }
+        const ok = await writeAudit({ status: err || !saved ? "error" : "ok", error: err ? String(err.message).slice(0, 300) : (!saved ? "not found" : null),
+          result_summary: saved ? `Owner ${saved.owner_id === user.id ? "self" : saved.owner_id}${saved.due_date ? `, due ${saved.due_date}` : ""}${saved.remind_at ? `, reminder ${saved.remind_at}` : ""}${payload.via === "voice" ? ", confirmed by voice" : ""}.` : null });
+        if (err || !saved) return json({ error: "Couldn't save the task.", request_id: requestId }, 400);
+        return json({ ok: ok, task: saved, request_id: requestId });
+      }
+      if (action === "done" || action === "remove") {
+        const id = String(payload.id ?? "");
+        if (!UUID_RE.test(id)) return json({ error: "Unknown task." }, 400);
+        const { data: t } = await admin.from("eliot_team_tasks").select("id,title").eq("id", id).maybeSingle();
+        if (!t) return json({ error: "That task no longer exists." }, 404);
+        let err;
+        if (action === "done") {
+          const done = payload.done !== false;
+          audit.command = `[task ${done ? "completed" : "reopened"}] ${clean(t.title, 200)}`;
+          ({ error: err } = await admin.from("eliot_team_tasks").update({ done, done_at: done ? new Date().toISOString() : null, done_by: done ? user.id : null, updated_at: new Date().toISOString() }).eq("id", id));
+        } else {
+          audit.command = `[task removed] ${clean(t.title, 200)}`;
+          ({ error: err } = await admin.from("eliot_team_tasks").delete().eq("id", id));
+        }
+        await writeAudit({ status: err ? "error" : "ok", error: err ? String(err.message).slice(0, 300) : null });
+        return json({ ok: !err, request_id: requestId }, err ? 400 : 200);
+      }
+      return json({ error: "Unknown task action.", request_id: requestId }, 400);
+    }
     // The executive briefing. quiet = background rescan (no model call, returns findings only, so
     // the app can notice new items); otherwise the full spoken briefing plus an on-screen table.
     if (payload?.briefing) {
@@ -1265,7 +1485,7 @@ Deno.serve(async (req) => {
         .eq("user_id", user.id).eq("module", "briefing").eq("status", "ok").order("created_at", { ascending: false }).limit(1).maybeSingle();
       const emailCtxB: EmailCtx = { userEmail: user.email ?? "" };
       try {
-        const scan = await attentionScan(db, emailCtxB, lastBrief?.created_at ?? null);
+        const scan = await attentionScan(db, emailCtxB, lastBrief?.created_at ?? null, { userId: user.id });
         const counts = { critical: 0, high: 0, medium: 0, info: 0 } as Record<string, number>;
         for (const i of scan.items) counts[SEVERITY[i.severity]]++;
         const findings = scan.items.map((i) => ({ key: i.key, source: i.source, severity: SEVERITY[i.severity], title: i.title, detail: i.detail }));
@@ -1323,6 +1543,7 @@ Deno.serve(async (req) => {
     const toolLog: Array<Record<string, unknown>> = [];
     const emailCtx: EmailCtx = { userEmail: user.email ?? "" };
     let display: Display | null = null;
+    let proposal: Record<string, unknown> | null = null;
     let answer = "";
     let refused = false;
     try {
@@ -1353,10 +1574,16 @@ Deno.serve(async (req) => {
         const input = (tu.input ?? {}) as Record<string, unknown>;
         try {
           if (tu.name === "attention_scan") {
-            const scan = await attentionScan(db, emailCtx, null);
+            const scan = await attentionScan(db, emailCtx, null, { userId: user.id });
             toolLog.push({ name: tu.name, input: {}, ok: scan.scan_errors.length === 0, rows: scan.items.length });
             const findings = scan.items.map((i) => ({ severity: SEVERITY[i.severity], source: i.source, title: i.title, detail: i.detail }));
             return { type: "tool_result" as const, tool_use_id: tu.id, content: `<database_result tool="attention_scan">\n${JSON.stringify({ findings, email_checked: scan.email_connected, failed_checks: scan.scan_errors })}\n</database_result>` };
+          }
+          if (tu.name === "propose_task") {
+            const d = await draftTask(admin, input, user.id);
+            if (d.draft) proposal = d.draft;
+            toolLog.push({ name: tu.name, input: { title: clean(input.title, 120), household: clean(input.household, 80) || null }, ok: !!d.draft, rows: d.draft ? 1 : 0 });
+            return { type: "tool_result" as const, tool_use_id: tu.id, content: d.message, is_error: !d.draft };
           }
           if (tu.name === "show_on_screen") {
             display = sanitizeDisplay(input);
@@ -1395,7 +1622,7 @@ Deno.serve(async (req) => {
       // An unlogged answer is not returned: the audit trail comes first.
       return json({ error: "I couldn't record that command, so I won't answer it. Please try again.", request_id: requestId }, 500);
     }
-    return json({ answer, display, first_name: firstName || null, request_id: requestId, tools: toolLog.map((t) => ({ name: t.name, rows: t.rows, ok: t.ok })) });
+    return json({ answer, display, proposal, first_name: firstName || null, request_id: requestId, tools: toolLog.map((t) => ({ name: t.name, rows: t.rows, ok: t.ok })) });
   } catch (e) {
     console.error("hub-command error", e);
     await writeAudit({ status: "error", error: redact((e as Error)?.message ?? e).slice(0, 500) });
