@@ -10,11 +10,9 @@
 //   - the public-signup Edge Function, which creates the Auth user and starts a Stripe Checkout
 //     Session. It deliberately does NOT create the household -- see that function's own comment.
 //
-// After public-signup returns a Checkout URL, this signs the new user in locally (so a session
-// already exists in localStorage) before navigating to Stripe. When Stripe redirects back to
-// success_url, the main app's own sb.auth.getSession() picks up that persisted session and the
-// existing role==="client" branch in App.jsx (ClientDashboard) takes over from there -- nothing
-// else needed to be built for that landing experience.
+// After paying, Stripe sends the person to /welcome (SignupWelcome below): a congratulations page with
+// one link to the sign-in screen. The login stays blocked until payment creates the household
+// (public-signup / stripe-webhook), so nobody is signed in before checkout any more.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -428,7 +426,7 @@ function AccountStep({ planKey, prices, onBack, onDone, onSkin }) {
           household_name: householdName.trim(),
           plan: planKey,
           ...(firmInfo ? { firm_code: firmInfo.code, firm_notice_id: firmInfo.notice?.id } : {}),
-          success_url: `${origin}/?welcome=1`,
+          success_url: `${origin}/welcome`,
           cancel_url: `${origin}/signup`,
           // public-signup re-validates these are the CURRENT version of each disclosure and
           // records the acknowledgment server-side -- this isn't just UI state, the account
@@ -444,14 +442,6 @@ function AccountStep({ planKey, prices, onBack, onDone, onSkin }) {
         setError(json?.error || "Something went wrong creating your account.");
         setSubmitting(false);
         return;
-      }
-      // Establish a local session before leaving for Stripe, so the persisted session is already
-      // in localStorage by the time success_url reloads the main app. If this fails for some
-      // reason the account and Checkout session still exist -- just log it, don't block payment.
-      try {
-        await sb.auth.signInWithPassword({ email: email.trim(), password });
-      } catch (e) {
-        console.error("Post-signup sign-in failed:", e);
       }
       onDone?.();
       window.location.href = json.url;
@@ -609,6 +599,43 @@ function AccountStep({ planKey, prices, onBack, onDone, onSkin }) {
           </div>
         </div>
         <div style={{ marginTop: 20, fontSize: ".86rem", color: C.muted }}>Change plan, raise your ceiling or cancel at any time. Cancelling leaves your documents in place and available to download.</div>
+      </div>
+    </div>
+  );
+}
+
+// Where Stripe sends a new client after paying (success_url). Deliberately just this: congratulations,
+// how to sign in for the first time, and one way forward.
+export function SignupWelcome() {
+  const isMobile = useIsMobile();
+  const [, setSkinTick] = useState(0);
+  const [skinReady, setSkinReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const done = () => { if (!cancelled) setSkinReady(true); };
+    const timer = setTimeout(done, 2000);
+    Promise.resolve(sb.rpc("brand_for_host", { p_host: window.location.hostname }))
+      .then(({ data, error }) => { if (!cancelled && !error && data && typeof data === "object") { applySkin(data); setSkinTick((n) => n + 1); } })
+      .catch(() => {})
+      .finally(() => { clearTimeout(timer); done(); });
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, []);
+  if (!skinReady) return <div style={{ minHeight: "100vh", background: "#fff" }} />;
+  return (
+    <div style={{ minHeight: "100vh", background: "#fff", color: C.slate, fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif", fontWeight: 300, fontSize: 16.5, lineHeight: 1.75, display: "flex", alignItems: "center", justifyContent: "center", padding: isMobile ? "40px 20px" : "60px 32px" }}>
+      <div style={{ maxWidth: 560, width: "100%", textAlign: "center" }}>
+        <StackedLogo width={isMobile ? 220 : 360} />
+        <div style={{ height: 1, background: C.rule, margin: isMobile ? "28px 0" : "36px 0" }} />
+        <EyebrowLine>Payment received</EyebrowLine>
+        <h1 style={{ fontFamily: "Georgia,serif", color: C.navy, fontSize: isMobile ? "1.9rem" : "2.4rem", fontWeight: 460, lineHeight: 1.25, margin: "0 0 .6em" }}>
+          Congratulations, and welcome to {BRAND_NAME}.
+        </h1>
+        <p style={{ fontSize: "1.05rem", color: C.slate, margin: "0 auto 2em", maxWidth: 460 }}>
+          To log in for the first time, sign in with the email address and password you just created.
+        </p>
+        <a href="/" style={{ display: "inline-block", background: C.navy, color: "#fff", textDecoration: "none", fontWeight: 600, fontSize: ".85rem", letterSpacing: ".08em", textTransform: "uppercase", padding: "14px 34px", borderRadius: 4, borderBottom: `2px solid ${C.gold}` }}>
+          Go to Sign In
+        </a>
       </div>
     </div>
   );

@@ -1577,7 +1577,12 @@ function LoginScreen(){
     setLoading(true);setError("");
     const{error:e}=await sb.auth.signInWithPassword({email:em,password});
     setLoading(false);
-    if(e)setError(e.message);
+    // A new sign-up's login is blocked until its payment is confirmed (usually a few seconds), and an
+    // archived household's login is blocked for good. Either way Supabase's own message is "User is
+    // banned", which should never reach a client.
+    if(e)setError(/banned/i.test(e.message||"")
+      ?"This account can't sign in yet. If you've just paid, your account is still being set up: wait a minute, then try again. If this keeps happening, please contact us."
+      :e.message);
   };
   const handleReset=async()=>{
     if(loading)return;

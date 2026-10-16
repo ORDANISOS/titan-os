@@ -244,7 +244,12 @@ Deno.serve(async (req) => {
       }
     }
   } else {
-    const alreadyExists = /already registered|already exists/i.test(createErr?.message ?? "");
+    // Supabase reports an existing email as code "email_exists" ("A user with this email address has
+    // already been registered"). The old pattern only matched "already registered", so every resume
+    // fell through to a 500 and a person whose first checkout failed could never finish signing up.
+    const errCode = (createErr as { code?: string } | null)?.code ?? "";
+    const alreadyExists = errCode === "email_exists" ||
+      /already (been )?registered|already exists/i.test(createErr?.message ?? "");
     if (!alreadyExists) {
       return json({ error: createErr?.message ?? "Could not create account" }, 500);
     }

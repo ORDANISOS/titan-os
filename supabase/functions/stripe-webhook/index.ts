@@ -117,6 +117,23 @@ async function unblockSignupLogin(authUserId: string) {
   if (error) throw new Error(`Could not unblock login ${authUserId}: ${error.message}`);
 }
 
+// Stripe sends invoice.payment_succeeded for the first payment at the same moment as
+// checkout.session.completed, and it usually arrives FIRST, before the household exists. The ledger
+// then skipped it ("has no household, not recorded"), which is why no first payment was ever in
+// billing_ledger. So the household's creation records that first invoice itself. billing_ledger_record
+// skips lines already recorded, so this is safe if the invoice event is also processed. Logged, not
+// thrown: a ledger problem must not undo or retry a household that now exists.
+async function recordFirstInvoice(session: Stripe.Checkout.Session, familyId: string) {
+  try {
+    if (!session.invoice) return;
+    const invoice = await stripe.invoices.retrieve(String(session.invoice));
+    if (invoice.status !== "paid") return;
+    await recordInvoiceInLedger(invoice, familyId);
+  } catch (e) {
+    console.error(`first-invoice ledger record failed for family ${familyId}:`, e instanceof Error ? e.message : e);
+  }
+}
+
 // Stamp the household onto the subscription so every later event finds it directly. Logged, not
 // thrown: familyIdForSubscription's fallback covers it if this fails.
 async function tagSubscriptionWithFamily(subId: string, familyId: string) {
@@ -178,6 +195,7 @@ async function createFamilyFromSignup(session: Stripe.Checkout.Session, authUser
     if (linkErr) throw new Error(`Could not link login ${authUserId} to family ${existing.id}: ${linkErr.message}`);
     await tagSubscriptionWithFamily(sub.id, existing.id);
     await unblockSignupLogin(authUserId);
+    await recordFirstInvoice(session, existing.id);
     return;
   }
 
@@ -229,6 +247,7 @@ async function createFamilyFromSignup(session: Stripe.Checkout.Session, authUser
   await tagSubscriptionWithFamily(sub.id, family.id);
   // Payment has created the household: the login made at sign-up may now sign in.
   await unblockSignupLogin(authUserId);
+  await recordFirstInvoice(session, family.id);
 
   // Signed up with a firm code (validated by public-signup before payment): place the household in the
   // firm now that it exists, keep the client's acceptance of the notice on the membership log, give it the
