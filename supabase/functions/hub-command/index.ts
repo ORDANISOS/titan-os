@@ -25,8 +25,9 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const MODEL = Deno.env.get("HUB_MODEL") || "claude-opus-5-5";
-// Email portal (separate Supabase project), reached through its read-only `jarvis_reader` database
-// login. See ordanis-jarvis/connectors/email_portal_reader.sql. Unset = email lookups say so.
+// Email portal (separate Supabase project), reached through its read-only `eliot_reader` database
+// login. See connectors/email_portal_reader.sql in the ELIOT repo and scripts/set-emailportal-url.sh.
+// Unset = email lookups say so.
 const EMAILPORTAL_DB_URL = Deno.env.get("EMAILPORTAL_DB_URL") ?? "";
 // Lock-screen notifications (Web Push). Unset = notifications are skipped; briefings still work.
 const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY") ?? "";
