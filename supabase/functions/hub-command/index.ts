@@ -1021,7 +1021,7 @@ async function composeBriefing(scan: Awaited<ReturnType<typeof attentionScan>>, 
 }
 
 // ── Scheduled briefings ───────────────────────────────────────────────────────────
-// pg_cron calls this function every 30 minutes with a secret that lives only in the database's
+// pg_cron calls this function every 5 minutes with a secret that lives only in the database's
 // Vault (checked by eliot_cron_ok, which only the service role may call). Eliot acts only at the
 // briefing times (Eastern), once per slot per admin, and stores the result in eliot_briefings for
 // the app to bring up the next time it's opened.
@@ -1320,8 +1320,7 @@ Deno.serve(async (req) => {
   };
 
   // Scheduled briefing trigger from pg_cron (see runScheduledBriefings). No user session involved.
-  // x-jarvis-cron is the pre-rename header; accepted only until the scheduled job switches (rename step C4).
-  const cronSecret = req.headers.get("x-eliot-cron") ?? req.headers.get("x-jarvis-cron");
+  const cronSecret = req.headers.get("x-eliot-cron");
   if (cronSecret) {
     try { return await runScheduledBriefings(admin, cronSecret, requestId); }
     catch (e) { console.error("scheduled run error", e); return json({ error: "scheduled run failed" }, 500); }
