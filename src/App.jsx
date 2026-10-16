@@ -6825,6 +6825,13 @@ function UserManagementView({userProfile,data={},toast}){
   const[loading,setLoading]=useState(true);
   const[modal,setModal]=useState(null);
   const[familyFilter,setFamilyFilter]=useState(""); // narrows the grouped lists below to users linked to one family
+  // Search across every group (name, email, role, a client's household). While a search is typed, groups with
+  // matches open and empty groups hide.
+  const[userSearch,setUserSearch]=useState("");
+  // Each role group can be minimised; remembered on this device so a long list stays tidy between visits.
+  const USERS_COLLAPSE_KEY="ordanis_users_collapsed";
+  const[collapsedGroups,setCollapsedGroups]=useState(()=>{try{return JSON.parse(localStorage.getItem(USERS_COLLAPSE_KEY)||"{}")||{};}catch(e){return {};}});
+  const toggleGroup=key=>setCollapsedGroups(prev=>{const next={...prev,[key]:!prev[key]};try{localStorage.setItem(USERS_COLLAPSE_KEY,JSON.stringify(next));}catch(e){}return next;});
   // Partner-to-family links (many-to-many, via family_partners junction table)
   const[familyPartners,setFamilyPartners]=useState([]);
   // New user form state
@@ -7064,6 +7071,8 @@ function UserManagementView({userProfile,data={},toast}){
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24,flexWrap:"wrap",gap:12}}>
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,color:B.navy,fontWeight:600}}>User Management</div>
         <div style={{display:"flex",gap:10,alignItems:"center"}}>
+          <Inp type="search" autoComplete="off" placeholder="Search users" aria-label="Search users" value={userSearch}
+            onChange={e=>setUserSearch(e.target.value)} style={{minWidth:200,width:220}}/>
           <Sel value={familyFilter} onChange={e=>setFamilyFilter(e.target.value)} style={{minWidth:180}}>
             <option value="">All Families</option>
             {families.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
@@ -7156,21 +7165,29 @@ function UserManagementView({userProfile,data={},toast}){
           </div>
           );
         };
-        const renderSection=(label,accent,desc,list,key)=>(
+        const searching=!!userSearch.trim();
+        const renderSection=(label,accent,desc,list,key)=>{
+          if(searching&&!list.length)return null;
+          const collapsed=!searching&&!!collapsedGroups[key];
+          return (
           <div key={key} style={{background:B.white,borderRadius:12,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,overflow:"hidden",marginBottom:18}}>
-            <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 20px",borderBottom:`1px solid ${B.borderLight}`,borderLeft:`4px solid ${accent}`,flexWrap:"wrap"}}>
+            <div role="button" tabIndex={0} aria-expanded={!collapsed} onClick={()=>toggleGroup(key)}
+              onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();toggleGroup(key);}}}
+              title={collapsed?"Show this group":"Minimise this group"}
+              style={{display:"flex",alignItems:"center",gap:10,padding:"12px 20px",borderBottom:collapsed?"none":`1px solid ${B.borderLight}`,borderLeft:`4px solid ${accent}`,flexWrap:"wrap",cursor:"pointer",userSelect:"none"}}>
+              <span aria-hidden="true" style={{display:"inline-block",width:12,color:B.textMute,fontSize:11,transform:collapsed?"rotate(-90deg)":"none",transition:"transform .15s"}}>▼</span>
               <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:700}}>{label}</div>
               <div style={{background:accent,color:B.white,borderRadius:20,minWidth:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,padding:"0 7px"}}>{list.length}</div>
               <div style={{fontSize:11,color:B.textMute,marginLeft:4}}>{desc}</div>
             </div>
-            {list.length>0?<>
+            {collapsed?null:list.length>0?<>
               <div style={{display:"grid",gridTemplateColumns:COLS,padding:"10px 20px",background:B.bg,borderBottom:`1px solid ${B.borderLight}`,gap:8}}>
                 {HEADERS.map(h=><div key={h} style={{fontSize:10,fontWeight:800,color:B.textMute,letterSpacing:"0.08em",textTransform:"uppercase"}}>{h}</div>)}
               </div>
               {list.map(renderRow)}
             </>:<div style={{padding:"16px 20px",color:B.textMute,fontSize:13}}>No {label.toLowerCase()} in this group yet.</div>}
-          </div>
-        );
+          </div>);
+        };
         if(users.length===0)return <div style={{background:B.white,borderRadius:12,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,padding:"40px",textAlign:"center",color:B.textMute,fontSize:14,marginBottom:24}}>No users yet. Add your first user above.</div>;
         // Contracted versus actual. Reports rather than blocks: exceeding what a firm
         // paid for is an invoice, and refusing an onboarding over it would present a
@@ -7221,10 +7238,18 @@ function UserManagementView({userProfile,data={},toast}){
           }
           return role==="admin"; // admins have access to every family regardless of filter
         };
-        const others=users.filter(u=>!known.includes(roleOf(u)));
+        // Search: name, email, role label, or the household a client belongs to.
+        const q=userSearch.trim().toLowerCase();
+        const matchesSearch=u=>{
+          if(!q)return true;
+          const fam=u.family_id?families.find(f=>f.id===u.family_id):null;
+          return [u.full_name,u.email,roleLabel(u.role),fam&&fam.name].some(v=>String(v||"").toLowerCase().includes(q));
+        };
+        const others=users.filter(u=>!known.includes(roleOf(u))&&matchesSearch(u));
         return <div style={{marginBottom:24}}>
           {LICENCE_PANEL}
-          {GROUPS.map(g=>renderSection(g.label,g.accent,g.desc,users.filter(u=>roleOf(u)===g.key&&linkedToFamily(u)),g.key))}
+          {GROUPS.map(g=>renderSection(g.label,g.accent,g.desc,users.filter(u=>roleOf(u)===g.key&&linkedToFamily(u)&&matchesSearch(u)),g.key))}
+          {searching&&!users.some(u=>matchesSearch(u))&&<div style={{padding:"18px 4px",color:B.textMute,fontSize:13}}>No users match “{userSearch.trim()}”.</div>}
           {others.length>0&&!familyFilter&&renderSection("Unassigned",B.textMute,"Users with no recognized role — set one below",others,"__unassigned")}
         </div>;
       })()}
