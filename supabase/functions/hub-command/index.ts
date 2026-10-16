@@ -991,11 +991,11 @@ async function composeBriefing(scan: Awaited<ReturnType<typeof attentionScan>>, 
 
 // ── Scheduled briefings ───────────────────────────────────────────────────────────
 // pg_cron calls this function every 30 minutes with a secret that lives only in the database's
-// Vault (checked by jarvis_cron_ok, which only the service role may call). Jarvis acts only at the
-// briefing times (Eastern), once per slot per admin, and stores the result in jarvis_briefings for
+// Vault (checked by eliot_cron_ok, which only the service role may call). Eliot acts only at the
+// briefing times (Eastern), once per slot per admin, and stores the result in eliot_briefings for
 // the app to bring up the next time it's opened.
-const BRIEFING_TIMES = (Deno.env.get("JARVIS_BRIEFING_TIMES") || "08:00,12:00,17:00").split(",").map((t) => t.trim()).filter((t) => /^\d{2}:\d{2}$/.test(t));
-const BRIEFING_DAYS = Deno.env.get("JARVIS_BRIEFING_DAYS") || "1-5"; // ISO weekdays, 1 = Monday
+const BRIEFING_TIMES = (Deno.env.get("ELIOT_BRIEFING_TIMES") || "08:00,12:00,17:00").split(",").map((t) => t.trim()).filter((t) => /^\d{2}:\d{2}$/.test(t));
+const BRIEFING_DAYS = Deno.env.get("ELIOT_BRIEFING_DAYS") || "1-5"; // ISO weekdays, 1 = Monday
 
 function etParts(d = new Date()) {
   const f = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false, weekday: "short" });
@@ -1032,7 +1032,7 @@ async function pushToUser(admin: SupabaseClient, userId: string, msg: { title: s
   const r: PushResult = { name: "web_push", ok: true, devices: 0, sent: 0, removed: 0, failed: 0 };
   const v = await vapid();
   if (!v) return { ...r, skipped: "push keys not set" };
-  const { data: subs, error } = await admin.from("jarvis_push_subscriptions").select("id,endpoint,p256dh,auth")
+  const { data: subs, error } = await admin.from("eliot_push_subscriptions").select("id,endpoint,p256dh,auth")
     .eq("user_id", userId).order("created_at", { ascending: false }).limit(10);
   if (error) return { ...r, ok: false, skipped: "could not read devices" };
   r.devices = subs?.length ?? 0;
@@ -1041,17 +1041,17 @@ async function pushToUser(admin: SupabaseClient, userId: string, msg: { title: s
       const status = await sendPush(v, s, msg, { urgency });
       if (status >= 200 && status < 300) {
         r.sent++;
-        await admin.from("jarvis_push_subscriptions").update({ last_success_at: new Date().toISOString(), last_error: null }).eq("id", s.id);
+        await admin.from("eliot_push_subscriptions").update({ last_success_at: new Date().toISOString(), last_error: null }).eq("id", s.id);
       } else if (status === 404 || status === 410) {
         r.removed++; // the device unsubscribed or the app was removed
-        await admin.from("jarvis_push_subscriptions").delete().eq("id", s.id);
+        await admin.from("eliot_push_subscriptions").delete().eq("id", s.id);
       } else {
         r.failed++;
-        await admin.from("jarvis_push_subscriptions").update({ last_error: `HTTP ${status}` }).eq("id", s.id);
+        await admin.from("eliot_push_subscriptions").update({ last_error: `HTTP ${status}` }).eq("id", s.id);
       }
     } catch (e) {
       r.failed++;
-      await admin.from("jarvis_push_subscriptions").update({ last_error: String((e as Error)?.message ?? e).slice(0, 200) }).eq("id", s.id);
+      await admin.from("eliot_push_subscriptions").update({ last_error: String((e as Error)?.message ?? e).slice(0, 200) }).eq("id", s.id);
     }
   }
   r.ok = r.failed === 0;
@@ -1059,7 +1059,7 @@ async function pushToUser(admin: SupabaseClient, userId: string, msg: { title: s
 }
 
 async function runScheduledBriefings(admin: SupabaseClient, secret: string, requestId: string): Promise<Response> {
-  const { data: ok, error } = await admin.rpc("jarvis_cron_ok", { p_secret: secret });
+  const { data: ok, error } = await admin.rpc("eliot_cron_ok", { p_secret: secret });
   if (error || ok !== true) return json({ error: "not allowed" }, 401);
   const et = etParts();
   const slot = BRIEFING_TIMES.find((t) => { const [h, m] = t.split(":").map(Number); const at = h * 60 + m; return et.minutes >= at && et.minutes < at + 30; });
@@ -1072,15 +1072,15 @@ async function runScheduledBriefings(admin: SupabaseClient, secret: string, requ
   for (const a of admins ?? []) {
     const { count: used } = await admin.from("audit_log").select("id", { count: "exact", head: true }).eq("user_id", a.id).eq("source", "hub");
     if (!used) continue;
-    const { data: done } = await admin.from("jarvis_briefings").select("id").eq("user_id", a.id).eq("slot", slotKey).maybeSingle();
+    const { data: done } = await admin.from("eliot_briefings").select("id").eq("user_id", a.id).eq("slot", slotKey).maybeSingle();
     if (done) continue;
     const emailCtx: EmailCtx = { userEmail: a.email ?? "" };
     const firstName = String(a.full_name ?? "").trim().split(/\s+/)[0].replace(/[^\p{L}'-]/gu, "").slice(0, 30);
     try {
-      const { data: last } = await admin.from("jarvis_briefings").select("created_at").eq("user_id", a.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const { data: last } = await admin.from("eliot_briefings").select("created_at").eq("user_id", a.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
       const scan = await attentionScan(admin, emailCtx, last?.created_at ?? null, { service: true });
       const b = await composeBriefing(scan, firstName, slotLabel(slot));
-      const { error: insErr } = await admin.from("jarvis_briefings").insert({
+      const { error: insErr } = await admin.from("eliot_briefings").insert({
         user_id: a.id, slot: slotKey, slot_label: slotLabel(slot), answer: b.answer, display: b.display, findings: b.findings, counts: b.counts, email_checked: scan.email_connected,
       });
       const push = insErr ? null : await pushToUser(admin, a.id, briefingPushText(slotLabel(slot), b.counts), (b.counts.critical ?? 0) > 0 ? "high" : "normal")
@@ -1156,7 +1156,8 @@ Deno.serve(async (req) => {
   };
 
   // Scheduled briefing trigger from pg_cron (see runScheduledBriefings). No user session involved.
-  const cronSecret = req.headers.get("x-jarvis-cron");
+  // x-jarvis-cron is the pre-rename header; accepted only until the scheduled job switches (rename step C4).
+  const cronSecret = req.headers.get("x-eliot-cron") ?? req.headers.get("x-jarvis-cron");
   if (cronSecret) {
     try { return await runScheduledBriefings(admin, cronSecret, requestId); }
     catch (e) { console.error("scheduled run error", e); return json({ error: "scheduled run failed" }, 500); }
@@ -1228,8 +1229,8 @@ Deno.serve(async (req) => {
           return json({ error: "This browser's notification service isn't supported.", request_id: requestId }, 400);
         }
         // Same device again (or an old row for it): replace it, owned by the caller.
-        await admin.from("jarvis_push_subscriptions").delete().eq("endpoint", endpoint);
-        const { error: insErr } = await admin.from("jarvis_push_subscriptions").insert({
+        await admin.from("eliot_push_subscriptions").delete().eq("endpoint", endpoint);
+        const { error: insErr } = await admin.from("eliot_push_subscriptions").insert({
           user_id: user.id, endpoint, p256dh: keys.p256dh, auth: keys.auth, device_label: device,
         });
         const ok = await writeAudit({ status: insErr ? "error" : "ok", error: insErr ? String(insErr.message).slice(0, 300) : null, result_summary: `Notifications turned on${device ? ` for ${device}` : ""}.` });
@@ -1237,7 +1238,7 @@ Deno.serve(async (req) => {
       }
       if (action === "unsubscribe") {
         audit.command = "[notifications off]";
-        const { error: delErr } = await admin.from("jarvis_push_subscriptions").delete().eq("user_id", user.id).eq("endpoint", endpoint);
+        const { error: delErr } = await admin.from("eliot_push_subscriptions").delete().eq("user_id", user.id).eq("endpoint", endpoint);
         await writeAudit({ status: delErr ? "error" : "ok", error: delErr ? String(delErr.message).slice(0, 300) : null, result_summary: `Notifications turned off${device ? ` for ${device}` : ""}.` });
         return json({ ok: !delErr, request_id: requestId });
       }
