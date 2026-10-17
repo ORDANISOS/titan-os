@@ -1413,6 +1413,158 @@ function _drawIntroCube(ctx,x,y,s,rot,hex,alpha){
 // actually chosen a password yet (see the PASSWORD_RECOVERY handler above) -- without this, an
 // invited Business Partner (or anyone using "forgot password") would be signed straight into
 // their dashboard with no password ever set, and have no way to log back in next time.
+// ── Two-step sign-in (TOTP authenticator app) ─────────────────────────────────
+// Staff (MFA_REQUIRED_ROLES) must use it: at sign-in they set it up if they haven't, and enter a code if they have.
+// Clients may turn it on from their dashboard (ClientSecurityModal); once on, they are asked for a code too.
+// A verified code raises the session from aal1 to aal2, which admin-only data (e.g. family_utilization) requires.
+const MFA_REQUIRED_ROLES=["admin","advisor","analyst","partner","enterprise_admin"];
+async function mfaStatus(){
+  const[{data:aal,error:e1},{data:f,error:e2}]=await Promise.all([sb.auth.mfa.getAuthenticatorAssuranceLevel(),sb.auth.mfa.listFactors()]);
+  if(e1||e2)throw e1||e2;
+  const verified=(f?.all||[]).filter(x=>x.factor_type==="totp"&&x.status==="verified");
+  const unverified=(f?.all||[]).filter(x=>x.factor_type==="totp"&&x.status!=="verified");
+  return{current:aal?.currentLevel,next:aal?.nextLevel,verified,unverified};
+}
+const MFA_CARD={background:B.white,borderRadius:16,padding:"32px 34px",maxWidth:420,width:"100%",boxShadow:B.shadowMd,border:`1px solid ${B.borderLight}`};
+const MFA_ERR={background:"#fde8e8",border:"1px solid #f5c6c6",color:"#8b1a1a",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12.5};
+const mfaCodeMessage=e=>/invalid|expired|code/i.test(e?.message||"")?"That code didn't work. Check the time on your phone and try the newest code.":(e?.message||"Something went wrong. Please try again.");
+
+// The 6-digit code box used by both set-up and sign-in.
+function MfaCodeInput({value,onChange,autoFocus}){
+  return <input value={value} onChange={e=>onChange(e.target.value.replace(/\D/g,"").slice(0,6))} autoFocus={autoFocus}
+    inputMode="numeric" autoComplete="one-time-code" placeholder="123456" aria-label="6-digit code"
+    style={{width:"100%",boxSizing:"border-box",fontSize:22,letterSpacing:"0.4em",textAlign:"center",padding:"12px 14px",border:`1px solid ${B.border}`,borderRadius:10,fontFamily:"inherit",color:B.navy,marginBottom:14}}/>;
+}
+
+// Set up an authenticator: shows a QR code (and the key for typing in), then confirms with a first code.
+function MfaEnroll({onVerified,onCancel,cancelLabel}){
+  const[factor,setFactor]=useState(null);
+  const[code,setCode]=useState("");
+  const[error,setError]=useState("");
+  const[busy,setBusy]=useState(false);
+  const started=useRef(false);
+  useEffect(()=>{
+    if(started.current)return; started.current=true;
+    (async()=>{
+      try{
+        // Clear any half-finished set-up from an earlier visit, so a fresh QR code can be made.
+        const st=await mfaStatus();
+        for(const f of st.unverified)await sb.auth.mfa.unenroll({factorId:f.id});
+        const{data,error:e}=await sb.auth.mfa.enroll({factorType:"totp",friendlyName:`ORDANIS ${new Date().toISOString().slice(0,10)}`});
+        if(e)throw e;
+        setFactor(data);
+      }catch(e){setError(e?.message||"Could not start the set-up. Please try again.");}
+    })();
+  },[]);
+  const verify=async e=>{
+    e?.preventDefault?.();
+    if(code.length!==6||!factor)return;
+    setBusy(true);setError("");
+    const{error:err}=await sb.auth.mfa.challengeAndVerify({factorId:factor.id,code});
+    setBusy(false);
+    if(err){setError(mfaCodeMessage(err));setCode("");return;}
+    onVerified();
+  };
+  return <form onSubmit={verify}>
+    {error&&<div style={MFA_ERR}>{error}</div>}
+    <ol style={{fontSize:13,color:B.textSoft,lineHeight:1.6,paddingLeft:18,margin:"0 0 14px"}}>
+      <li>Open an authenticator app on your phone (Google Authenticator, Microsoft Authenticator, 1Password, Authy…).</li>
+      <li>Add an account and scan this code.</li>
+      <li>Type the 6-digit code the app shows.</li>
+    </ol>
+    <div style={{display:"flex",justifyContent:"center",margin:"4px 0 10px",minHeight:180}}>
+      {factor?.totp?.qr_code?<img src={factor.totp.qr_code} alt="QR code for your authenticator app" style={{width:180,height:180,background:"#fff",padding:6,borderRadius:8,border:`1px solid ${B.borderLight}`}}/>:!error&&<Spinner/>}
+    </div>
+    {factor?.totp?.secret&&<div style={{fontSize:11.5,color:B.textMute,textAlign:"center",marginBottom:14,wordBreak:"break-all"}}>Can't scan? Enter this key instead:<br/><span style={{fontFamily:"monospace",color:B.navy,fontSize:12.5,letterSpacing:"0.08em"}}>{factor.totp.secret}</span></div>}
+    <MfaCodeInput value={code} onChange={setCode}/>
+    <Btn onClick={verify} disabled={busy||code.length!==6||!factor}>{busy?"Checking…":"Confirm and turn on"}</Btn>
+    {onCancel&&<button type="button" onClick={onCancel} style={{display:"block",margin:"14px auto 0",background:"none",border:"none",color:B.textSoft,fontSize:12,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>{cancelLabel||"Cancel"}</button>}
+  </form>;
+}
+
+// Shown after the password: set up (staff without an authenticator) or enter today's code (anyone who has one).
+function MfaGate({mode,factorId,role,onDone,onSignOut}){
+  const[code,setCode]=useState("");
+  const[error,setError]=useState("");
+  const[busy,setBusy]=useState(false);
+  const verify=async e=>{
+    e?.preventDefault?.();
+    if(code.length!==6)return;
+    setBusy(true);setError("");
+    const{error:err}=await sb.auth.mfa.challengeAndVerify({factorId,code});
+    setBusy(false);
+    if(err){setError(mfaCodeMessage(err));setCode("");return;}
+    onDone();
+  };
+  const signOut=<button type="button" onClick={onSignOut} style={{display:"block",margin:"16px auto 0",background:"none",border:"none",color:B.textSoft,fontSize:12,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>Sign out</button>;
+  return <div style={{minHeight:"100vh",background:B.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",padding:20}}>
+    <div style={MFA_CARD}>
+      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:6}}>{mode==="enroll"?"Set up two-step sign-in":mode==="error"?"Two-step sign-in":"Enter your code"}</div>
+      {mode==="enroll"&&<>
+        <div style={{fontSize:13,color:B.textSoft,marginBottom:16,lineHeight:1.5}}>{ROLE_LABELS[role]||"Team"} accounts can see many households, so ORDANIS asks for a code from your phone each time you sign in. This takes about a minute, once.</div>
+        <MfaEnroll onVerified={onDone}/>
+        {signOut}
+      </>}
+      {mode==="challenge"&&<form onSubmit={verify}>
+        <div style={{fontSize:13,color:B.textSoft,marginBottom:16,lineHeight:1.5}}>Open your authenticator app and type the 6-digit code for ORDANIS.</div>
+        {error&&<div style={MFA_ERR}>{error}</div>}
+        <MfaCodeInput value={code} onChange={setCode} autoFocus/>
+        <Btn onClick={verify} disabled={busy||code.length!==6}>{busy?"Checking…":"Continue"}</Btn>
+        <div style={{fontSize:11.5,color:B.textMute,marginTop:14,lineHeight:1.5}}>Lost your phone? Ask an ORDANIS administrator to reset your two-step sign-in.</div>
+        {signOut}
+      </form>}
+      {mode==="error"&&<>
+        <div style={MFA_ERR}>We couldn't check your two-step sign-in. Please sign out and sign in again.</div>
+        {signOut}
+      </>}
+    </div>
+  </div>;
+}
+
+// Clients: turn two-step sign-in on or off for their own login.
+function ClientSecurityModal({onClose,toast}){
+  const[st,setSt]=useState(null);
+  const[mode,setMode]=useState("view"); // view | enroll | confirmOff
+  const[code,setCode]=useState("");
+  const[error,setError]=useState("");
+  const[busy,setBusy]=useState(false);
+  const load=useCallback(()=>mfaStatus().then(setSt).catch(e=>setError(e?.message||"Could not load your settings.")),[]);
+  useEffect(()=>{load();},[load]);
+  const on=!!st?.verified?.length;
+  const turnOff=async e=>{
+    e?.preventDefault?.();
+    if(code.length!==6)return;
+    setBusy(true);setError("");
+    try{
+      const f=st.verified[0];
+      // Prove it is really them (raises the session to aal2), then remove the authenticator.
+      if(st.current!=="aal2"){const{error:v}=await sb.auth.mfa.challengeAndVerify({factorId:f.id,code});if(v)throw v;}
+      for(const x of st.verified){const{error:u}=await sb.auth.mfa.unenroll({factorId:x.id});if(u)throw u;}
+      toast("Two-step sign-in is off");setMode("view");setCode("");await load();
+    }catch(err){setError(mfaCodeMessage(err));setCode("");}
+    setBusy(false);
+  };
+  return <Modal title="Sign-in security" onClose={onClose}>
+    {error&&<div style={MFA_ERR}>{error}</div>}
+    {!st?!error&&<Spinner/>:mode==="enroll"?<MfaEnroll onVerified={async()=>{toast("Two-step sign-in is on");setMode("view");await load();}} onCancel={()=>setMode("view")}/>
+    :mode==="confirmOff"?<form onSubmit={turnOff}>
+      <div style={{fontSize:13,color:B.textSoft,marginBottom:14,lineHeight:1.5}}>To turn it off, type the current code from your authenticator app.</div>
+      <MfaCodeInput value={code} onChange={setCode} autoFocus/>
+      <div style={{display:"flex",gap:10}}><Btn variant="danger" onClick={turnOff} disabled={busy||code.length!==6}>{busy?"Turning off…":"Turn off"}</Btn><Btn variant="ghost" onClick={()=>{setMode("view");setCode("");setError("");}}>Keep it on</Btn></div>
+    </form>
+    :<div>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+        <span style={{fontSize:13,fontWeight:700,color:B.navy}}>Two-step sign-in</span>
+        <span style={{fontSize:11,fontWeight:700,padding:"2px 9px",borderRadius:999,background:on?"#EAF5EE":"#F1F1EE",color:on?"#1E6B3A":B.textSoft}}>{on?"On":"Off"}</span>
+      </div>
+      <div style={{fontSize:13,color:B.textSoft,lineHeight:1.55,marginBottom:18}}>{on
+        ?"Each time you sign in, ORDANIS asks for a 6-digit code from the authenticator app on your phone, as well as your password."
+        :"Add a second step to signing in: after your password, you type a 6-digit code from an authenticator app on your phone. Even if someone learned your password, they couldn't get in without your phone. Recommended."}</div>
+      {on?<Btn variant="ghost" onClick={()=>{setMode("confirmOff");setError("");}}>Turn off</Btn>:<Btn onClick={()=>{setMode("enroll");setError("");}}>Turn on two-step sign-in</Btn>}
+    </div>}
+  </Modal>;
+}
+
 function SetPasswordGate({onDone}){
   const[pw,setPw]=useState("");
   const[pw2,setPw2]=useState("");
@@ -6851,6 +7003,20 @@ function UserManagementView({userProfile,data={},toast}){
     const{data:rows}=await sb.from("user_profiles").select("*").order("created_at",{ascending:false});
     if(rows)setUsers(rows);
     setLoading(false);
+    loadMfaUsers();
+  };
+  // Who has two-step sign-in set up (admin_mfa_users), and the lost-phone reset (admin_reset_mfa).
+  const[mfaUsers,setMfaUsers]=useState(()=>new Set());
+  const loadMfaUsers=async()=>{
+    const{data:rows,error}=await sb.rpc("admin_mfa_users");
+    if(!error)setMfaUsers(new Set((rows||[]).map(r=>r.user_id)));
+  };
+  const resetMfa=async u=>{
+    if(!window.confirm(`Reset two-step sign-in for ${u.full_name||u.email}?\n\nUse this when they've lost or replaced their phone. They'll be signed out everywhere and asked to set it up again at their next sign-in.`))return;
+    const{error}=await sb.rpc("admin_reset_mfa",{p_user_id:u.id});
+    if(error)return toast(error.message,"error");
+    toast(`Two-step sign-in reset for ${u.email}`);
+    loadMfaUsers();
   };
   const loadFamilyPartners=async()=>{
     const{data:rows}=await sb.from("family_partners").select("*");
@@ -7092,6 +7258,9 @@ function UserManagementView({userProfile,data={},toast}){
             <div>
               <div style={{fontWeight:700,color:B.navy,fontSize:13}}>{u.full_name||"—"}</div>
               {u.id===userProfile?.id&&<div style={{fontSize:10,color:B.gold,fontWeight:700}}>You</div>}
+              {mfaUsers.has(u.id)
+                ?<div title="Signs in with a code from an authenticator app" style={{fontSize:10,color:"#1E6B3A",fontWeight:700}}>🔒 2-step on</div>
+                :MFA_REQUIRED_ROLES.includes(u.role)&&<div title="Will be asked to set up two-step sign-in at their next sign-in" style={{fontSize:10,color:"#8A5A00",fontWeight:700}}>2-step not set up</div>}
             </div>
             <div style={{fontSize:12,color:B.textMid,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.email}</div>
             <div>
@@ -7160,6 +7329,7 @@ function UserManagementView({userProfile,data={},toast}){
                 <Btn small variant={u.active?"danger":"ghost"} onClick={()=>toggleActive(u)}>{u.active?"Deactivate":"Activate"}</Btn>
                 <Btn small variant="ghost" onClick={()=>resetPass(u)}>Reset PW</Btn>
                 <Btn small variant="ghost" onClick={()=>openSetPassword(u)}>Set Temp PW</Btn>
+                {mfaUsers.has(u.id)&&<Btn small variant="ghost" onClick={()=>resetMfa(u)}>Reset 2-step</Btn>}
               </>}
             </div>
           </div>
@@ -9446,6 +9616,7 @@ function HouseholdTeamCard({familyId}){
 
 function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const isMobile=useIsMobile();
+  const[securityOpen,setSecurityOpen]=useState(false);
   // Needed because this view renders CashFlowView too. The client view is read-only, so
   // the picker never opens here — but the prop still has to resolve, and an undefined
   // identifier would take the whole dashboard down rather than degrade.
@@ -9856,6 +10027,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     {showAssistantGreeting&&!showNamePrompt&&<AssistantWelcome family={family} data={data} reload={reload} userProfile={userProfile} onClose={()=>setShowAssistantGreeting(false)} toast={toast} onWatchVideo={hasPlanVideo?()=>setPlanVideoWatching(true):undefined}/>}
     {planVideoWatching&&<PlanVideoModal plan={planVideoPlan} mode="watch" onPlayed={onPlanVideoPlayed} onClose={()=>setPlanVideoWatching(false)}/>}
     {emailAdvisorOpen&&<EmailAdvisorModal family={family} userProfile={userProfile} data={data} onClose={()=>setEmailAdvisorOpen(false)}/>}
+    {securityOpen&&<ClientSecurityModal onClose={()=>setSecurityOpen(false)} toast={toast}/>}
     {wizardOpen&&<OnboardingWizard onClose={closeWizard} addMember={addMember} addProfessional={addProfessional} addBusinessPartner={addBusinessPartner} addProperty={addProperty} addAccount={addAccount} addValuable={addValuable} members={members} professionals={professionals} properties={properties} accounts={accounts} valuables={valuables}/>}
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 
@@ -9884,6 +10056,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
             </div>
           </div>
           {clientHasExpert&&<button onClick={()=>setEmailAdvisorOpen(true)} style={{background:"rgba(206,182,132,0.15)",border:`1px solid ${B.gold}`,color:B.navy,borderRadius:8,padding:isMobile?"6px 10px":"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"inherit",flexShrink:0,fontWeight:600}}>{isMobile?"✉ ORDANIS Expert":"✉ Email my ORDANIS Expert"}</button>}
+          <button onClick={()=>setSecurityOpen(true)} title="Two-step sign-in" style={{background:"transparent",border:`1px solid ${B.border}`,color:B.textSoft,borderRadius:8,padding:isMobile?"6px 10px":"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>{isMobile?"🔒":"🔒 Security"}</button>
           <button onClick={logout} style={{background:"transparent",border:`1px solid ${B.border}`,color:B.textSoft,borderRadius:8,padding:isMobile?"6px 10px":"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>Sign Out</button>
         </div>
       </div>
@@ -14492,6 +14665,20 @@ export default function App(){
   },[userProfile,tab,allowedTabIds]);
 
   const[needsPasswordSetup,setNeedsPasswordSetup]=useState(false);
+  // Two-step sign-in: null while checking, false when done or not needed, else what MfaGate should show.
+  const[mfaNeed,setMfaNeed]=useState(null);
+  useEffect(()=>{
+    if(!authed||!userProfile){setMfaNeed(null);return;}
+    let stop=false;
+    const staff=MFA_REQUIRED_ROLES.includes(userProfile.role);
+    mfaStatus().then(st=>{
+      if(stop)return;
+      if(st.current==="aal2")setMfaNeed(false);
+      else if(st.verified.length)setMfaNeed({mode:"challenge",factorId:st.verified[0].id});
+      else setMfaNeed(staff?{mode:"enroll"}:false);
+    }).catch(()=>{if(!stop)setMfaNeed(staff?{mode:"error"}:false);});
+    return()=>{stop=true;};
+  },[authed,userProfile?.id,userProfile?.role]);
   useEffect(()=>{
     sb.auth.getSession().then(({data:{session}})=>{if(session?.user){setAuthed(true);loadProfile(session.user.id);}setAuthLoading(false);});
     const{data:{subscription}}=sb.auth.onAuthStateChange((event,session)=>{
@@ -14549,7 +14736,7 @@ export default function App(){
   },[fetchTable]);
 
   useEffect(()=>{
-    if(!authed||!userProfile)return;
+    if(!authed||!userProfile||mfaNeed!==false)return; // load nothing until two-step sign-in is done
     (async()=>{
       setLoading(true);
       await skinPromiseRef.current;
@@ -14563,7 +14750,7 @@ export default function App(){
       }
       setLoading(false);
     })();
-  },[authed,userProfile]);
+  },[authed,userProfile,mfaNeed]);
 
   // While isWelcomeRedirect and this client's family hasn't shown up yet, re-check every couple
   // of seconds instead of leaving them stuck on a dead-end screen the instant they land here.
@@ -14627,6 +14814,8 @@ export default function App(){
   if(!brandReady||authLoading)return <div style={{minHeight:"100vh",background:B.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><Spinner/></div>;
   if(!authed||!userProfile)return <LoginScreen/>;
   if(needsPasswordSetup)return <SetPasswordGate onDone={()=>setNeedsPasswordSetup(false)}/>;
+  if(mfaNeed===null)return <div style={{minHeight:"100vh",background:B.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><Spinner/></div>;
+  if(mfaNeed)return <MfaGate {...mfaNeed} role={userProfile.role} onDone={()=>setMfaNeed(false)} onSignOut={logout}/>;
   if(userProfile.active===false)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:B.bg,fontFamily:"'DM Sans',sans-serif",color:B.navy,fontSize:16,flexDirection:"column",gap:12}}><div style={{fontSize:40}}>🔒</div>Your account has been deactivated. Contact your administrator.</div>;
 
   // Client role — show read-only family dashboard
