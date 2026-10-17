@@ -13538,6 +13538,87 @@ function PayerCard({familyRow,userProfile,toast,reload}){
   </CollapseBox>;
 }
 
+// ── Household utilization (admin) ─────────────────────────────────────────────────
+// What each household uses and doesn't, so its ORDANIS Expert can raise it with the family.
+// Data: family_utilization() (admin + MFA only). "Use" = records added, changed or completed, or a
+// sign-in; simply viewing isn't recorded. Two signals per feature: ever used, and used in the last 30 days.
+function UtilizationView({toast}){
+  const[rows,setRows]=useState(null);
+  const[q,setQ]=useState("");
+  const[plan,setPlan]=useState("");
+  const[expert,setExpert]=useState("");
+  const[open,setOpen]=useState(null);
+  useEffect(()=>{
+    sb.rpc("family_utilization",{p_family_id:null}).then(({data,error})=>{
+      if(error){toast(error.message,"error");setRows([]);return;}
+      setRows(data||[]);
+    });
+  },[]);
+  if(rows===null)return <Spinner/>;
+  const byFam=new Map();
+  rows.forEach(r=>{if(!byFam.has(r.family_id))byFam.set(r.family_id,[]);byFam.get(r.family_id).push(r);});
+  const fams=[...byFam.values()].map(fr=>{
+    const inc=fr.filter(r=>r.included&&r.feature!=="assistant");
+    const ever=inc.filter(r=>r.ever_used).length, active=inc.filter(r=>r.used_30d===true).length;
+    return {id:fr[0].family_id,name:fr[0].family_name,plan:fr[0].plan,expert:fr[0].expert_name||"",rows:fr,inc:inc.length,ever,active,
+      never:inc.filter(r=>!r.ever_used).map(r=>r.label),quiet:inc.filter(r=>r.ever_used&&r.used_30d===false).map(r=>r.label),
+      share:inc.length?active/inc.length:0};
+  }).sort((a,b)=>a.share-b.share||a.name.localeCompare(b.name));
+  const experts=[...new Set(fams.map(f=>f.expert).filter(Boolean))].sort();
+  const shown=fams.filter(f=>(!plan||f.plan===plan)&&(!expert||f.expert===expert)&&(!q.trim()||f.name.toLowerCase().includes(q.trim().toLowerCase())));
+  const card={background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:14,boxShadow:B.shadow,marginBottom:12,overflow:"hidden"};
+  const chip=(t,tone)=><span key={t} style={{display:"inline-block",fontSize:11,padding:"2px 8px",borderRadius:999,margin:"2px 4px 2px 0",
+    background:tone==="never"?"#FBEAEA":tone==="quiet"?"#FFF5DF":"#EAF5EE",color:tone==="never"?"#9B2C2C":tone==="quiet"?"#8A5A00":"#1E6B3A"}}>{t}</span>;
+  const meter=(n,d)=><div style={{display:"flex",alignItems:"center",gap:8}}>
+    <div style={{width:70,height:6,borderRadius:3,background:B.borderLight,overflow:"hidden"}}><div style={{width:`${d?Math.round(n/d*100):0}%`,height:"100%",background:B.gold}}/></div>
+    <span style={{fontSize:12,color:B.textSoft,whiteSpace:"nowrap"}}>{n} of {d}</span></div>;
+  const day=t=>t?new Date(t).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):"—";
+  const planLbl=p=>p?p.charAt(0).toUpperCase()+p.slice(1):"—";
+  return <div style={{height:"100%",overflowY:"auto"}}><div style={{maxWidth:1040,padding:"24px 28px"}}>
+    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,color:B.navy,fontWeight:600,marginBottom:4}}>Utilization</div>
+    <p style={{fontSize:13,color:B.textSoft,margin:"0 0 16px",maxWidth:760,lineHeight:1.6}}>
+      What each household uses and doesn't, so its ORDANIS Expert can raise it with the family. Least used first.
+      For each feature its plan includes: <b>ever used</b>, and <b>used in the last 30 days</b>. "Use" means adding, changing or
+      completing something, or signing in; simply viewing a page isn't recorded.
+    </p>
+    <GoldLine/>
+    <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:16}}>
+      <div style={{flex:"2 1 240px"}}><Field label="Search households"><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Household name…" style={inp}/></Field></div>
+      <div style={{flex:"1 1 150px"}}><Field label="Plan"><Sel value={plan} onChange={e=>setPlan(e.target.value)}><option value="">All plans</option><option value="basic">Basic</option><option value="core">Core</option><option value="premier">Premier</option></Sel></Field></div>
+      <div style={{flex:"1 1 200px"}}><Field label="ORDANIS Expert"><Sel value={expert} onChange={e=>setExpert(e.target.value)}><option value="">All Experts</option>{experts.map(x=><option key={x} value={x}>{x}</option>)}</Sel></Field></div>
+    </div>
+    {!shown.length&&<Empty text="No households match."/>}
+    {shown.map(f=><div key={f.id} style={card}>
+      <button onClick={()=>setOpen(open===f.id?null:f.id)} aria-expanded={open===f.id} style={{all:"unset",cursor:"pointer",display:"grid",gridTemplateColumns:"minmax(160px,1.4fr) 80px minmax(110px,1fr) 130px 130px",gap:12,alignItems:"center",padding:"14px 20px",width:"100%",boxSizing:"border-box"}}>
+        <div><div style={{fontWeight:600,color:B.navy,fontSize:14}}>{f.name}</div>
+          {f.never.length>0&&<div style={{marginTop:4}}>{f.never.slice(0,4).map(t=>chip(t,"never"))}{f.never.length>4&&<span style={{fontSize:11,color:B.textMute}}>+{f.never.length-4} more</span>}</div>}</div>
+        <div style={{fontSize:12,color:B.textSoft}}>{planLbl(f.plan)}</div>
+        <div style={{fontSize:12,color:B.textSoft}}>{f.expert||"—"}</div>
+        <div><div style={{fontSize:10,color:B.textMute,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:3}}>Ever used</div>{meter(f.ever,f.inc)}</div>
+        <div><div style={{fontSize:10,color:B.textMute,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:3}}>Last 30 days</div>{meter(f.active,f.inc)}</div>
+      </button>
+      {open===f.id&&<div style={{borderTop:`1px solid ${B.borderLight}`,padding:"12px 20px 16px",overflowX:"auto"}}>
+        {(f.never.length>0||f.quiet.length>0)&&<div style={{fontSize:13,color:B.text,marginBottom:10,lineHeight:1.6}}>
+          {f.never.length>0&&<div><b>Never used (in their plan):</b> {f.never.map(t=>chip(t,"never"))}</div>}
+          {f.quiet.length>0&&<div><b>Used before, quiet for 30+ days:</b> {f.quiet.map(t=>chip(t,"quiet"))}</div>}
+        </div>}
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,minWidth:560}}>
+          <thead><tr style={{textAlign:"left",color:B.textMute,fontSize:11,textTransform:"uppercase",letterSpacing:"0.06em"}}>
+            <th style={{padding:"6px 8px"}}>Feature</th><th style={{padding:"6px 8px"}}>In plan</th><th style={{padding:"6px 8px"}}>Ever used</th><th style={{padding:"6px 8px"}}>Last 30 days</th><th style={{padding:"6px 8px"}}>Items</th><th style={{padding:"6px 8px"}}>Last activity</th></tr></thead>
+          <tbody>{f.rows.map(r=><tr key={r.feature} style={{borderTop:`1px solid ${B.borderLight}`,opacity:r.included?1:0.5}}>
+            <td style={{padding:"6px 8px"}}>{r.label}</td>
+            <td style={{padding:"6px 8px"}}>{r.included?"Yes":"No"}</td>
+            <td style={{padding:"6px 8px"}}>{r.ever_used?"✓":"—"}</td>
+            <td style={{padding:"6px 8px"}}>{r.used_30d===null?"Not tracked":r.used_30d?"✓":"—"}</td>
+            <td style={{padding:"6px 8px"}}>{r.item_count}</td>
+            <td style={{padding:"6px 8px"}}>{r.feature==="assistant"?"—":day(r.last_activity)}</td>
+          </tr>)}</tbody>
+        </table>
+      </div>}
+    </div>)}
+  </div></div>;
+}
+
 function FirmBillingView({toast}){
   const[firms,setFirms]=useState(null);
   const[firmId,setFirmId]=useState("");
@@ -14312,6 +14393,7 @@ const NAV_SECTIONS=[
     {id:"planrequests",label:"Plan requests",icon:"⇅"},
     {id:"enterprises",label:"Enterprises",icon:"▣"},
     {id:"firmbilling",label:"Firm billing",icon:"▤"},
+    {id:"utilization",label:"Utilization",icon:"◔"},
     {id:"staterules",label:"State Rules",icon:"⚖"},
     // Only surfaced on instances running database-driven branding (the demo /
     // pitch instance); a normal tenant deploy has no use for it.
@@ -14656,6 +14738,7 @@ export default function App(){
           {tab==="enterprises" &&isAdminRole&&<EnterprisesView key={navNonce} toast={showToast} userProfile={userProfile} onOpenBranding={BRAND_ADMIN?()=>setTab("branding"):null}/>}
           {tab==="firmbilling" &&isAdminRole&&<FirmBillingView key={navNonce} toast={showToast}/>}
           {tab==="staterules"  &&isAdminRole&&<StateRulesView key={navNonce} userProfile={userProfile} toast={showToast}/>}
+          {tab==="utilization" &&isAdminRole&&<UtilizationView key={navNonce} toast={showToast}/>}
           {tab==="branding"    &&isAdminRole&&BRAND_ADMIN&&<BrandingView key={navNonce} toast={showToast}/>}
           {tab==="resources"   &&<ResourcesView key={navNonce} data={data} userProfile={userProfile} toast={showToast}/>}
           {tab==="p-contacts"  &&<ProspectContactsView key={navNonce} data={data} reload={reload} toast={showToast} userProfile={userProfile}/>}

@@ -111,11 +111,24 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
   },
   {
     name: "household_detail",
-    description: "Details for one household: plan, subscription state, ORDANIS Expert, firm link, member names and roles, count of active obligations and open tasks, and its next five obligations.",
+    description: "Details for one household: plan, subscription state, ORDANIS Expert, firm link, member names and roles, count of active obligations and open tasks, its next five obligations, and its utilization: which features it uses now (last 30 days), used before but has gone quiet on, has never used though its plan includes them, and which its plan doesn't include.",
     input_schema: {
       type: "object",
       properties: { household_id: { type: "string", description: "UUID from find_households." } },
       required: ["household_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "utilization_overview",
+    description: "Utilization across households: for each, how many of its plan's features it has ever used and used in the last 30 days, and which included features it has never used. Sorted least-used first. Use for 'which families aren't using the platform', 'who isn't using what they pay for', 'which of Maria's households need a nudge'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        plan: { type: "string", enum: ["basic", "core", "premier"] },
+        expert: { type: "string", description: "Filter by the household's ORDANIS Expert (name contains)." },
+        limit: { type: "integer", minimum: 1, maximum: 50 },
+      },
       additionalProperties: false,
     },
   },
@@ -372,6 +385,25 @@ async function familyNames(db: SupabaseClient, ids: string[]): Promise<Record<st
   return Object.fromEntries((data ?? []).map((f: { id: string; name: string }) => [f.id, f.name]));
 }
 
+// Utilization rows (from family_utilization) folded into what a person would say about one household.
+type UtilRow = { family_id: string; family_name: string; plan: string; expert_name: string | null; feature: string; label: string;
+  included: boolean; ever_used: boolean; used_30d: boolean | null; item_count: number; last_activity: string | null };
+function summarizeUtilization(rows: UtilRow[]) {
+  const inc = rows.filter((r) => r.included);
+  const day = (t: string | null) => (t ? t.slice(0, 10) : null);
+  return {
+    plan: rows[0]?.plan ?? null,
+    active_last_30_days: inc.filter((r) => r.used_30d === true).map((r) => r.label),
+    used_before_but_quiet: inc.filter((r) => r.ever_used && r.used_30d === false).map((r) => ({ feature: r.label, last_activity: day(r.last_activity) })),
+    never_used_but_included: inc.filter((r) => !r.ever_used).map((r) => r.label),
+    not_in_plan: rows.filter((r) => !r.included).map((r) => r.label),
+    ai_assistant_prompts: Number(rows.find((r) => r.feature === "assistant")?.item_count ?? 0),
+    included_features_ever_used: `${inc.filter((r) => r.ever_used).length} of ${inc.length}`,
+    included_features_used_last_30_days: `${inc.filter((r) => r.used_30d === true).length} of ${inc.filter((r) => r.feature !== "assistant").length}`,
+    note: "Use means records added, changed or completed, or a sign-in. Viewing alone isn't recorded.",
+  };
+}
+
 async function runTool(db: SupabaseClient, name: string, input: Record<string, unknown>): Promise<ToolOut> {
   switch (name) {
     case "platform_overview": {
@@ -414,13 +446,14 @@ async function runTool(db: SupabaseClient, name: string, input: Record<string, u
       const id = String(input.household_id ?? "");
       if (!UUID_RE.test(id)) return { rows: 0, data: { error: "household_id must be a UUID from find_households" } };
       const today = isoDate(new Date());
-      const [fam, members, obCount, taskCount, nextObs] = await Promise.all([
+      const [fam, members, obCount, taskCount, nextObs, util] = await Promise.all([
         db.from("families").select("id,name,plan,subscription_state,advisor_name,created_at,archived_at,enterprise_id,pending_plan,pending_plan_effective_at,domicile_state").eq("id", id).maybeSingle(),
         db.from("user_profiles").select("full_name,role,active").eq("family_id", id).limit(ROW_CAP),
         db.from("obligations").select("id", { count: "exact", head: true }).eq("family_id", id).eq("active", true),
         db.from("tasks").select("id", { count: "exact", head: true }).eq("family_id", id).eq("done", false),
         db.from("obligations").select("name,kind,amount,due_date,counterparty").eq("family_id", id).eq("active", true)
           .gte("due_date", today).order("due_date").limit(5),
+        db.rpc("family_utilization", { p_family_id: id }),
       ]);
       if (fam.error) throw fam.error;
       if (!fam.data) return { rows: 0, data: { error: "No household with that id." } };
@@ -432,8 +465,29 @@ async function runTool(db: SupabaseClient, name: string, input: Record<string, u
           active_obligations: obCount.count ?? 0,
           open_tasks: taskCount.count ?? 0,
           next_obligations: nextObs.data ?? [],
+          utilization: util.error ? { error: "Utilization isn't available right now." } : summarizeUtilization((util.data ?? []) as UtilRow[]),
         },
       };
+    }
+    case "utilization_overview": {
+      const { data, error } = await db.rpc("family_utilization", { p_family_id: null });
+      if (error) throw error;
+      const byFam = new Map<string, UtilRow[]>();
+      for (const r of (data ?? []) as UtilRow[]) byFam.set(r.family_id, [...(byFam.get(r.family_id) ?? []), r]);
+      const expert = typeof input.expert === "string" ? input.expert.trim().toLowerCase() : "";
+      const list = [...byFam.values()]
+        .filter((rows) => (!input.plan || rows[0].plan === input.plan) && (!expert || String(rows[0].expert_name ?? "").toLowerCase().includes(expert)))
+        .map((rows) => {
+          const inc = rows.filter((r) => r.included && r.feature !== "assistant");
+          const active = inc.filter((r) => r.used_30d === true).length;
+          return { household: rows[0].family_name, plan: rows[0].plan, ordanis_expert: rows[0].expert_name,
+            included: inc.length, ever_used: inc.filter((r) => r.ever_used).length, used_last_30_days: active,
+            never_used_but_included: inc.filter((r) => !r.ever_used).map((r) => r.label), _share: inc.length ? active / inc.length : 0 };
+        })
+        .sort((a, b) => a._share - b._share)
+        .slice(0, clampInt(input.limit, 1, ROW_CAP, 15))
+        .map(({ _share, ...rest }) => rest);
+      return { rows: list.length, data: { households: list, note: "Use means records added, changed or completed, or a sign-in; viewing alone isn't recorded." } };
     }
     case "upcoming_obligations": {
       const days = clampInt(input.days, 1, 120, 30);
@@ -1292,6 +1346,7 @@ const SYSTEM_PROMPT = [
   "- Only state facts the tools returned. If the tools don't cover a question, say so plainly.",
   "- Results are capped at 50 rows; if a result has 50 rows, say the list may be longer.",
   "- Do not give investment, tax or legal advice.",
+  "- Utilization: when you look up a household, use its utilization. Say briefly what it actively uses, what it used before but has gone quiet on, and what its plan includes that it has never used, then suggest the one or two things its ORDANIS Expert could raise with the family. Present it as helpful, never as a judgement of the family. \"Use\" means records added or changed (or signing in); simply viewing isn't recorded, so say \"hasn't added\" rather than \"never looked at\".",
   "- Team tasks: you can draft tasks for the ORDANIS team's internal list with propose_task (households never see them). You never save a task yourself: say the draft is on screen, read it back, and ask a yes-or-no question. If they then say yes or no, the app handles it. Phone reminders are lock-screen alerts that show a count only, never the task text.",
 ].join("\n");
 

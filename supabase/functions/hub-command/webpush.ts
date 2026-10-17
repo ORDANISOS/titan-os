@@ -1,4 +1,4 @@
-// Web Push for Jarvis (lock-screen alerts), with no third-party library: the VAPID private key is
+// Web Push for ELIOT (lock-screen alerts), with no third-party library: the VAPID private key is
 // only ever handled by the platform's own WebCrypto.
 //
 // - Message encryption: RFC 8291 (aes128gcm, RFC 8188). The push service (Apple, Google, ...) relays
@@ -97,7 +97,7 @@ export async function sendPush(v: Vapid, sub: PushSub, msg: PushMessage, opts: {
       "Content-Type": "application/octet-stream",
       "TTL": String(opts.ttl ?? 4 * 3600),
       "Urgency": opts.urgency ?? "normal",
-      "Topic": msg.tag.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32) || "jarvis",
+      "Topic": msg.tag.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32) || "eliot",
     },
     body,
   });
