@@ -1437,6 +1437,7 @@ function MfaCodeInput({value,onChange,autoFocus}){
 }
 
 // Set up an authenticator: shows a QR code (and the key for typing in), then confirms with a first code.
+// issuer names the entry in the person's authenticator app ("ORDANIS"); without it Supabase uses the Site URL.
 function MfaEnroll({onVerified,onCancel,cancelLabel}){
   const[factor,setFactor]=useState(null);
   const[code,setCode]=useState("");
@@ -1450,7 +1451,7 @@ function MfaEnroll({onVerified,onCancel,cancelLabel}){
         // Clear any half-finished set-up from an earlier visit, so a fresh QR code can be made.
         const st=await mfaStatus();
         for(const f of st.unverified)await sb.auth.mfa.unenroll({factorId:f.id});
-        const{data,error:e}=await sb.auth.mfa.enroll({factorType:"totp",friendlyName:`ORDANIS ${new Date().toISOString().slice(0,10)}`});
+        const{data,error:e}=await sb.auth.mfa.enroll({factorType:"totp",issuer:"ORDANIS",friendlyName:`ORDANIS ${new Date().toISOString().slice(0,10)}`});
         if(e)throw e;
         setFactor(data);
       }catch(e){setError(e?.message||"Could not start the set-up. Please try again.");}
