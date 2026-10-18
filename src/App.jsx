@@ -7661,7 +7661,7 @@ function PlanRequestsView({data,toast,reload,onChanged}){
   };
   const statusChip=s=>{const c={approved:["#e0f5e9","#0d5c2b"],declined:["#fde8e8","#8b1a1a"],cancelled:["#eceff3","#5b6573"],pending:["rgba(206,182,129,0.22)","#7a5a19"]}[s]||["#eceff3","#5b6573"];
     return <span style={{fontSize:9.5,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",borderRadius:20,padding:"2px 8px",background:c[0],color:c[1]}}>{s}</span>;};
-  return <div style={{padding:isMobile?16:28,maxWidth:1100}}>
+  return <div style={{height:"100%",overflowY:"auto"}}><div style={{padding:isMobile?16:28,maxWidth:1100}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:12,flexWrap:"wrap",marginBottom:6}}>
       <div>
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600}}>Plan requests</div>
@@ -7709,7 +7709,7 @@ function PlanRequestsView({data,toast,reload,onChanged}){
         <Btn disabled={!!busyId} onClick={()=>acting.kind==="approve"?approve(acting.row):decline(acting.row)}>{busyId?"Working…":acting.kind==="approve"?"Approve":"Decline request"}</Btn>
       </div>
     </Modal>}
-  </div>;
+  </div></div>;
 }
 
 function SignupsRevenueView({data,toast,userProfile,reload}){
@@ -13139,7 +13139,7 @@ function BrandingView({toast}){
 
   if(loading)return <div style={{padding:40}}><Spinner/></div>;
 
-  return <div>
+  return <div style={{height:"100%",overflowY:"auto"}}><div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap",marginBottom:18}}>
       <div>
         <div style={{fontSize:13,color:B.textSoft,maxWidth:620,lineHeight:1.5}}>
@@ -13239,7 +13239,7 @@ function BrandingView({toast}){
         <Btn onClick={save} disabled={saving}>{saving?"Saving…":modal.isNew?"Create":"Save"}</Btn>
       </div>
     </Modal>}
-  </div>;
+  </div></div>;
 }
 
 // ── STATE RULE REVIEW ────────────────────────────────────────────────────────
@@ -13298,7 +13298,8 @@ function StateRulesView({userProfile,toast}){
 
   if(loading)return <Spinner/>;
 
-  return <div style={{maxWidth:980}}>
+  // The admin content area doesn't scroll by itself (overflow hidden); each view scrolls its own content.
+  return <div style={{height:"100%",overflowY:"auto"}}><div style={{maxWidth:980,padding:"24px 28px"}}>
     <h2 style={{fontSize:22,fontWeight:700,color:B.navy,margin:"0 0 4px",letterSpacing:"-0.01em"}}>State Rule Review</h2>
     <p style={{fontSize:13,color:B.textSoft,margin:"0 0 16px",maxWidth:680,lineHeight:1.6}}>
       The agent checks each published fact against its source and proposes what it found.
@@ -13370,7 +13371,7 @@ function StateRulesView({userProfile,toast}){
           </div>
         </div>;
       })}
-  </div>;
+  </div></div>;
 }
 
 // ── FIRM BILLING (Phase 8b) ────────────────────────────────────────────────
