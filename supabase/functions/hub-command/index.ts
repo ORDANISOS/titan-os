@@ -19,6 +19,7 @@ import Anthropic from "npm:@anthropic-ai/sdk@0.133.0";
 import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2.49.4";
 import postgres from "npm:postgres@3.4.9";
 import { loadVapid, sendPush, PUSH_ENDPOINT, type Vapid } from "./webpush.ts";
+import { expertDesk, deskForModel, type Desk, type DeskEmail } from "./coverage.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -347,6 +348,19 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
         },
       },
       required: ["title", "blocks"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "expert_desk",
+    description: "Cover for an ORDANIS Expert who is out (sick, on leave, on vacation): everything on that Expert's desk, the same as their own dashboard. Their households' workflow steps awaiting review, open tasks, bills the firm pays, deadlines (loans, insurance renewals, deal closes, birthdays, anniversaries), open emails assigned to them in the email portal, and recent notes, limited to overdue items plus the next N days. The full list goes on the administrator's screen automatically; you get the counts and the most urgent items. Use for 'what's on Maria's desk', 'Maria is out sick, what does she have', 'cover for Alex today'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        expert: { type: "string", description: "The Expert's name as spoken (first name is fine)." },
+        days: { type: "integer", minimum: 1, maximum: 60, description: "Look-ahead window after today. Default 14." },
+      },
+      required: ["expert"],
       additionalProperties: false,
     },
   },
@@ -885,6 +899,26 @@ async function runEmailTool(ctx: EmailCtx, name: string, input: Record<string, u
   }
 }
 
+// Open emails assigned to one Expert, for expert_desk. Only email-portal admins see someone else's
+// mail, the same rule as the email_ tools.
+async function expertEmails(ctx: EmailCtx, expertEmail: string): Promise<{ emails: DeskEmail[]; note?: string }> {
+  if (!EMAILPORTAL_DB_URL) return { emails: [], note: "The email portal isn't connected on this site." };
+  const member = await emailMember(ctx);
+  if (!member || member.role !== "admin") return { emails: [], note: "Their email isn't shown: only email portal admins can see another person's mail." };
+  const sql = await emailSql(ctx);
+  const tm = await sql`select id::text from public.team_members where lower(email) = lower(${expertEmail}) limit 1`;
+  if (!tm.length) return { emails: [], note: "They aren't on the email portal team, so they have no assigned email." };
+  const rows = await sql`
+    select e.received_at, coalesce(nullif(e.from_name, ''), e.from_address) as "from", e.subject, e.status::text as status,
+           f.name as household, (cardinality(e.auth_flags) > 0 or coalesce(e.spam_score, 0) >= 5) as flagged
+    from public.emails e left join public.families f on f.id = e.family_id
+    where not e.archived and e.status::text <> 'done' and e.assignee_id = ${tm[0].id}::uuid
+    order by e.received_at asc limit 51`;
+  const t = (v: unknown, n: number) => String(v ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, n);
+  return { emails: rows.map((r) => ({ received_at: new Date(r.received_at).toISOString(), from: t(r.from, 80), subject: t(r.subject, 160) || "(no subject)",
+    status: t(r.status, 20), household: r.household ? t(r.household, 80) : null, flagged: r.flagged === true })) };
+}
+
 // ── Attention scan (the executive briefing) ───────────────────────────────────────
 // Deterministic, read-only checks across production (as the signed-in admin, so access rules
 // apply) and the email portal (read-only login). Each finding gets a severity; the model only
@@ -1347,6 +1381,7 @@ const SYSTEM_PROMPT = [
   "- Results are capped at 50 rows; if a result has 50 rows, say the list may be longer.",
   "- Do not give investment, tax or legal advice.",
   "- Utilization: when you look up a household, use its utilization. Say briefly what it actively uses, what it used before but has gone quiet on, and what its plan includes that it has never used, then suggest the one or two things its ORDANIS Expert could raise with the family. Present it as helpful, never as a judgement of the family. \"Use\" means records added or changed (or signing in); simply viewing isn't recorded, so say \"hasn't added\" rather than \"never looked at\".",
+  "- Covering for an Expert: when asked what an ORDANIS Expert has on their plate, or to cover for one who is out, use expert_desk. The full list is on screen automatically, so don't call show_on_screen and don't read the list out. Say one or two sentences: how much is overdue or due today, the single most urgent item, and that the rest is on screen. If several Experts match, ask which one. If their email isn't shown, say why in a few words.",
   "- Team tasks: you can draft tasks for the ORDANIS team's internal list with propose_task (households never see them). You never save a task yourself: say the draft is on screen, read it back, and ask a yes-or-no question. If they then say yes or no, the app handles it. Phone reminders are lock-screen alerts that show a count only, never the task text.",
 ].join("\n");
 
@@ -1609,6 +1644,7 @@ Deno.serve(async (req) => {
     const emailCtx: EmailCtx = { userEmail: user.email ?? "" };
     let display: Display | null = null;
     let proposal: Record<string, unknown> | null = null;
+    let desk: Desk | null = null;
     let answer = "";
     let refused = false;
     try {
@@ -1650,6 +1686,13 @@ Deno.serve(async (req) => {
             toolLog.push({ name: tu.name, input: { title: clean(input.title, 120), household: clean(input.household, 80) || null }, ok: !!d.draft, rows: d.draft ? 1 : 0 });
             return { type: "tool_result" as const, tool_use_id: tu.id, content: d.message, is_error: !d.draft };
           }
+          if (tu.name === "expert_desk") {
+            const r = await expertDesk(db, input, (email) => expertEmails(emailCtx, email));
+            if (r.desk) desk = r.desk;
+            toolLog.push({ name: tu.name, input: { expert: clean(input.expert, 80), days: input.days ?? null }, ok: !!r.desk, rows: r.desk ? r.desk.stats.overdue + r.desk.review.length + r.desk.tasks.length + r.desk.bills.length + r.desk.deadlines.length + r.desk.emails.length : 0 });
+            const content = r.desk ? deskForModel(r.desk) : { error: r.error, experts: r.options ?? [] };
+            return { type: "tool_result" as const, tool_use_id: tu.id, content: `<database_result tool="expert_desk">\n${JSON.stringify(content)}\n</database_result>` };
+          }
           if (tu.name === "show_on_screen") {
             display = sanitizeDisplay(input);
             toolLog.push({ name: tu.name, input: { title: display?.title ?? null }, ok: !!display, rows: display?.blocks.length ?? 0 });
@@ -1682,12 +1725,14 @@ Deno.serve(async (req) => {
     if (refused) answer = "I can't help with that one.";
     if (!answer) answer = "I couldn't finish that lookup. Try asking it a simpler way.";
 
-    const logged = await writeAudit({ status: "ok", result_summary: (answer + (display ? `\n[visual: ${display.title}]` : "")).slice(0, 2000) });
+    // The desk sheet replaces any other visual for this answer.
+    if (desk) display = null;
+    const logged = await writeAudit({ status: "ok", result_summary: (answer + (display ? `\n[visual: ${display.title}]` : "") + (desk ? `\n[desk: ${desk.expert}]` : "")).slice(0, 2000) });
     if (!logged) {
       // An unlogged answer is not returned: the audit trail comes first.
       return json({ error: "I couldn't record that command, so I won't answer it. Please try again.", request_id: requestId }, 500);
     }
-    return json({ answer, display, proposal, first_name: firstName || null, request_id: requestId, tools: toolLog.map((t) => ({ name: t.name, rows: t.rows, ok: t.ok })) });
+    return json({ answer, display, proposal, desk, first_name: firstName || null, request_id: requestId, tools: toolLog.map((t) => ({ name: t.name, rows: t.rows, ok: t.ok })) });
   } catch (e) {
     console.error("hub-command error", e);
     await writeAudit({ status: "error", error: redact((e as Error)?.message ?? e).slice(0, 500) });
