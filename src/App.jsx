@@ -8695,7 +8695,7 @@ function ChrisBatchFiler({familyId,toast,onFiled}){
       fresh.push({id:`${Date.now()}_${Math.random().toString(36).slice(2,8)}`,file:f,
         thumb:isReadableImage(f)?URL.createObjectURL(f):null,status:"queued",phase:"Waiting to read…",
         name:base,nameTouched:false,description:"",descTouched:false,category:"General",categoryTouched:false,newFolder:false,
-        suggestion:null,text:null,error:null});
+        typedFolder:null,suggestion:null,text:null,error:null});
     }
     if(!fresh.length)return;
     setItems(list=>[...list,...fresh]);
@@ -8709,6 +8709,21 @@ function ChrisBatchFiler({familyId,toast,onFiled}){
     setItems(list=>list.filter(x=>x.id!==id));
   };
   const chooseFolder=(id,folder,isNew)=>patch(id,{category:folder,newFolder:!!isNew,categoryTouched:true});
+  // Nothing fits and CHRIS didn't propose anything: the person names a folder
+  // themselves. Same rules as everywhere else, and like CHRIS's own proposals it
+  // is only created when the card is filed. A name already chosen on another
+  // card in this batch is reused rather than refused.
+  const useTypedFolder=id=>{
+    const it=itemsRef.current.find(x=>x.id===id);
+    if(!it)return;
+    const typed=String(it.typedFolder||"").trim().replace(/\s+/g," ");
+    const pending=itemsRef.current.filter(x=>x.newFolder&&x.category).map(x=>x.category);
+    const same=pending.find(n=>n.toLowerCase()===typed.toLowerCase());
+    if(same){patch(id,{category:same,newFolder:true,categoryTouched:true,typedFolder:null,error:null});return;}
+    const v=validateFolderName(typed,customFoldersRef.current);
+    if(!v.ok){patch(id,{error:v.reason});return;}
+    patch(id,{category:v.name,newFolder:true,categoryTouched:true,typedFolder:null,error:null});
+  };
 
   const fileOne=async(id,knownFolders)=>{
     const it=itemsRef.current.find(x=>x.id===id);
@@ -8802,13 +8817,23 @@ function ChrisBatchFiler({familyId,toast,onFiled}){
               {opts.filter(o=>o.why).map(o=>`${o.folder||o.newFolder}: ${o.why}`).join(" · ")}</div>}
             {opts.some(o=>o.newFolder)&&<div style={{fontSize:11.5,color:B.textMute,marginTop:4}}>
               None of your folders fit this. Tap the new folder to create it when you file.</div>}
+            {it.newFolder&&!opts.some(o=>o.newFolder===it.category)&&<div style={{fontSize:11.5,color:B.textMute,marginTop:4}}>
+              "{it.category}" is a new folder. It's created when you file this.</div>}
             <div style={{display:"flex",gap:8,alignItems:"center",marginTop:10,flexWrap:"wrap"}}>
               <Sel aria-label="Choose another folder" value={allFolders.includes(it.category)?it.category:""} disabled={it.status==="filing"}
-                onChange={e=>e.target.value&&chooseFolder(it.id,e.target.value,false)} style={{flex:"1 1 180px",minHeight:40}}>
+                onChange={e=>{const v=e.target.value;if(v==="__new__")patch(it.id,{typedFolder:"",error:null});else if(v)chooseFolder(it.id,v,false);}} style={{flex:"1 1 180px",minHeight:40}}>
                 <option value="">Choose another folder…</option>
                 {allFolders.map(f=><option key={f} value={f}>{f}</option>)}
+                <option value="__new__">+ New folder…</option>
               </Sel>
             </div>
+            {it.typedFolder!==null&&it.typedFolder!==undefined&&<div style={{display:"flex",gap:8,alignItems:"center",marginTop:8,flexWrap:"wrap"}}>
+              <Inp autoFocus maxLength={40} placeholder="Name the new folder, e.g. Aircraft" aria-label="New folder name" value={it.typedFolder}
+                onChange={e=>patch(it.id,{typedFolder:e.target.value})} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();useTypedFolder(it.id);}}}
+                style={{flex:"1 1 180px",minHeight:40}}/>
+              <Btn small onClick={()=>useTypedFolder(it.id)} disabled={!String(it.typedFolder).trim()}>Use it</Btn>
+              <Btn small variant="ghost" onClick={()=>patch(it.id,{typedFolder:null,error:null})}>Cancel</Btn>
+            </div>}
             {it.error&&<div style={{fontSize:12,color:"#b3261e",marginTop:8}}>{it.error}</div>}
             <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:12}}>
               <Btn variant="ghost" onClick={()=>removeItem(it.id)} disabled={it.status==="filing"}>Remove</Btn>
@@ -8928,6 +8953,9 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
   // person's own choice always wins and is never silently overwritten.
   const[suggestion,setSuggestion]=useState(null); // {folder, newFolder, why, confidence}
   const[creatingSuggested,setCreatingSuggested]=useState(false);
+  // "+ New folder…" picked in the upload form's Category list: the name being typed.
+  const[typedCategory,setTypedCategory]=useState(null);
+  const[typedCategoryErr,setTypedCategoryErr]=useState("");
   // Text pulled from the file as soon as it's picked, and whether that read is
   // still in flight. This used to run only inside upload() -- after the file
   // was already in storage -- so the suggestion was computed and the document
@@ -8994,6 +9022,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     setName("");setDescription("");setCategory("General");setFile(null);autoNameRef.current="";autoDescRef.current="";
     setLinkPropertyId("");setLinkSection("");setConflictDoc(null);
     setSuggestion(null);setExtractedText(null);setExtracting(false);setCreatingSuggested(false);
+    setTypedCategory(null);setTypedCategoryErr("");
   };
   // Most recent download of a given document, if any (downloads is pre-sorted newest first).
   const lastDownloadFor=docId=>downloads.find(d=>d.documentId===docId)||null;
@@ -9505,7 +9534,31 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
 
     {modal==="upload"&&<Modal title="Upload Document" onClose={()=>{setModal(null);resetForm();}}>
       <Field label="Document Name" required><Inp maxLength={150} placeholder="Q4 2024 Statement" value={name} onChange={e=>setName(e.target.value)}/></Field>
-      <Field label="Category"><Sel value={category} onChange={e=>{setCategory(e.target.value);setSuggestion(null);}}>{[...DOC_CATEGORIES,...customFolders.map(f=>f.name)].map(c=><option key={c}>{c}</option>)}</Sel></Field>
+      <Field label="Category"><Sel value={category} onChange={e=>{if(e.target.value==="__new__"){setTypedCategory("");setTypedCategoryErr("");return;}setCategory(e.target.value);setSuggestion(null);}}>{[...DOC_CATEGORIES,...customFolders.map(f=>f.name)].map(c=><option key={c}>{c}</option>)}<option value="__new__">+ New folder…</option></Sel>
+        {typedCategory!==null&&<div style={{marginTop:8}}>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <Inp autoFocus maxLength={40} placeholder="Name the new folder, e.g. Aircraft" aria-label="New folder name" value={typedCategory}
+              onChange={e=>{setTypedCategory(e.target.value);setTypedCategoryErr("");}} style={{flex:"1 1 180px"}}
+              onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();document.getElementById("create-typed-folder")?.click();}}}/>
+            <button id="create-typed-folder" type="button" disabled={creatingSuggested||!typedCategory.trim()} onClick={async()=>{
+                const v=validateFolderName(typedCategory,customFolders.map(f=>f.name));
+                if(!v.ok){setTypedCategoryErr(v.reason);return;}
+                setCreatingSuggested(true);
+                const{error}=await sb.from("document_folders").insert({family_id:familyId,name:v.name});
+                setCreatingSuggested(false);
+                if(error&&!/duplicate key/i.test(error.message)){setTypedCategoryErr(error.message);return;}
+                await loadFolders();
+                setCategory(v.name);setSuggestion(null);setTypedCategory(null);
+                toast(`Created "${v.name}"`);
+              }}
+              style={{background:B.navy,color:B.white,border:"none",borderRadius:8,padding:"9px 14px",fontSize:13,fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+              {creatingSuggested?"Creating…":"Create"}</button>
+            <button type="button" onClick={()=>{setTypedCategory(null);setTypedCategoryErr("");}}
+              style={{background:"none",border:"none",color:B.textSoft,fontSize:12.5,fontFamily:"inherit",cursor:"pointer",textDecoration:"underline"}}>Cancel</button>
+          </div>
+          {typedCategoryErr&&<div style={{fontSize:12,color:"#b3261e",marginTop:6}}>{typedCategoryErr}</div>}
+        </div>}
+      </Field>
       <SuggestionPanel/>
       <Field label="Description" optional><Inp maxLength={500} placeholder="Anything that will help you find it later" value={description} onChange={e=>setDescription(e.target.value)}/></Field>
       {linkFields()}
