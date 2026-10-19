@@ -1415,7 +1415,7 @@ function _drawIntroCube(ctx,x,y,s,rot,hex,alpha){
 // their dashboard with no password ever set, and have no way to log back in next time.
 // ── Two-step sign-in (TOTP authenticator app) ─────────────────────────────────
 // Staff (MFA_REQUIRED_ROLES) must use it: at sign-in they set it up if they haven't, and enter a code if they have.
-// Clients may turn it on from their dashboard (ClientSecurityModal); once on, they are asked for a code too.
+// Clients may turn it on from the Security panel (SecurityModal); once on, they are asked for a code too.
 // A verified code raises the session from aal1 to aal2, which admin-only data (e.g. family_utilization) requires.
 const MFA_REQUIRED_ROLES=["admin","advisor","analyst","partner","enterprise_admin"];
 async function mfaStatus(){
@@ -1522,10 +1522,20 @@ function MfaGate({mode,factorId,role,onDone,onSignOut}){
   </div>;
 }
 
-// Clients: turn two-step sign-in on or off for their own login.
-function ClientSecurityModal({onClose,toast}){
+// Sign-in security for anyone signed in: two-step sign-in (clients may turn it on or off; staff must keep it)
+// and "Sign out everywhere", which ends every session of this login: other tabs, other devices and ELIOT.
+const SIGNED_OUT_KEY="ordanis_signed_out_reason";
+const noteSignedOut=reason=>{try{sessionStorage.setItem(SIGNED_OUT_KEY,reason);}catch(_e){}};
+async function signOutEverywhere(){
+  resetAssistantPromptSession();
+  noteSignedOut("everywhere");
+  const{error}=await sb.auth.signOut({scope:"global"});
+  if(error)await sb.auth.signOut({scope:"local"}); // still leave this browser signed out
+}
+function SecurityModal({onClose,toast,role}){
+  const required=MFA_REQUIRED_ROLES.includes(role);
   const[st,setSt]=useState(null);
-  const[mode,setMode]=useState("view"); // view | enroll | confirmOff
+  const[mode,setMode]=useState("view"); // view | enroll | confirmOff | confirmEverywhere
   const[code,setCode]=useState("");
   const[error,setError]=useState("");
   const[busy,setBusy]=useState(false);
@@ -1545,6 +1555,8 @@ function ClientSecurityModal({onClose,toast}){
     }catch(err){setError(mfaCodeMessage(err));setCode("");}
     setBusy(false);
   };
+  const everywhere=async()=>{setBusy(true);await signOutEverywhere();}; // the app returns to the sign-in screen
+  const section={borderTop:`1px solid ${B.borderLight}`,paddingTop:16,marginTop:18};
   return <Modal title="Sign-in security" onClose={onClose}>
     {error&&<div style={MFA_ERR}>{error}</div>}
     {!st?!error&&<Spinner/>:mode==="enroll"?<MfaEnroll onVerified={async()=>{toast("Two-step sign-in is on");setMode("view");await load();}} onCancel={()=>setMode("view")}/>
@@ -1553,17 +1565,34 @@ function ClientSecurityModal({onClose,toast}){
       <MfaCodeInput value={code} onChange={setCode} autoFocus/>
       <div style={{display:"flex",gap:10}}><Btn variant="danger" onClick={turnOff} disabled={busy||code.length!==6}>{busy?"Turning off…":"Turn off"}</Btn><Btn variant="ghost" onClick={()=>{setMode("view");setCode("");setError("");}}>Keep it on</Btn></div>
     </form>
+    :mode==="confirmEverywhere"?<div>
+      <div style={{fontSize:13,color:B.textSoft,marginBottom:16,lineHeight:1.55}}>This signs your login out on every device and browser, including this one{required?" and ELIOT":""}. Use it if you signed in on a computer that isn't yours, lost a device, or think someone else may have your password (change your password too).</div>
+      <div style={{display:"flex",gap:10}}><Btn variant="danger" onClick={everywhere} disabled={busy}>{busy?"Signing out…":"Sign out everywhere"}</Btn><Btn variant="ghost" onClick={()=>setMode("view")}>Cancel</Btn></div>
+    </div>
     :<div>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
         <span style={{fontSize:13,fontWeight:700,color:B.navy}}>Two-step sign-in</span>
         <span style={{fontSize:11,fontWeight:700,padding:"2px 9px",borderRadius:999,background:on?"#EAF5EE":"#F1F1EE",color:on?"#1E6B3A":B.textSoft}}>{on?"On":"Off"}</span>
       </div>
-      <div style={{fontSize:13,color:B.textSoft,lineHeight:1.55,marginBottom:18}}>{on
+      <div style={{fontSize:13,color:B.textSoft,lineHeight:1.55,marginBottom:18}}>{required
+        ?`Required for ${ROLE_LABELS[role]||"team"} accounts: each time you sign in, ORDANIS asks for a 6-digit code from the authenticator app on your phone. Lost your phone? Ask an ORDANIS administrator to reset it.`
+        :on
         ?"Each time you sign in, ORDANIS asks for a 6-digit code from the authenticator app on your phone, as well as your password."
         :"Add a second step to signing in: after your password, you type a 6-digit code from an authenticator app on your phone. Even if someone learned your password, they couldn't get in without your phone. Recommended."}</div>
-      {on?<Btn variant="ghost" onClick={()=>{setMode("confirmOff");setError("");}}>Turn off</Btn>:<Btn onClick={()=>{setMode("enroll");setError("");}}>Turn on two-step sign-in</Btn>}
+      {!required&&(on?<Btn variant="ghost" onClick={()=>{setMode("confirmOff");setError("");}}>Turn off</Btn>:<Btn onClick={()=>{setMode("enroll");setError("");}}>Turn on two-step sign-in</Btn>)}
+      <div style={section}>
+        <div style={{fontSize:13,fontWeight:700,color:B.navy,marginBottom:6}}>Sign out everywhere</div>
+        <div style={{fontSize:13,color:B.textSoft,lineHeight:1.55,marginBottom:12}}>"Sign Out" only signs out this browser. This ends every session for your login, on all your devices.</div>
+        <Btn variant="ghost" onClick={()=>setMode("confirmEverywhere")}>Sign out everywhere…</Btn>
+      </div>
     </div>}
   </Modal>;
+}
+// A "Security" button that opens SecurityModal; sits next to each Sign Out.
+function SecurityButton({role,toast,style,label="🔒 Security"}){
+  const[open,setOpen]=useState(false);
+  return <><button onClick={()=>setOpen(true)} title="Two-step sign-in and sign out everywhere" style={style}>{label}</button>
+    {open&&<SecurityModal role={role} toast={toast} onClose={()=>setOpen(false)}/>}</>;
 }
 
 function SetPasswordGate({onDone}){
@@ -1600,6 +1629,9 @@ function LoginScreen(){
   const[email,setEmail]=useState("");
   const[password,setPassword]=useState("");
   const[error,setError]=useState("");
+  // Why the last session ended, when it wasn't this tab's own Sign Out (set by signOutEverywhere / the session watcher).
+  const[signedOutNote]=useState(()=>{try{const r=sessionStorage.getItem(SIGNED_OUT_KEY);sessionStorage.removeItem(SIGNED_OUT_KEY);
+    return r==="everywhere"?"You've been signed out on all your devices.":r==="revoked"?"You were signed out, from another tab or device. Please sign in again.":"";}catch(_e){return "";}});
   const[loading,setLoading]=useState(false);
   const[resetSent,setResetSent]=useState(false);
 
@@ -1780,6 +1812,7 @@ function LoginScreen(){
             <form name="signin" onSubmit={e=>{e.preventDefault();if(mode==="login")handleLogin();else handleReset();}}>
             <Field label="Email" required><input type="email" id="signin-email" name="email" autoComplete="username" value={email} onChange={e=>{setEmail(e.target.value);setError("");}} placeholder={"you@"+BRAND.emailDomain} autoFocus style={{...inp,fontSize:15,padding:"13px 16px"}}/></Field>
             {mode==="login"&&<Field label="Password" required><PasswordField id="signin-password" name="password" autoComplete="current-password" value={password} onChange={e=>{setPassword(e.target.value);setError("");}} placeholder="••••••••" style={{fontSize:15,padding:"13px 16px"}}/></Field>}
+            {signedOutNote&&!error&&mode==="login"&&<div role="status" style={{fontSize:12,color:B.navy,marginBottom:12,fontWeight:600,padding:"8px 12px",background:"#EEF3F8",borderRadius:8}}>{signedOutNote}</div>}
             {error&&<div style={{fontSize:12,color:"#d43030",marginBottom:12,fontWeight:600,padding:"8px 12px",background:"#fde8e8",borderRadius:8}}>{error}</div>}
             <button type="submit" disabled={loading} style={{width:"100%",background:`linear-gradient(135deg,${B.navy},${B.navyMid})`,color:B.white,border:"none",borderRadius:10,padding:"13px",fontSize:14,fontWeight:700,cursor:loading?"not-allowed":"pointer",fontFamily:"inherit",letterSpacing:"0.06em",marginBottom:16,opacity:loading?.7:1}}>
               {loading?"Please wait…":mode==="login"?"SIGN IN":"SEND RESET LINK"}
@@ -9617,7 +9650,6 @@ function HouseholdTeamCard({familyId}){
 
 function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const isMobile=useIsMobile();
-  const[securityOpen,setSecurityOpen]=useState(false);
   // Needed because this view renders CashFlowView too. The client view is read-only, so
   // the picker never opens here — but the prop still has to resolve, and an undefined
   // identifier would take the whole dashboard down rather than degrade.
@@ -10028,7 +10060,6 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     {showAssistantGreeting&&!showNamePrompt&&<AssistantWelcome family={family} data={data} reload={reload} userProfile={userProfile} onClose={()=>setShowAssistantGreeting(false)} toast={toast} onWatchVideo={hasPlanVideo?()=>setPlanVideoWatching(true):undefined}/>}
     {planVideoWatching&&<PlanVideoModal plan={planVideoPlan} mode="watch" onPlayed={onPlanVideoPlayed} onClose={()=>setPlanVideoWatching(false)}/>}
     {emailAdvisorOpen&&<EmailAdvisorModal family={family} userProfile={userProfile} data={data} onClose={()=>setEmailAdvisorOpen(false)}/>}
-    {securityOpen&&<ClientSecurityModal onClose={()=>setSecurityOpen(false)} toast={toast}/>}
     {wizardOpen&&<OnboardingWizard onClose={closeWizard} addMember={addMember} addProfessional={addProfessional} addBusinessPartner={addBusinessPartner} addProperty={addProperty} addAccount={addAccount} addValuable={addValuable} members={members} professionals={professionals} properties={properties} accounts={accounts} valuables={valuables}/>}
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 
@@ -10057,7 +10088,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
             </div>
           </div>
           {clientHasExpert&&<button onClick={()=>setEmailAdvisorOpen(true)} style={{background:"rgba(206,182,132,0.15)",border:`1px solid ${B.gold}`,color:B.navy,borderRadius:8,padding:isMobile?"6px 10px":"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"inherit",flexShrink:0,fontWeight:600}}>{isMobile?"✉ ORDANIS Expert":"✉ Email my ORDANIS Expert"}</button>}
-          <button onClick={()=>setSecurityOpen(true)} title="Two-step sign-in" style={{background:"transparent",border:`1px solid ${B.border}`,color:B.textSoft,borderRadius:8,padding:isMobile?"6px 10px":"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>{isMobile?"🔒":"🔒 Security"}</button>
+          <SecurityButton role={userProfile?.role} toast={toast} label={isMobile?"🔒":"🔒 Security"} style={{background:"transparent",border:`1px solid ${B.border}`,color:B.textSoft,borderRadius:8,padding:isMobile?"6px 10px":"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}/>
           <button onClick={logout} style={{background:"transparent",border:`1px solid ${B.border}`,color:B.textSoft,borderRadius:8,padding:isMobile?"6px 10px":"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>Sign Out</button>
         </div>
       </div>
@@ -10670,6 +10701,7 @@ function FirmDashboard({userProfile,logout,toast}){
         <div style={{fontSize:12,color:B.navy,fontWeight:600}}>{userProfile.fullName||userProfile.email}</div>
         <div style={{fontSize:9,color:B.navyMid,letterSpacing:"0.1em",textTransform:"uppercase"}}>{firmName?firmName+" · ":""}Firm Administrator · View Only</div>
       </div>
+      <SecurityButton role={userProfile.role} toast={toast} style={{background:"none",border:`1px solid ${B.border}`,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontFamily:"inherit",fontSize:12,color:B.textSoft}}/>
       <button onClick={logout} style={{background:"none",border:`1px solid ${B.border}`,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontFamily:"inherit",fontSize:12,color:B.textSoft}}>Sign Out</button>
     </div>
   </div>;
@@ -10762,6 +10794,7 @@ function PartnerDashboard({data,userProfile,logout,toast,reload}){
         <div style={{fontSize:12,color:B.navy,fontWeight:600}}>{userProfile.fullName||userProfile.email}</div>
         <div style={{fontSize:9,color:B.navyMid,letterSpacing:"0.1em",textTransform:"uppercase"}}>Partner · View Only</div>
       </div>
+      <SecurityButton role={userProfile.role} toast={toast} style={{background:"none",border:`1px solid ${B.border}`,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontFamily:"inherit",fontSize:12,color:B.textSoft}}/>
       <button onClick={logout} style={{background:"none",border:`1px solid ${B.border}`,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontFamily:"inherit",fontSize:12,color:B.textSoft}}>Sign Out</button>
     </div>
   </div>;
@@ -14610,7 +14643,8 @@ export default function App(){
   const isMobile=useIsMobile();
   // Reset the view on the way out so nothing from this session is left on screen
   // for whoever signs in next.
-  const logout=async()=>{resetAssistantPromptSession();await sb.auth.signOut();setAuthed(false);setUserProfile(null);setTab("dashboard");};
+  // Sign Out = this browser only. Signing out every device is SecurityModal's "Sign out everywhere".
+  const logout=async()=>{resetAssistantPromptSession();await sb.auth.signOut({scope:"local"});setAuthed(false);setUserProfile(null);setTab("dashboard");};
   const showToast=useCallback((msg,type="success")=>{setToastState({msg,type});setTimeout(()=>setToastState(null),3500);},[]);
 
   const profileRef=useRef(null);
@@ -14695,6 +14729,36 @@ export default function App(){
     });
     return()=>subscription.unsubscribe();
   },[loadProfile]);
+
+  // A sign-out elsewhere ("Sign out everywhere", an admin's 2-step reset, a password change) ends this login's
+  // sessions on the server, but this tab's access pass keeps reading data until it expires, while anything that
+  // checks the session (e.g. firm invoices) answers "Not authenticated". So check with the server whenever the
+  // tab comes back into view and every two minutes; if the session is gone, sign this tab out and say why.
+  // Network trouble is not a sign-out: only an explicit "session not found / bad token" ends it.
+  useEffect(()=>{
+    if(!authed)return;
+    let busy=false;
+    const check=async()=>{
+      if(busy||document.visibilityState==="hidden")return;
+      busy=true;
+      try{
+        const{error}=await sb.auth.getUser();
+        const code=String(error?.code||"");
+        if(error&&(code==="session_not_found"||code==="session_expired"||code==="bad_jwt"||code==="user_not_found"||error.status===403||error.name==="AuthSessionMissingError")){
+          noteSignedOut("revoked");
+          resetAssistantPromptSession();
+          await sb.auth.signOut({scope:"local"});
+          setAuthed(false);setUserProfile(null);setTab("dashboard");
+        }
+      }catch(_e){/* offline: try again later */}
+      busy=false;
+    };
+    const onVis=()=>{if(document.visibilityState==="visible")check();};
+    document.addEventListener("visibilitychange",onVis);
+    window.addEventListener("focus",check);
+    const t=setInterval(check,120000);
+    return()=>{document.removeEventListener("visibilitychange",onVis);window.removeEventListener("focus",check);clearInterval(t);};
+  },[authed]);
 
   const fetchTable=useCallback(async table=>{
     const prof=profileRef.current;
@@ -14879,6 +14943,7 @@ export default function App(){
         <div style={{fontSize:9,color:B.textMute,marginBottom:4}}>{data.families.filter(isActiveFamily).length} families · {(data.portfolio_accounts||[]).length} accounts</div>
         <div style={{display:"flex",justifyContent:"space-between"}}>
           <button onClick={()=>reload()} style={{background:"none",border:"none",color:B.navyMid,fontSize:9,cursor:"pointer",padding:0,fontFamily:"inherit"}}>↺ Refresh</button>
+          <SecurityButton role={userProfile?.role} toast={showToast} label="🔒 Security" style={{background:"none",border:"none",color:B.navyMid,fontSize:9,cursor:"pointer",padding:0,fontFamily:"inherit"}}/>
           <button onClick={logout} style={{background:"none",border:"none",color:B.textMute,fontSize:9,cursor:"pointer",padding:0,fontFamily:"inherit"}}>Sign Out</button>
         </div>
       </div>
