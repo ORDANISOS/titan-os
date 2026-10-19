@@ -127,13 +127,14 @@ Deno.serve(async (req) => {
 
     if (!aiResp.ok) {
       const detail = await aiResp.text().catch(() => "");
-      console.error("Anthropic error", aiResp.status, detail);
-      let reason = "";
-      try { reason = JSON.parse(detail)?.error?.message || ""; } catch (_e) { /* not JSON */ }
+      let reason = "", kind = "";
+      try { const e = JSON.parse(detail)?.error; reason = e?.message || ""; kind = e?.type || ""; } catch (_e) { /* not JSON */ }
+      // Status and error type only in the logs: an error body can quote the document.
+      console.error("Anthropic error", aiResp.status, kind);
       return json({
         error: "The extraction service returned an error.",
         anthropicStatus: aiResp.status,
-        detail: (reason || detail).slice(0, 400),
+        detail: (reason || kind || "").slice(0, 200),
       }, 502);
     }
 
@@ -148,7 +149,7 @@ Deno.serve(async (req) => {
 
     return json({ text });
   } catch (e) {
-    console.error("extract-document-text error", e);
+    console.error("extract-document-text error", e instanceof Error ? e.name : "error");
     return json({ error: "Server error." }, 500);
   }
 });

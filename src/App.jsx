@@ -8526,7 +8526,307 @@ async function suggestFolder(text,fileName,folders){
     if(seen.has(key))continue;
     seen.add(key);options.push(entry);
   }
-  return options.length?{options,confidence:data.confidence||"low"}:null;
+  // A proposed title and a one-line summary come back too -- a phone photo arrives
+  // as "IMG_4821", which nobody will ever search for. Both only pre-fill fields the
+  // person can see and change.
+  const suggestedName=typeof data.suggestedName==="string"&&data.suggestedName.trim()?data.suggestedName.trim().slice(0,150):null;
+  const summary=typeof data.summary==="string"&&data.summary.trim()?data.summary.trim().slice(0,500):null;
+  if(!options.length&&!suggestedName&&!summary)return null;
+  return{options,confidence:data.confidence||"low",suggestedName,summary};
+}
+
+// A phone photo is 4-6 MB, which is over what the reader accepts in one image, and
+// HEIC from an iPhone library is not read at all. So the READ gets a resized JPEG
+// (long side 2000px is plenty to read a page); the file that gets STORED is always
+// the original, untouched. Returns base64, or null when this browser can't decode it.
+async function prepareImageForRead(file,maxSide=2000){
+  const url=URL.createObjectURL(file);
+  try{
+    const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error("decode"));i.src=url;});
+    const w0=img.naturalWidth,h0=img.naturalHeight;
+    if(!w0||!h0)return null;
+    const scale=Math.min(1,maxSide/Math.max(w0,h0));
+    const canvas=document.createElement("canvas");
+    canvas.width=Math.max(1,Math.round(w0*scale));canvas.height=Math.max(1,Math.round(h0*scale));
+    const ctx=canvas.getContext("2d");
+    ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height); // transparent PNGs read better on white
+    ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    const dataUrl=canvas.toDataURL("image/jpeg",0.85);
+    canvas.width=0;canvas.height=0;
+    return dataUrl.split(",")[1]||null;
+  }catch(_e){return null;}
+  finally{URL.revokeObjectURL(url);}
+}
+const READABLE_IMAGE_TYPES=["image/png","image/jpeg","image/webp","image/heic","image/heif","image/gif"];
+const isReadableImage=f=>{
+  const t=String(f&&f.type||"").toLowerCase();
+  const ext=(String(f&&f.name||"").split(".").pop()||"").toLowerCase();
+  return READABLE_IMAGE_TYPES.includes(t==="image/jpg"?"image/jpeg":t)||["png","jpg","jpeg","webp","heic","heif","gif"].includes(ext);
+};
+const isPdfFile=f=>String(f&&f.type||"").toLowerCase()==="application/pdf"||/\.pdf$/i.test(String(f&&f.name||""));
+
+// Pulls the text out of one picked file so CHRIS can suggest where it goes and
+// search can find it later. Digital PDFs are read in the browser; scanned PDFs and
+// photos go to the server-side reader. Never throws: a document that can't be read
+// still uploads, it just arrives without a suggestion. Returns text or null.
+async function readDocumentForFiling(f,onPhase){
+  const phase=t=>{if(onPhase)onPhase(t);};
+  try{
+    if(isPdfFile(f)){
+      try{
+        phase("Reading document…");
+        const t=await extractPdfText(await f.arrayBuffer());
+        if(t&&t.length>=20)return t;
+      }catch(_e){/* fall through to the vision read */}
+      try{
+        const r=await extractScannedPdfText(await f.arrayBuffer(),(p,tot)=>phase(`Scanning page ${p} of ${tot}…`));
+        if(r&&r.text)return r.text;
+      }catch(_e){}
+      return null;
+    }
+    if(isReadableImage(f)){
+      phase("Reading the photo…");
+      let b64=await prepareImageForRead(f),mediaType="image/jpeg";
+      if(!b64){
+        // This browser couldn't decode it (HEIC outside Safari, say). Send the original
+        // only if it's a type the reader takes and small enough to go in one piece.
+        const mt=f.type==="image/jpg"?"image/jpeg":f.type;
+        if(!["image/png","image/jpeg","image/webp"].includes(mt)||f.size>3_500_000)return null;
+        b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(",")[1]);r.onerror=()=>rej(new Error("read failed"));r.readAsDataURL(f);});
+        mediaType=mt;
+      }
+      const{data,error}=await sb.functions.invoke("extract-document-text",{body:{fileBase64:b64,mediaType}});
+      if(!error&&data&&data.text)return data.text;
+    }
+  }catch(_e){}
+  return null;
+}
+
+// Saves one document into a household's CHRIS: the original file to the private
+// bucket under the household's own folder (which is what the storage policies
+// check), then the row. If the row can't be written, the stored file is removed so
+// nothing is left behind that no one can see. Returns an error message or null.
+async function fileChrisDocument({familyId,file,name,category,description,extractedText}){
+  const ext=(file.name.split(".").pop()||"").toLowerCase();
+  const path=`${familyId}/${Date.now()}_${Math.random().toString(36).slice(2,7)}_${file.name.replace(/[^A-Za-z0-9._-]+/g,"_")}`;
+  const{error:upErr}=await sb.storage.from("documents").upload(path,file,{upsert:false});
+  if(upErr)return upErr.message;
+  const{error:dbErr}=await sb.from("documents").insert({family_id:familyId,name:name.trim(),description:description||null,
+    category,file_path:path,file_size:file.size,file_type:file.type||ext,extracted_text:extractedText||null,uploaded_by:CURRENT_USER_LABEL||null});
+  if(dbErr){await sb.storage.from("documents").remove([path]).catch(()=>{});return dbErr.message;}
+  return null;
+}
+
+const CONFIDENCE_WORDS={high:"CHRIS is fairly sure",medium:"CHRIS's best match",low:"CHRIS isn't sure"};
+
+// ── SNAP OR ADD SEVERAL ─────────────────────────────────────────────────────
+// Onboarding usually means a pile of paper. Take photos one after another, or
+// pick a stack of PDFs, and each one becomes a card: CHRIS reads it, proposes a
+// name, a one-line summary and a folder (or a new folder when nothing fits), and
+// the person files each card with one tap or changes anything first.
+//
+// Nothing is filed until the person taps File. A proposed NEW folder is only
+// created when a card that uses it is actually filed, so removing a card never
+// leaves an empty folder behind. Used in CHRIS and in the onboarding wizard.
+const BATCH_READ_CONCURRENCY=2;
+function ChrisBatchFiler({familyId,toast,onFiled}){
+  const[items,setItems]=useState([]);
+  const itemsRef=useRef(items);itemsRef.current=items;
+  const[customFolders,setCustomFolders]=useState([]);
+  const customFoldersRef=useRef(customFolders);customFoldersRef.current=customFolders;
+  const[filingAll,setFilingAll]=useState(false);
+  const cameraRef=useRef(null),filesRef=useRef(null);
+  const queueRef=useRef([]),runningRef=useRef(0),aliveRef=useRef(true);
+  const loadFolders=useCallback(async()=>{
+    if(!familyId)return[];
+    const{data,error}=await sb.from("document_folders").select("name").eq("family_id",familyId).order("name");
+    const names=error?[]:(data||[]).map(r=>r.name);
+    if(aliveRef.current)setCustomFolders(names);
+    return names;
+  },[familyId]);
+  useEffect(()=>{aliveRef.current=true;loadFolders();return()=>{aliveRef.current=false;};},[loadFolders]);
+  // Thumbnails are object URLs; let them go when the filer closes.
+  useEffect(()=>()=>{itemsRef.current.forEach(it=>{if(it.thumb)URL.revokeObjectURL(it.thumb);});},[]);
+  const allFolders=[...DOC_CATEGORIES,...customFolders];
+  // New folders chosen on other cards in this batch count as real for the next
+  // suggestion, so ten photos of boat paperwork don't each propose "Boat" afresh.
+  const foldersForSuggest=()=>{
+    const pending=itemsRef.current.filter(it=>it.newFolder&&it.category).map(it=>it.category);
+    return[...new Set([...DOC_CATEGORIES,...customFoldersRef.current,...pending])];
+  };
+  const patch=(id,ch)=>setItems(list=>list.map(it=>it.id===id?{...it,...(typeof ch==="function"?ch(it):ch)}:it));
+
+  const readOne=async item=>{
+    patch(item.id,{status:"reading",phase:"Reading…"});
+    const text=await readDocumentForFiling(item.file,ph=>aliveRef.current&&patch(item.id,{phase:ph}));
+    if(!aliveRef.current)return;
+    let sug=null;
+    if(text&&text.length>80){
+      patch(item.id,{phase:"Working out where this belongs…"});
+      try{sug=await suggestFolder(text,item.file.name,foldersForSuggest());}catch(_e){}
+    }
+    if(!aliveRef.current)return;
+    patch(item.id,it=>{
+      const top=sug&&sug.options&&sug.options[0];
+      // An existing folder is pre-selected when CHRIS is reasonably sure. A NEW folder
+      // is never pre-selected: creating one is the person's call, one tap away.
+      const preselect=top&&top.folder&&sug.confidence!=="low"?top.folder:null;
+      return{status:"ready",phase:"",text,suggestion:sug,
+        name:(!it.nameTouched&&sug&&sug.suggestedName)?sug.suggestedName:it.name,
+        description:(!it.descTouched&&sug&&sug.summary)?sug.summary:it.description,
+        category:it.categoryTouched?it.category:(preselect||it.category),newFolder:it.categoryTouched?it.newFolder:false};
+    });
+  };
+  const pump=()=>{
+    while(runningRef.current<BATCH_READ_CONCURRENCY&&queueRef.current.length){
+      const item=queueRef.current.shift();
+      if(!itemsRef.current.some(it=>it.id===item.id))continue; // removed while waiting
+      runningRef.current++;
+      readOne(item).finally(()=>{runningRef.current--;pump();});
+    }
+  };
+  const addFiles=fileList=>{
+    const files=Array.from(fileList||[]);
+    const fresh=[];
+    for(const f of files){
+      const problem=docFileProblem(f);
+      if(problem){toast(`${f.name}: ${problem}`,"error");continue;}
+      const base=f.name.replace(/\.[^./\\]+$/,"").trim()||"Document";
+      fresh.push({id:`${Date.now()}_${Math.random().toString(36).slice(2,8)}`,file:f,
+        thumb:isReadableImage(f)?URL.createObjectURL(f):null,status:"queued",phase:"Waiting to read…",
+        name:base,nameTouched:false,description:"",descTouched:false,category:"General",categoryTouched:false,newFolder:false,
+        suggestion:null,text:null,error:null});
+    }
+    if(!fresh.length)return;
+    setItems(list=>[...list,...fresh]);
+    itemsRef.current=[...itemsRef.current,...fresh];
+    queueRef.current.push(...fresh);
+    pump();
+  };
+  const removeItem=id=>{
+    const it=itemsRef.current.find(x=>x.id===id);
+    if(it&&it.thumb)URL.revokeObjectURL(it.thumb);
+    setItems(list=>list.filter(x=>x.id!==id));
+  };
+  const chooseFolder=(id,folder,isNew)=>patch(id,{category:folder,newFolder:!!isNew,categoryTouched:true});
+
+  const fileOne=async(id,knownFolders)=>{
+    const it=itemsRef.current.find(x=>x.id===id);
+    if(!it||it.status==="filing"||it.status==="filed")return false;
+    if(!it.name.trim()){patch(id,{error:"Give it a name first."});return false;}
+    patch(id,{status:"filing",error:null});
+    let folders=knownFolders||customFoldersRef.current;
+    if(it.newFolder&&!DOC_CATEGORIES.includes(it.category)&&!folders.includes(it.category)){
+      const v=validateFolderName(it.category,folders);
+      if(!v.ok){patch(id,{status:"ready",error:v.reason});return false;}
+      const{error}=await sb.from("document_folders").insert({family_id:familyId,name:v.name});
+      if(error&&!/duplicate key/i.test(error.message)){patch(id,{status:"ready",error:error.message});return false;}
+      folders=await loadFolders();
+    }
+    const err=await fileChrisDocument({familyId,file:it.file,name:it.name,category:it.category,description:it.description,extractedText:it.text});
+    if(err){patch(id,{status:"ready",error:err});return false;}
+    patch(id,{status:"filed"});
+    return folders;
+  };
+  const fileSingle=async id=>{const ok=await fileOne(id);if(ok){toast("Filed in CHRIS");if(onFiled)onFiled();}};
+  const readyItems=items.filter(it=>it.status==="ready");
+  const fileAllReady=async()=>{
+    setFilingAll(true);
+    let n=0,folders=customFoldersRef.current;
+    for(const it of readyItems){
+      const r=await fileOne(it.id,folders);
+      if(r){n++;folders=r;}
+    }
+    setFilingAll(false);
+    if(n){toast(`Filed ${n} document${n===1?"":"s"} in CHRIS`);if(onFiled)onFiled();}
+  };
+
+  const pill=(label,active,onClick,opts={})=><button key={label+(opts.k||"")} type="button" onClick={onClick}
+    style={{minHeight:36,padding:"6px 12px",borderRadius:18,fontSize:12.5,fontFamily:"inherit",fontWeight:active?700:600,cursor:"pointer",
+      border:`1px solid ${active?B.navy:opts.dashed?B.gold:B.border}`,borderStyle:opts.dashed&&!active?"dashed":"solid",
+      background:active?B.navy:B.white,color:active?B.white:B.navy,textAlign:"left"}}>{label}</button>;
+  const bigBtn={flex:"1 1 160px",minHeight:56,display:"flex",alignItems:"center",justifyContent:"center",gap:8,borderRadius:12,
+    fontSize:14.5,fontWeight:700,fontFamily:"inherit",cursor:"pointer"};
+
+  return <div>
+    <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
+      <button type="button" onClick={()=>cameraRef.current&&cameraRef.current.click()}
+        style={{...bigBtn,background:B.navy,color:B.white,border:"none"}}><span style={{fontSize:20}}>📷</span>Take a photo</button>
+      <button type="button" onClick={()=>filesRef.current&&filesRef.current.click()}
+        style={{...bigBtn,background:B.white,color:B.navy,border:`1.5px solid ${B.navy}`}}><span style={{fontSize:18}}>📄</span>Choose files</button>
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{display:"none"}}
+        onChange={e=>{addFiles(e.target.files);e.target.value="";}}/>
+      <input ref={filesRef} type="file" multiple accept={[...DOC_UPLOAD_EXTS.map(x=>"."+x),"image/*"].join(",")} style={{display:"none"}}
+        onChange={e=>{addFiles(e.target.files);e.target.value="";}}/>
+    </div>
+    {!items.length&&<div style={{fontSize:12.5,color:B.textSoft,lineHeight:1.6,background:B.bg,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"12px 14px"}}>
+      Snap a page, or pick as many PDFs and photos as you like. CHRIS reads each one and suggests a name and a folder.
+      You check each suggestion and tap <strong style={{color:B.navy}}>File it</strong>. Nothing is saved until you do.
+    </div>}
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      {items.map(it=>{
+        const sug=it.suggestion,busy=it.status==="queued"||it.status==="reading";
+        if(it.status==="filed")return <div key={it.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:10,
+          background:"#eef7f0",border:"1px solid #cfe6d5",fontSize:13,color:B.text}}>
+          <span style={{color:"#2e7d4f",fontWeight:700}}>✓</span>
+          <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}><strong>{it.name}</strong> · filed in {it.category}</span>
+        </div>;
+        const opts=(sug&&sug.options)||[];
+        const offered=new Set(opts.map(o=>o.folder||o.newFolder));
+        return <div key={it.id} style={{border:`1px solid ${B.borderLight}`,borderRadius:12,padding:14,background:B.white,boxShadow:B.shadow}}>
+          <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
+            <div style={{width:56,height:72,flexShrink:0,borderRadius:6,overflow:"hidden",background:B.bg,border:`1px solid ${B.borderLight}`,
+              display:"flex",alignItems:"center",justifyContent:"center",fontSize:10.5,fontWeight:700,color:B.textMute}}>
+              {it.thumb?<img src={it.thumb} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:(isPdfFile(it.file)?"PDF":"FILE")}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:11,color:B.textMute,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.file.name}</div>
+              <Inp maxLength={150} value={it.name} disabled={it.status==="filing"} aria-label="Document name"
+                onChange={e=>patch(it.id,{name:e.target.value,nameTouched:true})} style={{marginTop:4,fontWeight:600}}/>
+              {busy&&<div style={{fontSize:12,color:B.gold,fontWeight:600,marginTop:6}}>{it.phase||"Reading…"}</div>}
+              {!busy&&sug&&sug.summary&&<div style={{fontSize:12.5,color:B.textMid,marginTop:6,lineHeight:1.5}}>{sug.summary}</div>}
+              {!busy&&!sug&&<div style={{fontSize:12,color:B.textMute,marginTop:6}}>CHRIS couldn't read this one. Choose a folder below.</div>}
+            </div>
+          </div>
+          {!busy&&<div style={{marginTop:12}}>
+            <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",color:B.textMute,marginBottom:6}}>
+              {sug&&opts.length?CONFIDENCE_WORDS[sug.confidence]||CONFIDENCE_WORDS.low:"Folder"}
+            </div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {opts.map((o,i)=>o.newFolder
+                ?pill(`+ New folder: ${o.newFolder}`,it.newFolder&&it.category===o.newFolder,()=>chooseFolder(it.id,o.newFolder,true),{dashed:true,k:i})
+                :pill(o.folder,!it.newFolder&&it.category===o.folder,()=>chooseFolder(it.id,o.folder,false),{k:i}))}
+              {!offered.has(it.category)&&pill(it.category,true,()=>{},{k:"cur"})}
+            </div>
+            {opts.length>1&&opts.some(o=>o.why)&&<div style={{fontSize:11.5,color:B.textMute,marginTop:6}}>
+              {opts.filter(o=>o.why).map(o=>`${o.folder||o.newFolder}: ${o.why}`).join(" · ")}</div>}
+            {opts.some(o=>o.newFolder)&&<div style={{fontSize:11.5,color:B.textMute,marginTop:4}}>
+              None of your folders fit this. Tap the new folder to create it when you file.</div>}
+            <div style={{display:"flex",gap:8,alignItems:"center",marginTop:10,flexWrap:"wrap"}}>
+              <Sel aria-label="Choose another folder" value={allFolders.includes(it.category)?it.category:""} disabled={it.status==="filing"}
+                onChange={e=>e.target.value&&chooseFolder(it.id,e.target.value,false)} style={{flex:"1 1 180px",minHeight:40}}>
+                <option value="">Choose another folder…</option>
+                {allFolders.map(f=><option key={f} value={f}>{f}</option>)}
+              </Sel>
+            </div>
+            {it.error&&<div style={{fontSize:12,color:"#b3261e",marginTop:8}}>{it.error}</div>}
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:12}}>
+              <Btn variant="ghost" onClick={()=>removeItem(it.id)} disabled={it.status==="filing"}>Remove</Btn>
+              <Btn onClick={()=>fileSingle(it.id)} disabled={it.status==="filing"||filingAll||!it.name.trim()}>
+                {it.status==="filing"?"Filing…":`File it in ${it.category}`}</Btn>
+            </div>
+          </div>}
+          {busy&&<div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}>
+            <Btn variant="ghost" small onClick={()=>removeItem(it.id)}>Remove</Btn></div>}
+        </div>;
+      })}
+    </div>
+    {readyItems.length>1&&<div style={{position:"sticky",bottom:0,background:B.white,paddingTop:12,marginTop:12,borderTop:`1px solid ${B.borderLight}`,
+      display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <span style={{fontSize:12,color:B.textSoft}}>Each card files where it shows. Check them before you tap.</span>
+      <Btn onClick={fileAllReady} disabled={filingAll}>{filingAll?"Filing…":`File all ${readyItems.length}`}</Btn>
+    </div>}
+  </div>;
 }
 
 function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canEditMetadata,toast,reload,attachIntent,onAttachHandled}){
@@ -8622,6 +8922,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
   // nobody has to retype it. It only ever fills a blank field, or one still holding
   // the previous auto-filled name -- whatever the person typed themselves is theirs.
   const autoNameRef=useRef("");
+  const autoDescRef=useRef(""); // same rule for the description CHRIS fills in from its summary
   const[uploadPhase,setUploadPhase]=useState("");
   // What the read suggested, and why. Held separately from `category` so the
   // person's own choice always wins and is never silently overwritten.
@@ -8690,7 +8991,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     if(s&&s.scope==="family")setLinkPropertyId("");
   };
   const resetForm=()=>{
-    setName("");setDescription("");setCategory("General");setFile(null);autoNameRef.current="";
+    setName("");setDescription("");setCategory("General");setFile(null);autoNameRef.current="";autoDescRef.current="";
     setLinkPropertyId("");setLinkSection("");setConflictDoc(null);
     setSuggestion(null);setExtractedText(null);setExtracting(false);setCreatingSuggested(false);
   };
@@ -8768,6 +9069,8 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
   const pickFile=async f=>{
     setFile(f||null);
     setSuggestion(null);setExtractedText(null);
+    // A summary CHRIS wrote for the previous file doesn't describe this one.
+    if(autoDescRef.current){const prevDesc=autoDescRef.current;setDescription(prev=>prev===prevDesc?"":prev);autoDescRef.current="";}
     if(f&&f.name){
       const base=f.name.replace(/\.[^./\\]+$/,"").trim();
       const prevAuto=autoNameRef.current;
@@ -8777,44 +9080,35 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
       }
     }
     if(!f||!scanOnUpload)return;
-    const mt=f.type==="image/jpg"?"image/jpeg":f.type;
-    const supported=mt==="application/pdf"||["image/png","image/jpeg","image/webp"].includes(mt);
-    if(!supported)return; // Word/Excel/etc. still upload fine, just without a suggestion
+    if(!isPdfFile(f)&&!isReadableImage(f))return; // Word/Excel/etc. still upload fine, just without a suggestion
     setExtracting(true);
     let text=null;
     try{
-      if(mt==="application/pdf"){
-        // Fast, unlimited browser text extraction first; batched vision scan
-        // only for scanned PDFs that have no embedded text.
-        try{
-          setUploadPhase("Reading document…");
-          const buf=await f.arrayBuffer();
-          const t=await extractPdfText(buf);
-          if(t&&t.length>=20)text=t;
-        }catch(_e){/* fall through to vision */}
-        if(!text){
-          try{
-            const buf2=await f.arrayBuffer();
-            const r=await extractScannedPdfText(buf2,(p,tot)=>setUploadPhase(`Scanning page ${p} of ${tot}…`));
-            if(r&&r.text)text=r.text;
-          }catch(_e){}
-        }
-      } else {
-        try{
-          setUploadPhase("Scanning for AI assistant…");
-          const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(",")[1]);r.onerror=()=>rej(new Error("read failed"));r.readAsDataURL(f);});
-          const{data:exResp,error:exErr}=await sb.functions.invoke("extract-document-text",{body:{fileBase64:b64,mediaType:mt}});
-          if(!exErr&&exResp&&exResp.text)text=exResp.text;
-        }catch(_e){}
-      }
+      // Digital PDFs are read in the browser; scanned PDFs and photos (resized
+      // first, so a full-size phone photo isn't refused) go to the reader.
+      text=await readDocumentForFiling(f,setUploadPhase);
       setExtractedText(text);
       // What did we just read? Ask once, cheaply, and only to SUGGEST.
       if(text&&text.length>80){
         try{
           setUploadPhase("Working out where this belongs…");
-          const sug=await suggestFolder(text,name||f.name,
+          // The file's own name, never the Name field: that can still hold the
+          // previous document's title, and the reader would blend the two.
+          const sug=await suggestFolder(text,f.name,
             [...DOC_CATEGORIES,...customFolders.map(x=>x.name)]);
           if(sug&&sug.options&&sug.options.length)setSuggestion(sug);
+          // The proposed title replaces only the auto-filled file name ("IMG_4821"),
+          // never something the person typed; the summary likewise.
+          if(sug&&sug.suggestedName){
+            const prevAuto=autoNameRef.current;
+            setName(prev=>(!prev.trim()||prev===prevAuto)?sug.suggestedName:prev);
+            autoNameRef.current=sug.suggestedName;
+          }
+          if(sug&&sug.summary){
+            const prevDesc=autoDescRef.current;
+            setDescription(prev=>(!prev.trim()||prev===prevDesc)?sug.summary:prev);
+            autoDescRef.current=sug.summary;
+          }
         }catch(_e){/* a failed suggestion must never block an upload */}
       }
     } finally {
@@ -9066,6 +9360,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
               fontSize:11.5,fontFamily:"inherit",padding:"4px 9px",borderRadius:6,flexShrink:0}}>
             Remove folder</button>}
       </div>
+      {allowUpload&&familyId&&<Btn variant="ghost" onClick={()=>setModal("batch")}>📷 Snap or add several</Btn>}
       {allowUpload&&<Btn onClick={()=>{setCategory(openFolder||"General");setModal("upload");}}>⬆ Upload Document</Btn>}
       {allowScan&&unscannedCount>0&&<Btn variant="ghost" onClick={scanAllUnscanned} disabled={!!bulkScan} title="Extract text from existing documents so the AI assistant can read them">{bulkScan?`Scanning ${bulkScan.done}/${bulkScan.total}${scanMsg?" · "+scanMsg:""}…`:`✦ Scan ${unscannedCount} for AI`}</Btn>}
     </div>
@@ -9204,6 +9499,10 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
       </div>
     </Modal>}
 
+    {modal==="batch"&&<Modal wide title="Add documents to CHRIS" onClose={()=>setModal(null)}>
+      <ChrisBatchFiler familyId={familyId} toast={toast} onFiled={()=>{loadDocs();loadFolders();if(reload)reload("documents");}}/>
+    </Modal>}
+
     {modal==="upload"&&<Modal title="Upload Document" onClose={()=>{setModal(null);resetForm();}}>
       <Field label="Document Name" required><Inp maxLength={150} placeholder="Q4 2024 Statement" value={name} onChange={e=>setName(e.target.value)}/></Field>
       <Field label="Category"><Sel value={category} onChange={e=>{setCategory(e.target.value);setSuggestion(null);}}>{[...DOC_CATEGORIES,...customFolders.map(f=>f.name)].map(c=><option key={c}>{c}</option>)}</Sel></Field>
@@ -9211,9 +9510,14 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
       <Field label="Description" optional><Inp maxLength={500} placeholder="Anything that will help you find it later" value={description} onChange={e=>setDescription(e.target.value)}/></Field>
       {linkFields()}
       <Field label="File" required>
+        <input id="file-camera" type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{const f=e.target.files&&e.target.files[0];const pr=f?docFileProblem(f):null;if(pr){toast(pr,"error");e.target.value="";return;}pickFile(f);}}/>
+        {!file&&<button type="button" onClick={()=>document.getElementById("file-camera").click()}
+          style={{width:"100%",minHeight:50,marginBottom:10,borderRadius:10,border:"none",background:B.navy,color:B.white,
+            fontSize:14.5,fontWeight:700,fontFamily:"inherit",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+          <span style={{fontSize:19}}>📷</span>Take a photo</button>}
         <div style={{border:`2px dashed ${file?B.gold:B.border}`,borderRadius:10,padding:"20px",textAlign:"center",cursor:"pointer",background:file?"#fef9f0":B.bg,transition:"all .2s"}} onClick={()=>document.getElementById("file-upload").click()}>
           <input id="file-upload" type="file" accept={DOC_UPLOAD_EXTS.map(e=>"."+e).join(",")} style={{display:"none"}} onChange={e=>{const f=e.target.files&&e.target.files[0];const pr=f?docFileProblem(f):null;if(pr){toast(pr,"error");e.target.value="";return;}pickFile(f);}}/>
-          {file?<><div style={{fontSize:24,marginBottom:6}}>✅</div><div style={{fontSize:13,color:B.navy,fontWeight:600}}>{file.name}</div><div style={{fontSize:11,color:B.textSoft}}>{(file.size/1024/1024).toFixed(2)} MB</div>{extracting&&<div style={{fontSize:11,color:B.gold,fontWeight:600,marginTop:6}}>{uploadPhase||"Reading document…"}</div>}</>:<><div style={{fontSize:32,marginBottom:6}}>📁</div><div style={{fontSize:13,color:B.textSoft}}>Click to select a file</div><div style={{fontSize:11,color:B.textMute,marginTop:4}}>PDF, Word, Excel, images supported</div></>}
+          {file?<><div style={{fontSize:24,marginBottom:6}}>✅</div><div style={{fontSize:13,color:B.navy,fontWeight:600}}>{file.name}</div><div style={{fontSize:11,color:B.textSoft}}>{(file.size/1024/1024).toFixed(2)} MB</div>{extracting&&<div style={{fontSize:11,color:B.gold,fontWeight:600,marginTop:6}}>{uploadPhase||"Reading document…"}</div>}</>:<><div style={{fontSize:32,marginBottom:6}}>📁</div><div style={{fontSize:13,color:B.textSoft}}>Or choose a file</div><div style={{fontSize:11,color:B.textMute,marginTop:4}}>PDF, Word, Excel, images supported</div></>}
         </div>
       </Field>
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
@@ -9508,9 +9812,13 @@ function BusinessPartnerQuickForm({onSave,onCancel,saving,seatFree}){
 // only caller. Each step reuses the exact same QuickForm + save handler as that entity's
 // standalone "+ Add" button, so nothing about how the data is saved differs by how someone got to
 // the form; only the chrome around it (a wizard step vs. a popup modal) differs.
-const WIZARD_STEPS=["welcome","member","professional","property","account","valuable","done"];
-function OnboardingWizard({onClose,addMember,addProfessional,addBusinessPartner,addProperty,addAccount,addValuable,members,professionals,properties,accounts,valuables}){
+// The "documents" step is the CHRIS snap-or-add-several filer, so a new household can
+// photograph its paperwork straight into the right folders while it is setting up.
+const WIZARD_STEPS=["welcome","member","professional","property","account","valuable","documents","done"];
+function OnboardingWizard({onClose,addMember,addProfessional,addBusinessPartner,addProperty,addAccount,addValuable,members,professionals,properties,accounts,valuables,familyId,toast,reload}){
   const[stepIdx,setStepIdx]=useState(0);
+  const mobile=useIsMobile(640);
+  const[docsFiled,setDocsFiled]=useState(0);
   const[saving,setSaving]=useState(false);
   const step=WIZARD_STEPS[stepIdx];
   const next=()=>setStepIdx(i=>Math.min(i+1,WIZARD_STEPS.length-1));
@@ -9543,9 +9851,9 @@ function OnboardingWizard({onClose,addMember,addProfessional,addBusinessPartner,
 
   const shell=(title,blurb,body,footer)=><div style={{
     position:"fixed",inset:0,background:"rgba(9,20,35,0.55)",zIndex:2000,
-    display:"flex",alignItems:"center",justifyContent:"center",padding:20,
+    display:"flex",alignItems:mobile?"flex-end":"center",justifyContent:"center",padding:mobile?0:20,
   }}>
-    <div style={{background:B.white,borderRadius:16,maxWidth:640,width:"100%",maxHeight:"88vh",overflowY:"auto",padding:"32px 34px",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+    <div style={{background:B.white,borderRadius:mobile?"16px 16px 0 0":16,maxWidth:640,width:"100%",maxHeight:mobile?"92vh":"88vh",overflowY:"auto",padding:mobile?"22px 18px 28px":"32px 34px",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
       <div style={{display:"flex",gap:6,marginBottom:20}}>
         {WIZARD_STEPS.slice(0,-1).map((s,i)=><div key={s} style={{flex:1,height:4,borderRadius:2,background:i<=stepIdx?B.gold:B.borderLight}}/>)}
       </div>
@@ -9614,13 +9922,24 @@ function OnboardingWizard({onClose,addMember,addProfessional,addBusinessPartner,
     <>{list("valuable")}<ValuableQuickForm saving={saving} onSave={f=>save("valuable",f)}/></>,
     <>
       <button onClick={back} style={{background:"none",border:"none",color:B.textSoft,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>← Back</button>
-      <Btn onClick={next}>{valuables.length?"Finish":"Skip & finish"}</Btn>
+      <Btn variant="ghost" onClick={next}>{valuables.length?"Next":"Skip"}</Btn>
+    </>
+  );
+
+  if(step==="documents")return shell(
+    "Add your documents to CHRIS",
+    "Take photos of your paperwork or pick PDFs. CHRIS reads each one and suggests a name and a folder. You check each one before it's filed. Entirely optional.",
+    familyId?<ChrisBatchFiler familyId={familyId} toast={toast||(()=>{})} onFiled={()=>{setDocsFiled(n=>n+1);if(reload)reload("documents");}}/>
+      :<div style={{fontSize:13,color:B.textSoft}}>You can add documents anytime from CHRIS.</div>,
+    <>
+      <button onClick={back} style={{background:"none",border:"none",color:B.textSoft,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>← Back</button>
+      <Btn onClick={next}>{docsFiled?"Finish":"Skip & finish"}</Btn>
     </>
   );
 
   return shell(
     "You're all set",
-    "You can add more properties, accounts or valuables anytime from their own tabs, upload documents to CHRIS.",
+    "You can add more properties, accounts or valuables anytime from their own tabs, and more documents in CHRIS.",
     <div style={{fontSize:13,color:B.textSoft,lineHeight:1.6}}>
       Added this session: {properties.length} propert{properties.length===1?"y":"ies"}, {accounts.length} account{accounts.length===1?"":"s"}, {valuables.length} valuable{valuables.length===1?"":"s"}.
     </div>,
@@ -10060,7 +10379,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     {showAssistantGreeting&&!showNamePrompt&&<AssistantWelcome family={family} data={data} reload={reload} userProfile={userProfile} onClose={()=>setShowAssistantGreeting(false)} toast={toast} onWatchVideo={hasPlanVideo?()=>setPlanVideoWatching(true):undefined}/>}
     {planVideoWatching&&<PlanVideoModal plan={planVideoPlan} mode="watch" onPlayed={onPlanVideoPlayed} onClose={()=>setPlanVideoWatching(false)}/>}
     {emailAdvisorOpen&&<EmailAdvisorModal family={family} userProfile={userProfile} data={data} onClose={()=>setEmailAdvisorOpen(false)}/>}
-    {wizardOpen&&<OnboardingWizard onClose={closeWizard} addMember={addMember} addProfessional={addProfessional} addBusinessPartner={addBusinessPartner} addProperty={addProperty} addAccount={addAccount} addValuable={addValuable} members={members} professionals={professionals} properties={properties} accounts={accounts} valuables={valuables}/>}
+    {wizardOpen&&<OnboardingWizard onClose={closeWizard} addMember={addMember} addProfessional={addProfessional} addBusinessPartner={addBusinessPartner} addProperty={addProperty} addAccount={addAccount} addValuable={addValuable} members={members} professionals={professionals} properties={properties} accounts={accounts} valuables={valuables} familyId={family.id} toast={toast} reload={reload}/>}
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 
     {/* Header (white banner with logo, family name, sign out) */}

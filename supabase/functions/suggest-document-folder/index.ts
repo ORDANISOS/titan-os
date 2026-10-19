@@ -18,8 +18,21 @@
 //   · never guess when the text does not support a guess -- "General" is a correct
 //     answer and a confident wrong one is not
 //   · never block an upload, which is why every failure returns 200 with no options
+//
+// It also proposes a document name and a one-sentence summary, because a photo
+// taken on a phone arrives called "IMG_4821" and nobody will ever search for that.
+// Both are suggestions too: the form pre-fills them and the person can change them.
+//
+// Signed-in users only. It reads no tables and no storage -- the caller hands it
+// the opening of one document -- but it spends AI budget, so the public app key
+// alone is not enough. Document text is never written to the logs.
+
+import { createClient } from "npm:@supabase/supabase-js@2.49.4";
 
 const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+const MODEL = Deno.env.get("SUGGEST_FOLDER_MODEL") || "claude-sonnet-4-6";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -32,13 +45,39 @@ const json = (body: unknown, status = 200) =>
     headers: { ...CORS, "Content-Type": "application/json" },
   });
 
-const EMPTY = { options: [] as unknown[], confidence: "low" };
+const EMPTY = { options: [] as unknown[], confidence: "low", suggestedName: null, summary: null };
+
+// A proposed name has to be something a person would type: short, plain, no path
+// characters. Anything else is dropped and the form keeps the file's own name.
+function cleanName(v: unknown): string | null {
+  const s = String(v ?? "").replace(/[\\/:*?"<>|\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+  if (s.length < 3 || s.length > 80) return null;
+  return s;
+}
+function cleanSummary(v: unknown): string | null {
+  const s = String(v ?? "").replace(/\s+/g, " ").trim();
+  if (s.length < 8) return null;
+  return s.slice(0, 220);
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   // A missing key must not stop someone uploading a document. No options, no fuss.
   if (!ANTHROPIC_KEY) return json(EMPTY);
+
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const token = authHeader.replace(/^Bearer\s+/i, "");
+  if (!token) return json({ error: "Not authenticated." }, 401);
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) return json({ error: "Not authenticated." }, 401);
+  } catch {
+    return json({ error: "Not authenticated." }, 401);
+  }
 
   let text = "", fileName = "", folders: string[] = [];
   try {
@@ -56,7 +95,7 @@ Deno.serve(async (req) => {
 document and the folders this household actually has. Say which folder it belongs in.
 
 Return ONLY a JSON object, no prose and no markdown fence:
-{"options":[{"folder":"<exactly one of the folders given, or null>","newFolder":"<a proposed folder name, or null>","why":"<one short clause, under 12 words>"}],"confidence":"high"|"medium"|"low"}
+{"options":[{"folder":"<exactly one of the folders given, or null>","newFolder":"<a proposed folder name, or null>","why":"<one short clause, under 12 words>"}],"confidence":"high"|"medium"|"low","suggestedName":"<a document name, or null>","summary":"<one plain sentence, or null>"}
 
 Rules:
 - List exactly ONE option when the document clearly belongs in one place. This is
@@ -83,7 +122,16 @@ Rules:
 - "why" explains what in the text decided it, in the household's own terms, written
   per option: "a mutual non-disclosure agreement", "a K-1 for the 2025 tax year".
   Not "the document appears to relate to legal matters".
-- Never mention being an AI, and never hedge in "why".`;
+- Never mention being an AI, and never hedge in "why".
+- "suggestedName" is what a person would title this document in their records:
+  issuer or subject, document type, and the year or period when the text shows one.
+  Three to eight words, title case, no file extension. For example "State Farm Auto
+  Policy 2026", "2025 Form 1099-DIV Fidelity", "Lease 14 Harbor Lane". Never include
+  account numbers, Social Security numbers or other identifiers. Null if the text
+  does not say what the document is.
+- "summary" is one plain sentence, under 25 words, saying what the document is and
+  who or what it concerns. No account numbers, no amounts beyond what identifies it.
+  Null if the text does not support one.`;
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -94,8 +142,8 @@ Rules:
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 300,
+        model: MODEL,
+        max_tokens: 500,
         system,
         messages: [{
           role: "user",
@@ -109,7 +157,8 @@ Rules:
 
     const data = await res.json();
     if (!res.ok || data.error) {
-      console.error("suggest-document-folder:", data?.error?.message ?? res.status);
+      // Status and error type only: an error body can quote the request.
+      console.error("suggest-document-folder: upstream", res.status, data?.error?.type ?? "");
       return json(EMPTY);
     }
 
@@ -160,9 +209,13 @@ Rules:
 
     // Nothing held up. Say nothing rather than guessing -- the person files it
     // themselves, which they can already do.
-    return json(options.length ? { options, confidence } : EMPTY);
+    const suggestedName = cleanName(parsed.suggestedName);
+    const summary = cleanSummary(parsed.summary);
+    return json(options.length
+      ? { options, confidence, suggestedName, summary }
+      : { ...EMPTY, suggestedName, summary });
   } catch (e) {
-    console.error("suggest-document-folder:", e instanceof Error ? e.message : String(e));
+    console.error("suggest-document-folder: failed", e instanceof Error ? e.name : "error");
     return json(EMPTY);
   }
 });
