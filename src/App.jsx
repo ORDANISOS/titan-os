@@ -7748,6 +7748,8 @@ function PlanRequestsView({data,toast,reload,onChanged}){
 function SignupsRevenueView({data,toast,userProfile,reload}){
   const isMobile=useIsMobile();
   const families=(data.families||[]).filter(f=>!(f.archived_at||f.archivedAt));
+  // Archived = step 1 of a deletion request done, step 2 (permanent delete) still to do.
+  const archivedFamilies=(data.families||[]).filter(f=>f.archived_at||f.archivedAt);
   const[planFeatures,setPlanFeatures]=useState([]);
   const[contacts,setContacts]=useState({}); // family_id -> {id, email, fullName}
   const[workflowByFamily,setWorkflowByFamily]=useState({}); // family_id -> {total, completed}
@@ -8049,7 +8051,10 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
 
   // ── User drill-down: one household's payment info + utilization ─────────
   if(drill?.type==="user"){
-    const family=families.find(f=>f.id===drill.familyId);
+    // Looked up in the FULL list, archived included: archiving is step 1 of a deletion and the
+    // permanent-delete button lives on this same page, so dropping archived households here made
+    // step 2 unreachable (the page went to "could no longer be found" the moment step 1 finished).
+    const family=(data.families||[]).find(f=>f.id===drill.familyId);
     if(!family)return <div style={{padding:isMobile?"18px 14px":"26px 30px"}}>
       <button onClick={()=>setDrill(null)} style={backBtnStyle}>← Back to Signups & Revenue</button>
       <div style={{marginTop:16,color:B.textSoft}}>That household could no longer be found.</div>
@@ -8226,6 +8231,20 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={B.gold} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
       </div>
     </div>
+
+    {archivedFamilies.length>0&&<div style={{background:"#fde8e8",border:"1px solid #f0b8b8",borderRadius:10,padding:"14px 18px",marginBottom:16}}>
+      <div style={{fontSize:13,fontWeight:700,color:"#8b1a1a",marginBottom:4}}>
+        {archivedFamilies.length} archived household{archivedFamilies.length===1?"":"s"} waiting for permanent deletion
+      </div>
+      <div style={{fontSize:12,color:B.textSoft,marginBottom:10}}>Billing is cancelled and logins are disabled. Open one to permanently delete it, from Danger Zone at the bottom.</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+        {archivedFamilies.map(f=><span key={f.id} onClick={()=>setDrill({type:"user",familyId:f.id})} role="button" tabIndex={0}
+          onKeyDown={e=>{if(e.key==="Enter"||e.key===" ")setDrill({type:"user",familyId:f.id});}}
+          style={{cursor:"pointer",fontSize:12,color:"#8b1a1a",background:"#fff",border:"1px solid #f0b8b8",borderRadius:20,padding:"4px 10px"}}>
+          {f.name}
+        </span>)}
+      </div>
+    </div>}
 
     {overdueOnboarding.length>0&&<div style={{background:UTIL_SCHEME.Low.bg,border:`1px solid ${UTIL_SCHEME.Low.text}33`,borderRadius:10,padding:"14px 18px",marginBottom:20}}>
       <div style={{display:"flex",alignItems:"center",gap:8,fontSize:13,fontWeight:700,color:UTIL_SCHEME.Low.text,marginBottom:8}}>
