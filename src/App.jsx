@@ -10389,6 +10389,22 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     if(error)toast(error.message,"error");else{toast("Property removed");await reload("properties");}
   };
   const startPropertyAttach=(propertyId,section)=>{setPropAttachIntent({propertyId,section});setActiveTab("documents");};
+  // Vendors and service providers on a property (property_contacts), self-serve households only, same
+  // form and columns as the staff side.
+  const[vendorModal,setVendorModal]=useState(null); // {propertyId, contact?}
+  const saveVendor=async(m,f)=>{
+    const fields={name:f.name,role:f.role||null,company:f.company||null,email:f.email||null,phone:f.phone||null,notes:f.notes||null};
+    const{error}=m.contact
+      ?await sb.from("property_contacts").update(fields).eq("id",m.contact.id).eq("family_id",family.id)
+      :await sb.from("property_contacts").insert({...fields,property_id:m.propertyId,family_id:family.id});
+    if(error){toast(error.message,"error");return false;}
+    toast(m.contact?"Vendor updated. All saved.":"Vendor added. Your team is easy to find now.");await reload("property_contacts");
+  };
+  const delVendor=async c=>{
+    if(!confirm(`Remove ${c.name||"this vendor"} from the property?`))return;
+    const{error}=await sb.from("property_contacts").delete().eq("id",c.id).eq("family_id",family.id);
+    if(error)toast(error.message,"error");else{toast("Vendor removed");await reload("property_contacts");}
+  };
   const addAccount=async f=>{
     const{error}=await sb.from("portfolio_accounts").insert({family_id:family.id,institution:f.institution,account_type:f.accountType,starting_balance:numOrNull(f.startingBalance),current_balance:numOrNull(f.currentBalance),account_advisor_name:f.accountAdvisorName||null,account_advisor_phone:f.accountAdvisorPhone||null,account_advisor_email:f.accountAdvisorEmail||null,notes:f.notes||null});
     if(error){toast(error.message,"error");return false;}else{toast("Account added. Your record is looking more complete.");await reload("portfolio_accounts");}
@@ -10717,6 +10733,10 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         {addPropertyOpen&&<Modal title="Add a property" onClose={()=>setAddPropertyOpen(false)}>
           <PropertyQuickForm saving={savingQuickAdd} onCancel={()=>setAddPropertyOpen(false)} onSave={runQuickAdd(addProperty,()=>setAddPropertyOpen(false))}/>
         </Modal>}
+        {vendorModal&&clientSelfServe&&<Modal title={vendorModal.contact?"Edit vendor":"Add a vendor"} onClose={()=>setVendorModal(null)}>
+          <PropertyContactForm initial={vendorModal.contact?{name:vendorModal.contact.name||"",role:vendorModal.contact.role||"",company:vendorModal.contact.company||"",email:vendorModal.contact.email||"",phone:vendorModal.contact.phone||"",notes:vendorModal.contact.notes||""}:null}
+            onSave={async f=>{const r=await saveVendor(vendorModal,f);if(r!==false)setVendorModal(null);return r;}} onClose={()=>setVendorModal(null)}/>
+        </Modal>}
         {editingProperty&&clientSelfServe&&<Modal title="Edit Property" wide onClose={()=>setEditingProperty(null)}>
           <PropertyForm initial={editingProperty} canExtract={false} onSave={async f=>{const r=await editClientProperty(editingProperty.id,f);if(r!==false)setEditingProperty(null);return r;}} onClose={()=>setEditingProperty(null)}/>
         </Modal>}
@@ -10744,10 +10764,17 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
             </div>)}
           </div>
           {(()=>{const vendors=(data.property_contacts||[]).filter(pc=>pc.propertyId===p.id);return <div style={{marginTop:16,paddingTop:12,borderTop:`1px solid ${B.borderLight}`}}>
-            <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:8}}>Vendors & Service Providers</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8}}>
+              <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase"}}>Vendors & Service Providers</div>
+              {clientSelfServe&&<Btn small variant="ghost" onClick={()=>setVendorModal({propertyId:p.id})}>+ Add vendor</Btn>}
+            </div>
             {vendors.length===0
-              ? <div style={{fontSize:12,color:B.textMute}}>None on file yet.</div>
-              : <div style={{display:"flex",flexDirection:"column",gap:6}}>{vendors.map(c=><div key={c.id} style={{background:B.bg,borderRadius:6,padding:"6px 10px"}}>
+              ? <div style={{fontSize:12,color:B.textMute}}>None on file yet.{clientSelfServe?" Add the plumber, landscaper, property manager or anyone else who looks after it.":""}</div>
+              : <div style={{display:"flex",flexDirection:"column",gap:6}}>{vendors.map(c=><div key={c.id} style={{background:B.bg,borderRadius:6,padding:"6px 10px",position:"relative",paddingRight:clientSelfServe?110:10}}>
+                  {clientSelfServe&&<div style={{position:"absolute",top:6,right:8,display:"flex",gap:10}}>
+                    <button onClick={()=>setVendorModal({propertyId:p.id,contact:c})} style={{background:"none",border:"none",color:B.navyMid,fontSize:12,cursor:"pointer",fontFamily:"inherit",fontWeight:600,padding:0}}>Edit</button>
+                    <button onClick={()=>delVendor(c)} style={{background:"none",border:"none",color:B.textMute,fontSize:12,cursor:"pointer",fontFamily:"inherit",padding:0}}>Remove</button>
+                  </div>}
                   <div style={{fontSize:12,fontWeight:600,color:B.navy}}>{c.name}{c.role&&<span style={{fontWeight:400,color:B.textSoft,marginLeft:6}}>· {c.role}</span>}</div>
                   <div style={{fontSize:11,color:B.textSoft,display:"flex",gap:10,flexWrap:"wrap",marginTop:1}}>{c.company&&<span>{c.company}</span>}{c.phone&&<span>📞 <PhoneLink value={c.phone}/></span>}{c.email&&<span>✉ <EmailLink value={c.email}/></span>}</div>
                 </div>)}</div>}
