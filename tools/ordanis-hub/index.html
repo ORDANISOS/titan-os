@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ORDANIS Hub</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 14a33 36 0 0 0 0 72v-9a24 27 0 0 1 0-54z' fill='%230A2540'/%3E%3Cpath d='M50 14a33 36 0 0 1 0 72v-9a24 27 0 0 0 0-54z' fill='%23C9A961'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --navy: #0A2540;
+    --ink: #061629;
+    --ink-2: #0C1E36;
+    --gold: #C9A961;
+    --gold-hi: #E4C98A;
+    --paper: #F8F6F1;
+    --muted: #9AA8BA;
+    --line: rgba(201, 169, 97, 0.18);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    min-height: 100vh;
+    background: radial-gradient(ellipse at 50% 55%, #0E2B4A 0%, var(--ink) 60%) fixed, var(--ink);
+    color: var(--paper);
+    font-family: Arial, Helvetica, sans-serif;
+    overflow-x: hidden;
+  }
+  a { color: inherit; }
+
+  /* Header */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 24px 0; max-width: 1100px; margin: 0 auto;
+  }
+  .brand { display: flex; align-items: center; gap: 14px; text-decoration: none; }
+  .brand svg { width: 34px; height: 34px; }
+  .wordmark { font-family: Georgia, 'Times New Roman', serif; font-weight: 700; letter-spacing: 0.18em; font-size: 22px; }
+  .divider { width: 1px; height: 26px; background: rgba(248, 246, 241, 0.2); }
+  .hubname { color: var(--gold); font-weight: 700; letter-spacing: 0.24em; font-size: 14px; }
+  .user { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 14px; }
+  .avatar {
+    width: 38px; height: 38px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: var(--navy); border: 1.5px solid var(--gold);
+    font-family: Georgia, serif; font-weight: 700; color: var(--gold);
+  }
+  nav {
+    display: flex; gap: 34px; padding: 22px 24px 0; max-width: 1100px; margin: 0 auto;
+    border-bottom: 1px solid rgba(248, 246, 241, 0.1);
+  }
+  nav button {
+    all: unset; cursor: pointer; padding: 0 4px 14px; font-size: 16px; color: var(--muted);
+    border-bottom: 3px solid transparent;
+  }
+  nav button[aria-selected="true"] { color: var(--paper); border-color: var(--gold); }
+  nav button:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
+
+  /* Greeting */
+  main { max-width: 1100px; margin: 0 auto; padding: 34px 16px 60px; text-align: center; }
+  h1 { font-family: Georgia, 'Times New Roman', serif; font-weight: 700; font-size: clamp(28px, 6vw, 44px); margin: 0 0 10px; }
+  .sub { color: var(--muted); font-size: clamp(15px, 3.6vw, 18px); line-height: 1.5; margin: 0 auto 26px; max-width: 520px; }
+
+  /* Orbit */
+  .stage {
+    position: relative; width: min(94vw, 600px); aspect-ratio: 1; margin: 0 auto;
+  }
+  .beams { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .beams .rail { stroke: rgba(201, 169, 97, 0.28); stroke-width: 0.6; fill: none; }
+  .beams .pulse {
+    stroke: url(#beam); stroke-width: 1.1; fill: none; stroke-linecap: round;
+    stroke-dasharray: 9 37; animation: travel 3.2s linear infinite;
+    filter: drop-shadow(0 0 1.5px var(--gold)) drop-shadow(0 0 3px rgba(201, 169, 97, 0.6));
+  }
+  .beams .spoke { stroke-dasharray: 3 24; animation-duration: 2.4s; opacity: 0.85; }
+  @keyframes travel { to { stroke-dashoffset: -46; } }
+
+  .core {
+    position: absolute; left: 50%; top: 50%; width: 30%; aspect-ratio: 1;
+    transform: translate(-50%, -50%); border-radius: 50%;
+    display: grid; place-items: center;
+    background: radial-gradient(circle, #10304F 0%, var(--ink-2) 70%);
+    box-shadow: 0 0 40px rgba(201, 169, 97, 0.18), inset 0 0 30px rgba(0, 0, 0, 0.5);
+  }
+  .core .ring {
+    position: absolute; inset: -9%; border-radius: 50%;
+    border: 1.5px solid rgba(201, 169, 97, 0.55);
+    animation: spin 18s linear infinite;
+  }
+  .core .ring::before, .core .ring::after {
+    content: ""; position: absolute; inset: 8%; border-radius: 50%;
+    border: 1.5px dashed rgba(201, 169, 97, 0.45);
+  }
+  .core .ring::after { inset: -12%; border: 1px solid transparent; border-top-color: var(--gold); border-right-color: rgba(201,169,97,.4); }
+  .core .ring.reverse { inset: 14%; border-color: rgba(201, 169, 97, 0.25); animation-duration: 11s; animation-direction: reverse; }
+  .core .ring.reverse::before { border-style: dotted; inset: 10%; }
+  .core .ring.reverse::after { display: none; }
+  .core svg.mark { width: 46%; height: 46%; position: relative; filter: drop-shadow(0 0 10px rgba(201, 169, 97, 0.45)); animation: flip 4s linear infinite; }
+  @keyframes flip { from { transform: perspective(400px) rotateY(0deg); } to { transform: perspective(400px) rotateY(360deg); } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .node {
+    position: absolute; width: 28%; aspect-ratio: 1; transform: translate(-50%, -50%);
+    border-radius: 50%; text-decoration: none;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6%;
+    background: radial-gradient(circle at 50% 35%, #123459 0%, var(--ink-2) 75%);
+    border: 1.5px solid rgba(248, 246, 241, 0.12);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    transition: border-color .25s, box-shadow .25s, transform .25s;
+    padding: 6%;
+  }
+  .node:hover, .node:focus-visible {
+    outline: none; border-color: var(--gold);
+    box-shadow: 0 0 0 4px rgba(201, 169, 97, 0.12), 0 0 36px rgba(201, 169, 97, 0.45);
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+  .node .icon { width: 22%; height: 22%; color: var(--gold); }
+  .node .name { font-family: Georgia, 'Times New Roman', serif; font-weight: 700; font-size: clamp(12px, 3.1vw, 19px); line-height: 1.15; }
+  .node .badge {
+    font-size: clamp(8px, 1.9vw, 11px); letter-spacing: 0.16em; font-weight: 700; color: var(--muted);
+    border: 1px solid rgba(248, 246, 241, 0.22); border-radius: 999px; padding: 4px 10px;
+  }
+  .node.live .badge { color: var(--gold); border-color: rgba(201, 169, 97, 0.6); }
+  .node.soon { cursor: default; opacity: 0.72; }
+
+  .panel { color: var(--muted); max-width: 560px; margin: 40px auto; line-height: 1.6; }
+  .panel h2 { font-family: Georgia, serif; color: var(--paper); }
+  footer { text-align: center; color: rgba(154, 168, 186, 0.6); font-size: 12px; padding-bottom: 28px; letter-spacing: .08em; }
+
+  @media (max-width: 560px) {
+    header { padding: 14px 16px 0; }
+    nav { padding: 18px 16px 0; gap: 22px; }
+    .wordmark { font-size: 18px; }
+    .hubname { font-size: 11px; }
+    .user .label { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .core .ring, .core svg.mark, .beams .pulse { animation: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="#" aria-label="ORDANIS Hub">
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <path d="M50 14a33 36 0 0 0 0 72v-9a24 27 0 0 1 0-54z" fill="#F8F6F1"/>
+      <path d="M50 14a33 36 0 0 1 0 72v-9a24 27 0 0 0 0-54z" fill="#C9A961"/>
+    </svg>
+    <span class="wordmark">ORDANIS</span>
+    <span class="divider"></span>
+    <span class="hubname">HUB</span>
+  </a>
+  <div class="user"><span class="avatar">W</span><span class="label">Will Perez</span></div>
+</header>
+
+<nav role="tablist">
+  <button role="tab" aria-selected="true" data-tab="tools">Apps</button>
+  <button role="tab" aria-selected="false" data-tab="guides">Guides</button>
+  <button role="tab" aria-selected="false" data-tab="team">Team &amp; Access</button>
+</nav>
+
+<main>
+  <section id="tab-tools">
+    <h1 id="greeting">Welcome, Will</h1>
+    <p class="sub">Pick an app. It opens in a new tab.</p>
+    <div class="stage" id="stage">
+      <svg class="beams" id="beams" viewBox="0 0 100 100" aria-hidden="true">
+        <defs>
+          <linearGradient id="beam" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="100">
+            <stop offset="0" stop-color="#E4C98A"/>
+            <stop offset="1" stop-color="#C9A961"/>
+          </linearGradient>
+        </defs>
+      </svg>
+      <div class="core" aria-hidden="true">
+        <div class="ring"></div>
+        <div class="ring reverse"></div>
+        <svg class="mark" viewBox="0 0 100 100">
+          <path d="M50 14a33 36 0 0 0 0 72v-9a24 27 0 0 1 0-54z" fill="#F8F6F1"/>
+          <path d="M50 14a33 36 0 0 1 0 72v-9a24 27 0 0 0 0-54z" fill="#C9A961"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-guides" class="panel" hidden>
+    <h2>Guides</h2>
+    <p>Runbooks and how-tos for each app will live here.</p>
+  </section>
+  <section id="tab-team" class="panel" hidden>
+    <h2>Team &amp; Access</h2>
+    <p>Who can open which app, and in what role, will be managed here.</p>
+  </section>
+</main>
+
+<footer>ORDANIS OS LLC</footer>
+
+<script>
+  // Edit the apps here. Leave url empty to show the tile as "coming soon".
+  const APPS = [
+    { name: "ORDANIS Platform", role: "PRODUCTION", url: "https://portal.ordanisos.com", icon: "home" },
+    { name: "ELIOT",            role: "ADMIN",      url: "https://eliot.ordanisos.com", icon: "mic" },
+    { name: "MILO",             role: "MARKETING",  url: "",                            icon: "chart" },
+    { name: "Server",           role: "OWNER",      url: "https://supabase.com/dashboard/project/xreeruxuwtmjhvvxvjts", icon: "server" },
+    { name: "Demo",             role: "SANDBOX",    url: "https://ordanis-demo.vercel.app", icon: "flask" },
+  ];
+
+  const ICONS = {
+    home:   '<path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
+    mic:    '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/>',
+    chart:  '<path d="M4 20h16"/><path d="M7 16v-5"/><path d="M12 16V6"/><path d="M17 16v-8"/>',
+    server: '<rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/><path d="M8 7h.01M8 17h.01"/>',
+    flask:  '<path d="M9 3h6"/><path d="M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3"/><path d="M7.5 15h9"/>',
+  };
+
+  const hour = new Date().getHours();
+  const part = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  document.getElementById("greeting").textContent = part + ", Will";
+
+  const stage = document.getElementById("stage");
+  const beams = document.getElementById("beams");
+  const NS = "http://www.w3.org/2000/svg";
+  const R = 34;
+  const pts = APPS.map((_, i) => {
+    const a = (-90 + (360 / APPS.length) * i) * Math.PI / 180;
+    return { x: 50 + R * Math.cos(a), y: 50 + R * Math.sin(a) };
+  });
+
+  function line(a, b, cls) {
+    const l = document.createElementNS(NS, "line");
+    l.setAttribute("x1", a.x); l.setAttribute("y1", a.y);
+    l.setAttribute("x2", b.x); l.setAttribute("y2", b.y);
+    l.setAttribute("class", cls);
+    beams.appendChild(l);
+    return l;
+  }
+
+  const center = { x: 50, y: 50 };
+  pts.forEach((p, i) => {
+    const next = pts[(i + 1) % pts.length];
+    line(p, next, "rail");
+    line(p, next, "pulse").style.animationDelay = (-i * 0.6) + "s";
+    line(center, p, "rail");
+    line(center, p, "pulse spoke").style.animationDelay = (-i * 0.45) + "s";
+  });
+
+  APPS.forEach((app, i) => {
+    const live = Boolean(app.url);
+    const el = document.createElement(live ? "a" : "div");
+    el.className = "node " + (live ? "live" : "soon");
+    el.style.left = pts[i].x + "%";
+    el.style.top = pts[i].y + "%";
+    if (live) {
+      el.href = app.url;
+      el.target = "_blank";
+      el.rel = "noopener noreferrer";
+      el.setAttribute("aria-label", "Open " + app.name);
+    }
+    el.innerHTML =
+      '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS[app.icon] + '</svg>' +
+      '<span class="name"></span><span class="badge"></span>';
+    el.querySelector(".name").textContent = app.name;
+    el.querySelector(".badge").textContent = live ? app.role : "COMING SOON";
+    stage.appendChild(el);
+  });
+
+  document.querySelectorAll("nav button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("nav button").forEach(b => b.setAttribute("aria-selected", String(b === btn)));
+      ["tools", "guides", "team"].forEach(t => {
+        document.getElementById("tab-" + t).hidden = t !== btn.dataset.tab;
+      });
+    });
+  });
+</script>
+</body>
+</html>
