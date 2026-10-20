@@ -1368,6 +1368,16 @@ function BrandMark({reversed=false,size=40}){
     </svg>
   );
 }
+// "Powered by ORDANIS" under a firm's own logo. Drawn as live text, never baked into the firm's artwork:
+// text inside a logo image shrinks with the image and becomes unreadable in the 64px sidebar slot, while
+// this stays a fixed, legible size everywhere the logo appears. The ORDANIS colour is fixed (not B.navy),
+// because B.navy is the firm's own primary colour once a skin is applied.
+function PoweredByOrdanis({size=11,align="center"}){
+  return <div style={{display:"flex",alignItems:"baseline",gap:5,justifyContent:align==="left"?"flex-start":"center",marginTop:6,whiteSpace:"nowrap",lineHeight:1.1}}>
+    <span style={{fontFamily:"Arial, Helvetica, sans-serif",fontSize:size,color:"#5B6B80"}}>Powered by</span>
+    <span style={{fontFamily:"Georgia, 'Times New Roman', serif",fontWeight:700,fontSize:size+1.5,letterSpacing:"0.12em",color:"#0A2540"}}>ORDANIS</span>
+  </div>;
+}
 function PCMLogo({dark=false,compact=false}){
   // Explicit target widths (not a fixed height) so wide white-label raster
   // wordmarks scale down to fit their container instead of overflowing it.
@@ -1380,12 +1390,14 @@ function PCMLogo({dark=false,compact=false}){
   const usingDefaultLogo=!import.meta.env.VITE_BRAND_LOGO_URL&&(_isDefaultBrand||!_skinHasLogo);
   const rasterStyle={maxHeight:compact||dark?64:110,maxWidth:"100%",width:"auto",height:"auto",display:"block",margin:dark||compact?0:"0 auto"};
   const content=(w,c=false)=>usingDefaultLogo?<BrandLockupSVG width={w} compact={c}/>:<BrandImg src={BRAND.logo} alt={BRAND.name} style={rasterStyle}/>;
-  if(dark)return <div style={{background:"rgba(255,255,255,0.97)",borderRadius:8,padding:"8px 14px",display:"inline-block"}}>{content(190)}</div>;
-  if(compact)return content(200,true);
+  // A firm's skin always carries "Powered by ORDANIS"; the default ORDANIS lockup does not need it.
+  const powered=!usingDefaultLogo;
+  if(dark)return <div style={{background:"rgba(255,255,255,0.97)",borderRadius:8,padding:"8px 14px",display:"inline-block"}}>{content(190)}{powered&&<PoweredByOrdanis size={11} align="left"/>}</div>;
+  if(compact)return powered?<div>{content(200,true)}<PoweredByOrdanis size={11} align="left"/></div>:content(200,true);
   // 480 matches the signup page's desktop header lockup exactly (same viewBox,
   // same proportions) -- the login screen's card is widened below to fit it
   // without CSS capping it back down.
-  return content(480);
+  return powered?<div>{content(480)}<PoweredByOrdanis size={13}/></div>:content(480);
 }
 
 // ── LOGIN INTRO (tumbling cubes) ────────────────────────────────────────────
