@@ -45,7 +45,31 @@ const json = (body: unknown, status = 200) =>
     headers: { ...CORS, "Content-Type": "application/json" },
   });
 
-const EMPTY = { options: [] as unknown[], confidence: "low", suggestedName: null, summary: null };
+const EMPTY = { options: [] as unknown[], confidence: "low", suggestedName: null, summary: null, link: null, policy: null };
+
+// Where a document can be pinned on a household's records. Mirrors DOC_SECTIONS in the app; a link the
+// model returns is only kept if its section is allowed for the kind of record it names.
+const SECTIONS_BY_KIND: Record<string, string[]> = {
+  property: ["mortgage", "tax", "insurance_dec", "insurance_invoice", "flood_dec", "rental"],
+  valuable: ["valuable_policy"],
+};
+
+// Policy details read off an insurance document, only to PRE-FILL a form the person checks. Anything
+// that does not parse cleanly is dropped rather than guessed.
+function cleanPolicy(v: unknown): Record<string, string | number> | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const out: Record<string, string | number> = {};
+  const txt = (x: unknown, max: number) => { const t = String(x ?? "").replace(/[\r\n\t]+/g, " ").trim(); return t && t.length <= max ? t : null; };
+  const money = (x: unknown) => { const n = Number(String(x ?? "").replace(/[^0-9.]/g, "")); return Number.isFinite(n) && n > 0 && n < 1e10 ? Math.round(n * 100) / 100 : null; };
+  const insurer = txt(o.insurer, 80); if (insurer) out.insurer = insurer;
+  const num = txt(o.policyNumber, 80); if (num) out.policyNumber = num;
+  const prem = money(o.annualPremium); if (prem != null) out.annualPremium = prem;
+  const cov = money(o.coverageAmount); if (cov != null) out.coverageAmount = cov;
+  const exp = String(o.expirationDate ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(exp) && !Number.isNaN(Date.parse(exp))) out.expirationDate = exp;
+  return Object.keys(out).length ? out : null;
+}
 
 // A proposed name has to be something a person would type: short, plain, no path
 // characters. Anything else is dropped and the form keeps the file's own name.
@@ -80,11 +104,18 @@ Deno.serve(async (req) => {
   }
 
   let text = "", fileName = "", folders: string[] = [];
+  // The household's own records a document could be pinned to, as short keys the app maps back to ids
+  // (V1 = a valuable, P1 = a property). Labels only -- descriptions and addresses the household entered.
+  let targets: { key: string; kind: string; label: string }[] = [];
   try {
     const body = await req.json();
     text = String(body?.text ?? "").slice(0, 4000);
     fileName = String(body?.fileName ?? "").slice(0, 200);
     folders = Array.isArray(body?.folders) ? body.folders.filter((f: unknown) => typeof f === "string") : [];
+    targets = (Array.isArray(body?.targets) ? body.targets : [])
+      .filter((t: any) => t && typeof t.key === "string" && /^[PV]\d{1,3}$/.test(t.key) && (t.kind === "property" || t.kind === "valuable"))
+      .slice(0, 60)
+      .map((t: any) => ({ key: t.key, kind: t.kind, label: String(t.label ?? "").replace(/[\r\n]+/g, " ").slice(0, 120) }));
   } catch {
     return json(EMPTY);
   }
@@ -95,7 +126,7 @@ Deno.serve(async (req) => {
 document and the folders this household actually has. Say which folder it belongs in.
 
 Return ONLY a JSON object, no prose and no markdown fence:
-{"options":[{"folder":"<exactly one of the folders given, or null>","newFolder":"<a proposed folder name, or null>","why":"<one short clause, under 12 words>"}],"confidence":"high"|"medium"|"low","suggestedName":"<a document name, or null>","summary":"<one plain sentence, or null>"}
+{"options":[{"folder":"<exactly one of the folders given, or null>","newFolder":"<a proposed folder name, or null>","why":"<one short clause, under 12 words>"}],"confidence":"high"|"medium"|"low","suggestedName":"<a document name, or null>","summary":"<one plain sentence, or null>","link":{"target":"<a record key given, e.g. P1 or V2>","section":"<one section name>","why":"<short clause>"} or null,"policy":{"insurer":"...","policyNumber":"...","annualPremium":<number>,"coverageAmount":<number>,"expirationDate":"YYYY-MM-DD"} or null}
 
 Rules:
 - List exactly ONE option when the document clearly belongs in one place. This is
@@ -131,7 +162,19 @@ Rules:
   does not say what the document is.
 - "summary" is one plain sentence, under 25 words, saying what the document is and
   who or what it concerns. No account numbers, no amounts beyond what identifies it.
-  Null if the text does not support one.`;
+  Null if the text does not support one.
+- "link": only when "Household records" are given AND the text clearly concerns ONE of them
+  -- the address of that property, or that specific item (make, model, serial, description).
+  Sections for a property: mortgage (loan statement or note), tax (property tax bill),
+  insurance_dec (homeowners/property insurance declarations or policy), insurance_invoice
+  (insurance premium bill), flood_dec (flood insurance), rental (lease or rental agreement).
+  Section for a valuable: valuable_policy (its insurance policy, rider, appraisal-for-insurance
+  or schedule naming that item). When the text matches no record, or more than one equally,
+  return null: a wrong link puts a document on the wrong record.
+- "policy": only when the document is an insurance policy, declarations page or renewal.
+  Read the insurer, policy number, annual premium, coverage or insured amount, and the
+  expiration or renewal date (YYYY-MM-DD) exactly as printed; omit any you cannot read.
+  Otherwise null.`;
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -143,12 +186,13 @@ Rules:
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 500,
+        max_tokens: 700,
         system,
         messages: [{
           role: "user",
           content:
             `Folders available: ${folders.join(", ")}\n` +
+            (targets.length ? `Household records:\n${targets.map((t) => `${t.key} (${t.kind}): ${t.label}`).join("\n")}\n` : "") +
             (fileName ? `File name: ${fileName}\n` : "") +
             `\nOpening of the document:\n${text}`,
         }],
@@ -211,9 +255,20 @@ Rules:
     // themselves, which they can already do.
     const suggestedName = cleanName(parsed.suggestedName);
     const summary = cleanSummary(parsed.summary);
+    // A link is kept only if it names a record we were actually given and a section allowed for it.
+    let link: { target: string; section: string; why: string } | null = null;
+    const L = parsed.link;
+    if (L && typeof L === "object") {
+      const t = targets.find((x) => x.key === String(L.target ?? ""));
+      const section = String(L.section ?? "");
+      if (t && (SECTIONS_BY_KIND[t.kind] ?? []).includes(section)) {
+        link = { target: t.key, section, why: String(L.why ?? "").slice(0, 120) };
+      }
+    }
+    const policy = cleanPolicy(parsed.policy);
     return json(options.length
-      ? { options, confidence, suggestedName, summary }
-      : { ...EMPTY, suggestedName, summary });
+      ? { options, confidence, suggestedName, summary, link, policy }
+      : { ...EMPTY, suggestedName, summary, link, policy });
   } catch (e) {
     console.error("suggest-document-folder: failed", e instanceof Error ? e.name : "error");
     return json(EMPTY);

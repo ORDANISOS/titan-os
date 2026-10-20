@@ -4150,7 +4150,9 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
       {modal&&modal.type==="editProperty"&&<Modal title="Edit Property" onClose={()=>setModal(null)} wide><PropertyForm initial={modal.property} canExtract={true} onSave={async f=>{const r=await editProperty(modal.property.id,f);if(r!==false)setModal(null);return r;}} onClose={()=>setModal(null)}/></Modal>}
       {modal==="valuable"&&<Modal title="Add Valuable" onClose={()=>setModal(null)}><ValuableForm onSave={async f=>{const r=await addValuable(f);if(r!==false)setModal(null);return r;}} onClose={()=>setModal(null)}/></Modal>}
       {modal&&modal.type==="propertyContact"&&<Modal title={modal.contact?"Edit Service Provider":"Add Service Provider"} onClose={()=>setModal(null)}><PropertyContactForm initial={modal.contact?{name:modal.contact.name||"",role:modal.contact.role||"",company:modal.contact.company||"",email:modal.contact.email||"",phone:modal.contact.phone||"",notes:modal.contact.notes||""}:null} onSave={async f=>{modal.contact?await editPropertyContact(modal.contact.id,f):await addPropertyContact(modal.propertyId,f);setModal(null);}} onClose={()=>setModal(null)}/></Modal>}
-      {modal&&modal.type==="editValuable"&&<Modal title="Edit Valuable" onClose={()=>setModal(null)}><ValuableForm initial={modal.valuable} onSave={async f=>{const r=await editValuable(modal.valuable.id,f);if(r!==false)setModal(null);return r;}} onClose={()=>setModal(null)}/></Modal>}
+      {modal&&modal.type==="editValuable"&&<Modal title="Edit Valuable" onClose={()=>setModal(null)}><ValuableForm initial={modal.valuable} policy={{familyId:family.id,valuableId:modal.valuable.id,toast,onUploaded:()=>reload("documents"),
+        doc:(data.documents||[]).find(d=>d.valuableId===modal.valuable.id&&d.propertySection==="valuable_policy")||null}}
+        onSave={async f=>{const r=await editValuable(modal.valuable.id,f);if(r!==false)setModal(null);return r;}} onClose={()=>setModal(null)}/></Modal>}
       {modal==="deal"&&<Modal title="Add Deal" onClose={()=>setModal(null)}><SimpleDealForm contacts={contacts} onSave={async f=>{const r=await addDeal(f);if(r!==false)setModal(null);return r;}} onClose={()=>setModal(null)}/></Modal>}
       {modal==="account"&&<Modal title="Add Portfolio Account" onClose={()=>setModal(null)}><AccountForm onSave={async f=>{const r=await addAccount(f);if(r!==false)setModal(null);return r;}} onClose={()=>setModal(null)}/></Modal>}
       {modal&&modal.type==="editAccount"&&<Modal title="Edit Portfolio Account" onClose={()=>setModal(null)}><AccountForm initial={modal.account} onSave={async f=>{const r=await editAccount(modal.account.id,f);if(r!==false)setModal(null);return r;}} onClose={()=>setModal(null)}/></Modal>}
@@ -4495,8 +4497,44 @@ function valuableRowFromForm(f){
     insurance_premium:ins?numOrNull(f.insurancePremium):null,coverage_amount:ins?numOrNull(f.coverageAmount):null,
     insurance_expiration:ins?(f.insuranceExpiration||null):null,notes:f.notes||null};
 }
-function ValuableForm({initial,onSave,onClose}){
+// policy (optional, editing an existing valuable only): {familyId, valuableId, doc, toast, onUploaded}. Lets the
+// person photograph or pick the policy right here: CHRIS reads it, files it in Insurance linked to this valuable,
+// and pre-fills any blank policy fields it can read, for the person to check before saving.
+function ValuableForm({initial,onSave,onClose,policy=null}){
   const[f,setF]=useState(initial||{category:"Car / Vehicle",description:"",makeModel:"",year:"",estimatedValue:"",insured:false,insuranceCompany:"",notes:""});
+  const[policyDoc,setPolicyDoc]=useState(policy?policy.doc||null:null);
+  const[policyBusy,setPolicyBusy]=useState("");
+  const[prefilled,setPrefilled]=useState([]);
+  const camRef=useRef(null),fileRef=useRef(null);
+  const attachPolicy=async file=>{
+    if(!file||!policy)return;
+    const problem=docFileProblem(file);
+    if(problem){policy.toast(problem,"error");return;}
+    try{
+      const text=await readDocumentForFiling(file,ph=>setPolicyBusy(ph));
+      let sug=null;
+      if(text&&text.length>80){setPolicyBusy("Reading the policy…");try{sug=await suggestFolder(text,file.name,DOC_CATEGORIES);}catch(_e){}}
+      // Fill only what is blank: anything the person typed stays theirs.
+      const pol=sug&&sug.policy;const got=[];
+      if(pol){
+        setF(p=>{const n={...p,insured:true};
+          const fill=(k,v,label)=>{if(v!=null&&v!==""&&(p[k]==null||String(p[k]).trim()==="")){n[k]=String(v);got.push(label);}};
+          fill("insuranceCompany",pol.insurer,"insurer");fill("policyNumber",pol.policyNumber,"policy number");
+          fill("insurancePremium",pol.annualPremium,"premium");fill("coverageAmount",pol.coverageAmount,"coverage");
+          fill("insuranceExpiration",pol.expirationDate,"renewal date");
+          return n;});
+      }
+      setPolicyBusy("Filing in CHRIS…");
+      const base=file.name.replace(/\.[^./\\]+$/,"").trim();
+      const name=(sug&&sug.suggestedName)||`${f.description||"Valuable"} insurance policy`||base;
+      const err=await fileChrisDocument({familyId:policy.familyId,file,name,category:"Insurance",description:sug&&sug.summary,extractedText:text,
+        link:{kind:"valuable",id:policy.valuableId,section:"valuable_policy"}});
+      if(err){policy.toast(err,"error");return;}
+      setPolicyDoc({name});setPrefilled(got);
+      policy.toast("Policy filed in CHRIS and linked to this item");
+      if(policy.onUploaded)policy.onUploaded();
+    }finally{setPolicyBusy("");}
+  };
   const[saving,setSaving]=useState(false);
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const[showReq,setShowReq]=useState(false);
@@ -4520,6 +4558,21 @@ function ValuableForm({initial,onSave,onClose}){
       </Grid2>
       <Field label="Renewal / Expiration Date" optional><Inp type="date" value={f.insuranceExpiration||""} onChange={set("insuranceExpiration")}/></Field>
     </>}
+    {policy&&<div style={{marginBottom:14,padding:"12px 14px",border:`1px solid ${B.borderLight}`,borderRadius:10,background:B.bg}}>
+      <div style={{fontSize:12,fontWeight:700,color:B.navy,marginBottom:4}}>Policy document</div>
+      <div style={{fontSize:12,color:B.textSoft,marginBottom:10,lineHeight:1.5}}>
+        {policyDoc?<>📄 <strong style={{color:B.navy}}>{policyDoc.name}</strong> is in CHRIS, linked to this item. Add a newer one to replace it; the old one stays in CHRIS.</>
+          :"Snap or upload the policy. CHRIS files it in Insurance, links it to this item, and fills in any details it can read."}
+      </div>
+      {policyBusy?<div style={{fontSize:12.5,color:B.gold,fontWeight:600}}>{policyBusy}</div>
+        :<div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <button type="button" onClick={()=>camRef.current&&camRef.current.click()} style={{flex:"1 1 140px",minHeight:44,borderRadius:10,border:"none",background:B.navy,color:B.white,fontSize:13.5,fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>📷 Take a photo</button>
+          <button type="button" onClick={()=>fileRef.current&&fileRef.current.click()} style={{flex:"1 1 140px",minHeight:44,borderRadius:10,border:`1.5px solid ${B.navy}`,background:B.white,color:B.navy,fontSize:13.5,fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>📄 Choose file</button>
+        </div>}
+      <input ref={camRef} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{const x=e.target.files&&e.target.files[0];e.target.value="";attachPolicy(x);}}/>
+      <input ref={fileRef} type="file" accept={[...DOC_UPLOAD_EXTS.map(x=>"."+x),"image/*"].join(",")} style={{display:"none"}} onChange={e=>{const x=e.target.files&&e.target.files[0];e.target.value="";attachPolicy(x);}}/>
+      {prefilled.length>0&&<div style={{fontSize:11.5,color:"#8a5c00",marginTop:8}}>Filled in from the policy: {prefilled.join(", ")}. Check them, then Save.</div>}
+    </div>}
     <Field label="Notes" optional><Tex value={f.notes||""} onChange={set("notes")}/></Field>
     {showReq&&<ReqHint/>}
     {err&&<div style={{fontSize:12,color:"#8b1a1a",background:"#fff5f5",border:"1px solid #f3c2c2",borderRadius:8,padding:"8px 10px",marginTop:8}}>{err}</div>}
@@ -8595,9 +8648,10 @@ function VaultSearchResults({hits,searching,query,onDownload,onClear}){
 //
 // Only the opening is sent — a filing decision is made on the first page of a
 // document, and sending forty pages of a trust costs more and decides no better.
-async function suggestFolder(text,fileName,folders){
+// targets: from linkTargetsFor(), the household's own properties and valuables a document could be pinned to.
+async function suggestFolder(text,fileName,folders,targets=null){
   const{data,error}=await sb.functions.invoke("suggest-document-folder",{
-    body:{text:String(text).slice(0,4000),fileName:fileName||"",folders},
+    body:{text:String(text).slice(0,4000),fileName:fileName||"",folders,targets:targets?targets.list:[]},
   });
   if(error||!data||!Array.isArray(data.options))return null;
   // Each option, re-checked against the household's real folder list rather than
@@ -8625,9 +8679,27 @@ async function suggestFolder(text,fileName,folders){
   // person can see and change.
   const suggestedName=typeof data.suggestedName==="string"&&data.suggestedName.trim()?data.suggestedName.trim().slice(0,150):null;
   const summary=typeof data.summary==="string"&&data.summary.trim()?data.summary.trim().slice(0,500):null;
-  if(!options.length&&!suggestedName&&!summary)return null;
-  return{options,confidence:data.confidence||"low",suggestedName,summary};
+  // Where CHRIS thinks it belongs on the household's records (a property section, or one valuable's
+  // policy). Mapped back from the short key to a real id, and dropped if the key is not one we sent.
+  let link=null;
+  if(targets&&data.link&&targets.byKey[data.link.target]){
+    const t=targets.byKey[data.link.target];
+    link={kind:t.kind,id:t.id,label:t.label,section:data.link.section,why:data.link.why||""};
+  }
+  const policy=data.policy&&typeof data.policy==="object"?data.policy:null;
+  if(!options.length&&!suggestedName&&!summary&&!link)return null;
+  return{options,confidence:data.confidence||"low",suggestedName,summary,link,policy};
 }
+
+// The household's properties and valuables, as the short keys suggest-document-folder works with
+// (P1, V1 ...). Only names the household entered are sent; ids never leave the browser.
+function linkTargetsFor(properties,valuables){
+  const list=[],byKey={};
+  (properties||[]).slice(0,40).forEach((p,i)=>{const key=`P${i+1}`;const label=p.name||[p.address,p.city].filter(Boolean).join(", ")||"Property";list.push({key,kind:"property",label});byKey[key]={kind:"property",id:p.id,label};});
+  (valuables||[]).slice(0,40).forEach((v,i)=>{const key=`V${i+1}`;const label=[v.description,v.category,v.makeModel].filter(Boolean).join(" · ")||"Valuable";list.push({key,kind:"valuable",label});byKey[key]={kind:"valuable",id:v.id,label};});
+  return list.length?{list,byKey}:null;
+}
+const linkLabel=l=>l?`${l.label} · ${sectionLabel(l.section)}`:"";
 
 // A phone photo is 4-6 MB, which is over what the reader accepts in one image, and
 // HEIC from an iPhone library is not read at all. So the READ gets a resized JPEG
@@ -8700,13 +8772,23 @@ async function readDocumentForFiling(f,onPhase){
 // bucket under the household's own folder (which is what the storage policies
 // check), then the row. If the row can't be written, the stored file is removed so
 // nothing is left behind that no one can see. Returns an error message or null.
-async function fileChrisDocument({familyId,file,name,category,description,extractedText}){
+async function fileChrisDocument({familyId,file,name,category,description,extractedText,link=null}){
   const ext=(file.name.split(".").pop()||"").toLowerCase();
   const path=`${familyId}/${Date.now()}_${Math.random().toString(36).slice(2,7)}_${file.name.replace(/[^A-Za-z0-9._-]+/g,"_")}`;
   const{error:upErr}=await sb.storage.from("documents").upload(path,file,{upsert:false});
   if(upErr)return upErr.message;
+  // A link pins the document to one record's section. Whatever held that spot before is unlinked, never
+  // deleted (same rule as the upload form): last year's policy still belongs in CHRIS.
+  const propertyId=link&&link.kind==="property"?link.id:null,valuableId=link&&link.kind==="valuable"?link.id:null;
+  const section=link?link.section:null;
+  if(section){
+    let q=sb.from("documents").update({property_section:null}).eq("family_id",familyId).eq("property_section",section);
+    q=propertyId?q.eq("property_id",propertyId):valuableId?q.eq("valuable_id",valuableId):q;
+    await q;
+  }
   const{error:dbErr}=await sb.from("documents").insert({family_id:familyId,name:name.trim(),description:description||null,
-    category,file_path:path,file_size:file.size,file_type:file.type||ext,extracted_text:extractedText||null,uploaded_by:CURRENT_USER_LABEL||null});
+    category,file_path:path,file_size:file.size,file_type:file.type||ext,extracted_text:extractedText||null,uploaded_by:CURRENT_USER_LABEL||null,
+    property_id:propertyId,valuable_id:valuableId,property_section:section});
   if(dbErr){await sb.storage.from("documents").remove([path]).catch(()=>{});return dbErr.message;}
   return null;
 }
@@ -8739,6 +8821,15 @@ function ChrisBatchFiler({familyId,toast,onFiled}){
     return names;
   },[familyId]);
   useEffect(()=>{aliveRef.current=true;loadFolders();return()=>{aliveRef.current=false;};},[loadFolders]);
+  // The household's own properties and valuables, so CHRIS can suggest which one a document belongs to.
+  const targetsRef=useRef(null);
+  useEffect(()=>{
+    if(!familyId)return;
+    Promise.all([
+      sb.from("properties").select("id,name,address,city").eq("family_id",familyId),
+      sb.from("valuables").select("id,description,category,make_model").eq("family_id",familyId),
+    ]).then(([p,v])=>{targetsRef.current=linkTargetsFor((p.data||[]).map(toClient),(v.data||[]).map(toClient));}).catch(()=>{});
+  },[familyId]);
   // Thumbnails are object URLs; let them go when the filer closes.
   useEffect(()=>()=>{itemsRef.current.forEach(it=>{if(it.thumb)URL.revokeObjectURL(it.thumb);});},[]);
   const allFolders=[...DOC_CATEGORIES,...customFolders];
@@ -8757,7 +8848,7 @@ function ChrisBatchFiler({familyId,toast,onFiled}){
     let sug=null;
     if(text&&text.length>80){
       patch(item.id,{phase:"Working out where this belongs…"});
-      try{sug=await suggestFolder(text,item.file.name,foldersForSuggest());}catch(_e){}
+      try{sug=await suggestFolder(text,item.file.name,foldersForSuggest(),targetsRef.current);}catch(_e){}
     }
     if(!aliveRef.current)return;
     patch(item.id,it=>{
@@ -8768,7 +8859,10 @@ function ChrisBatchFiler({familyId,toast,onFiled}){
       return{status:"ready",phase:"",text,suggestion:sug,
         name:(!it.nameTouched&&sug&&sug.suggestedName)?sug.suggestedName:it.name,
         description:(!it.descTouched&&sug&&sug.summary)?sug.summary:it.description,
-        category:it.categoryTouched?it.category:(preselect||it.category),newFolder:it.categoryTouched?it.newFolder:false};
+        category:it.categoryTouched?it.category:(preselect||it.category),newFolder:it.categoryTouched?it.newFolder:false,
+        // A suggested link is on by default only when CHRIS is reasonably sure; it is shown on the card
+        // either way and the person can switch it off before filing.
+        useLink:!!(sug&&sug.link&&sug.confidence!=="low")};
     });
   };
   const pump=()=>{
@@ -8832,7 +8926,8 @@ function ChrisBatchFiler({familyId,toast,onFiled}){
       if(error&&!/duplicate key/i.test(error.message)){patch(id,{status:"ready",error:error.message});return false;}
       folders=await loadFolders();
     }
-    const err=await fileChrisDocument({familyId,file:it.file,name:it.name,category:it.category,description:it.description,extractedText:it.text});
+    const link=it.useLink&&it.suggestion&&it.suggestion.link?it.suggestion.link:null;
+    const err=await fileChrisDocument({familyId,file:it.file,name:it.name,category:it.category,description:it.description,extractedText:it.text,link});
     if(err){patch(id,{status:"ready",error:err});return false;}
     patch(id,{status:"filed"});
     return folders;
@@ -8878,7 +8973,7 @@ function ChrisBatchFiler({familyId,toast,onFiled}){
         if(it.status==="filed")return <div key={it.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:10,
           background:"#eef7f0",border:"1px solid #cfe6d5",fontSize:13,color:B.text}}>
           <span style={{color:"#2e7d4f",fontWeight:700}}>✓</span>
-          <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}><strong>{it.name}</strong> · filed in {it.category}</span>
+          <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}><strong>{it.name}</strong> · filed in {it.category}{it.useLink&&sug&&sug.link?` · linked to ${sug.link.label}`:""}</span>
         </div>;
         const opts=(sug&&sug.options)||[];
         const offered=new Set(opts.map(o=>o.folder||o.newFolder));
@@ -8928,6 +9023,14 @@ function ChrisBatchFiler({familyId,toast,onFiled}){
               <Btn small onClick={()=>useTypedFolder(it.id)} disabled={!String(it.typedFolder).trim()}>Use it</Btn>
               <Btn small variant="ghost" onClick={()=>patch(it.id,{typedFolder:null,error:null})}>Cancel</Btn>
             </div>}
+            {sug&&sug.link&&<label style={{display:"flex",alignItems:"flex-start",gap:9,marginTop:10,padding:"9px 11px",borderRadius:8,cursor:"pointer",
+              background:it.useLink?"rgba(206,182,132,0.14)":B.bg,border:`1px solid ${it.useLink?B.gold:B.borderLight}`}}>
+              <input type="checkbox" checked={!!it.useLink} disabled={it.status==="filing"} onChange={e=>patch(it.id,{useLink:e.target.checked})} style={{marginTop:2,width:16,height:16,accentColor:B.navy}}/>
+              <span style={{fontSize:12.5,color:B.text,lineHeight:1.45}}>
+                <strong style={{color:B.navy}}>Link to {linkLabel(sug.link)}</strong>
+                {sug.link.why&&<span style={{display:"block",fontSize:11.5,color:B.textMute}}>{sug.link.why}</span>}
+              </span>
+            </label>}
             {it.error&&<div style={{fontSize:12,color:"#b3261e",marginTop:8}}>{it.error}</div>}
             <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:12}}>
               <Btn variant="ghost" onClick={()=>removeItem(it.id)} disabled={it.status==="filing"}>Remove</Btn>
@@ -9047,6 +9150,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
   // person's own choice always wins and is never silently overwritten.
   const[suggestion,setSuggestion]=useState(null); // {folder, newFolder, why, confidence}
   const[creatingSuggested,setCreatingSuggested]=useState(false);
+  const[suggestedLink,setSuggestedLink]=useState(null); // {kind,id,label,section,why} from the read
   // "+ New folder…" picked in the upload form's Category list: the name being typed.
   const[typedCategory,setTypedCategory]=useState(null);
   const[typedCategoryErr,setTypedCategoryErr]=useState("");
@@ -9133,7 +9237,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
   const resetForm=()=>{
     setName("");setDescription("");setCategory("General");setFile(null);autoNameRef.current="";autoDescRef.current="";
     setLinkPropertyId("");setLinkValuableId("");setLinkSection("");setConflictDoc(null);
-    setSuggestion(null);setExtractedText(null);setExtracting(false);setCreatingSuggested(false);
+    setSuggestion(null);setExtractedText(null);setExtracting(false);setCreatingSuggested(false);setSuggestedLink(null);
     setTypedCategory(null);setTypedCategoryErr("");
   };
   // Most recent download of a given document, if any (downloads is pre-sorted newest first).
@@ -9209,7 +9313,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
   // suggestion must never block picking the file or uploading it plain.
   const pickFile=async f=>{
     setFile(f||null);
-    setSuggestion(null);setExtractedText(null);
+    setSuggestion(null);setExtractedText(null);setSuggestedLink(null);
     // A summary CHRIS wrote for the previous file doesn't describe this one.
     if(autoDescRef.current){const prevDesc=autoDescRef.current;setDescription(prev=>prev===prevDesc?"":prev);autoDescRef.current="";}
     if(f&&f.name){
@@ -9236,8 +9340,10 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
           // The file's own name, never the Name field: that can still hold the
           // previous document's title, and the reader would blend the two.
           const sug=await suggestFolder(text,f.name,
-            [...DOC_CATEGORIES,...customFolders.map(x=>x.name)]);
+            [...DOC_CATEGORIES,...customFolders.map(x=>x.name)],linkTargetsFor(properties,valuablesList));
           if(sug&&sug.options&&sug.options.length)setSuggestion(sug);
+          // Only offered when the person hasn't already chosen a link (e.g. arriving from a 📎).
+          if(sug&&sug.link&&!linkSection)setSuggestedLink(sug.link);
           // The proposed title replaces only the auto-filled file name ("IMG_4821"),
           // never something the person typed; the summary likewise.
           if(sug&&sug.suggestedName){
@@ -9680,6 +9786,18 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
         </div>}
       </Field>
       <SuggestionPanel/>
+      {suggestedLink&&<div style={{margin:"-4px 0 14px",padding:"10px 12px",background:"rgba(206,182,132,0.12)",borderLeft:`2px solid ${B.gold}`,borderRadius:6,fontSize:12.5,color:B.textMid,lineHeight:1.5}}>
+        <strong style={{color:B.navy}}>This looks like it belongs on {linkLabel(suggestedLink)}.</strong>{suggestedLink.why?` ${suggestedLink.why}`:""}
+        <div style={{display:"flex",gap:14,marginTop:6}}>
+          <button type="button" onClick={()=>{setLinkSection(suggestedLink.section);
+              if(suggestedLink.kind==="property"){setLinkPropertyId(suggestedLink.id);setLinkValuableId("");}
+              else{setLinkValuableId(suggestedLink.id);setLinkPropertyId("");}
+              setSuggestedLink(null);}}
+            style={{background:"none",border:"none",color:B.navyMid,cursor:"pointer",fontSize:12.5,fontFamily:"inherit",fontWeight:700,padding:0,textDecoration:"underline"}}>Link it</button>
+          <button type="button" onClick={()=>setSuggestedLink(null)}
+            style={{background:"none",border:"none",color:B.textMute,cursor:"pointer",fontSize:12,fontFamily:"inherit",padding:0,textDecoration:"underline"}}>No thanks</button>
+        </div>
+      </div>}
       <Field label="Description" optional><Inp maxLength={500} placeholder="Anything that will help you find it later" value={description} onChange={e=>setDescription(e.target.value)}/></Field>
       {linkFields()}
       <Field label="File" required>
@@ -10981,7 +11099,9 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           <ValuableQuickForm saving={savingQuickAdd} onCancel={()=>setAddValuableOpen(false)} onSave={runQuickAdd(addValuable,()=>setAddValuableOpen(false))}/>
         </Modal>}
         {editingValuable&&clientSelfServe&&<Modal title="Edit valuable" onClose={()=>setEditingValuable(null)}>
-          <ValuableForm initial={editingValuable} onSave={f=>editClientValuable(editingValuable.id,f)} onClose={()=>setEditingValuable(null)}/>
+          <ValuableForm initial={editingValuable} policy={{familyId:family.id,valuableId:editingValuable.id,toast,onUploaded:()=>reload("documents"),
+              doc:(data.documents||[]).find(d=>d.valuableId===editingValuable.id&&d.propertySection==="valuable_policy")||null}}
+            onSave={f=>editClientValuable(editingValuable.id,f)} onClose={()=>setEditingValuable(null)}/>
         </Modal>}
         <div style={{marginBottom:20}}/>
         {valuables.length===0?<Empty text="No valuables on file yet."/>:VALUABLE_CATS.map(cat=>{
