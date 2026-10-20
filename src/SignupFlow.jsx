@@ -675,6 +675,15 @@ export function SignupWelcome() {
       .finally(() => { clearTimeout(timer); done(); });
     return () => { cancelled = true; clearTimeout(timer); };
   }, []);
+  // The new client signs in with the login they just paid for. If this browser is still signed in as
+  // someone else (a staff member testing, a household member on a shared computer), "/" would open THAT
+  // session instead, so this browser's session is signed out first. scope "local": only this browser;
+  // the other person's other devices stay signed in.
+  const goToSignIn = async (e) => {
+    e.preventDefault();
+    try { await sb.auth.signOut({ scope: "local" }); } catch (_e) { /* nothing to sign out */ }
+    window.location.href = "/";
+  };
   if (!skinReady) return <div style={{ minHeight: "100vh", background: "#fff" }} />;
   return (
     <div style={{ minHeight: "100vh", background: "#fff", color: C.slate, fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif", fontWeight: 300, fontSize: 16.5, lineHeight: 1.75, display: "flex", alignItems: "center", justifyContent: "center", padding: isMobile ? "40px 20px" : "60px 32px" }}>
@@ -688,7 +697,7 @@ export function SignupWelcome() {
         <p style={{ fontSize: "1.05rem", color: C.slate, margin: "0 auto 2em", maxWidth: 460 }}>
           To log in for the first time, sign in with the email address and password you just created.
         </p>
-        <a href="/" style={{ display: "inline-block", background: C.navy, color: "#fff", textDecoration: "none", fontWeight: 600, fontSize: ".85rem", letterSpacing: ".08em", textTransform: "uppercase", padding: "14px 34px", borderRadius: 4, borderBottom: `2px solid ${C.gold}` }}>
+        <a href="/" onClick={goToSignIn} style={{ display: "inline-block", background: C.navy, color: "#fff", textDecoration: "none", fontWeight: 600, fontSize: ".85rem", letterSpacing: ".08em", textTransform: "uppercase", padding: "14px 34px", borderRadius: 4, borderBottom: `2px solid ${C.gold}` }}>
           Go to Sign In
         </a>
       </div>
