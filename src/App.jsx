@@ -10372,6 +10372,23 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     const{error}=await sb.from("properties").insert({family_id:family.id,address:f.address,property_type:f.propertyType,purchase_price:f.purchasePrice||null,purchase_date:f.purchaseDate||null,current_value:f.currentValue||null,notes:f.notes||null});
     if(error){toast(error.message,"error");return false;}else{toast("Property added. Your record is looking more complete.");await reload("properties");}
   };
+  // Basic and Core are self-service: no Expert keeps their properties up to date, so the household edits,
+  // removes and attaches documents to its own properties, with the same form staff use. Same columns as the
+  // staff side's editProperty; RLS already scopes every write to the household's own rows.
+  const[editingProperty,setEditingProperty]=useState(null);
+  const[propAttachIntent,setPropAttachIntent]=useState(null);
+  const editClientProperty=async(id,f)=>{
+    const row={owner_name:f.ownerName||null,address:f.address,property_type:f.propertyType,purchase_price:numOrNull(f.purchasePrice),purchase_date:f.purchaseDate||null,current_value:numOrNull(f.currentValue),lender:f.lender||null,loan_balance:numOrNull(f.loanBalance),interest_rate:numOrNull(f.interestRate),loan_payment:numOrNull(f.loanPayment),loan_maturity_date:f.loanMaturityDate||null,loan_type:f.loanType,rental_income:numOrNull(f.rentalIncome),property_taxes:numOrNull(f.propertyTaxes),utilities:numOrNull(f.utilities),insurance_company:f.insuranceCompany||null,insurance_premium:numOrNull(f.insurancePremium),insurance_expiration:f.insuranceExpiration||null,flood_insurance:!!f.floodInsurance,flood_insurance_company:f.floodInsurance?(f.floodInsuranceCompany||null):null,flood_insurance_premium:f.floodInsurance?numOrNull(f.floodInsurancePremium):null,flood_insurance_expiration:f.floodInsurance?(f.floodInsuranceExpiration||null):null,hoa_fee:Number(f.hoaFee)||0,property_management_fee_pct:Number(f.propertyManagementFeePct)||0,include_mortgage_in_cashflow:f.includeMortgageInCashflow!==false,second_mortgage_balance:numOrNull(f.secondMortgageBalance),second_mortgage_payment:numOrNull(f.secondMortgagePayment),notes:f.notes||null};
+    const{error}=await sb.from("properties").update(row).eq("id",id).eq("family_id",family.id);
+    if(error){toast(error.message,"error");return false;}
+    toast("Property updated. All saved.");await reload("properties");
+  };
+  const delClientProperty=async p=>{
+    if(!confirm(`Remove ${p.address||"this property"} and its details? Documents attached to it stay in CHRIS. This can't be undone.`))return;
+    const{error}=await sb.from("properties").delete().eq("id",p.id).eq("family_id",family.id);
+    if(error)toast(error.message,"error");else{toast("Property removed");await reload("properties");}
+  };
+  const startPropertyAttach=(propertyId,section)=>{setPropAttachIntent({propertyId,section});setActiveTab("documents");};
   const addAccount=async f=>{
     const{error}=await sb.from("portfolio_accounts").insert({family_id:family.id,institution:f.institution,account_type:f.accountType,starting_balance:numOrNull(f.startingBalance),current_balance:numOrNull(f.currentBalance),account_advisor_name:f.accountAdvisorName||null,account_advisor_phone:f.accountAdvisorPhone||null,account_advisor_email:f.accountAdvisorEmail||null,notes:f.notes||null});
     if(error){toast(error.message,"error");return false;}else{toast("Account added. Your record is looking more complete.");await reload("portfolio_accounts");}
@@ -10700,20 +10717,29 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         {addPropertyOpen&&<Modal title="Add a property" onClose={()=>setAddPropertyOpen(false)}>
           <PropertyQuickForm saving={savingQuickAdd} onCancel={()=>setAddPropertyOpen(false)} onSave={runQuickAdd(addProperty,()=>setAddPropertyOpen(false))}/>
         </Modal>}
+        {editingProperty&&clientSelfServe&&<Modal title="Edit Property" wide onClose={()=>setEditingProperty(null)}>
+          <PropertyForm initial={editingProperty} canExtract={false} onSave={async f=>{const r=await editClientProperty(editingProperty.id,f);if(r!==false)setEditingProperty(null);return r;}} onClose={()=>setEditingProperty(null)}/>
+        </Modal>}
         {properties.length===0?<Empty text="No properties on file yet."/>:(()=>{
           const bySort=(a,b)=>((Number.isFinite(Number(a.sortOrder))?Number(a.sortOrder):1e9)-(Number.isFinite(Number(b.sortOrder))?Number(b.sortOrder):1e9))||(new Date(a.createdAt||0)-new Date(b.createdAt||0));
           const groups=[...PROP_TYPES,"Other"].map(type=>({type,list:properties.filter(p=>type==="Other"?!PROP_TYPES.includes(p.propertyType):p.propertyType===type).sort(bySort)})).filter(g=>g.list.length>0);
           const card=p=><div key={p.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid ${B.gold}`,borderRadius:12,padding:24,marginBottom:16,boxShadow:B.shadow}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12,gap:12,flexWrap:"wrap"}}>
             <div><div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600}}>{p.address}</div>{p.ownerName&&<div style={{fontSize:13,color:B.textSoft,marginTop:2}}>{p.ownerName}</div>}</div>
             <div style={{textAlign:"right"}}>
               <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600}}>{fmtMoney(p.currentValue||p.purchasePrice)}</div>
               <div style={{fontSize:12,color:B.textSoft}}>Current Value</div>
             </div>
           </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
+            <Btn small variant="ghost" onClick={()=>window.open(`https://www.zillow.com/homes/${encodeURIComponent(p.address||"")}_rb/`,"_blank","noopener,noreferrer")}>🔗 Zillow</Btn>
+            <Btn small variant="ghost" onClick={()=>window.open(`https://www.google.com/search?q=${encodeURIComponent(`"${p.address||""}" property tax records`)}`,"_blank","noopener,noreferrer")}>🏛 Tax Records</Btn>
+            {clientSelfServe&&<Btn small variant="ghost" onClick={()=>setEditingProperty(p)}>Edit</Btn>}
+            {clientSelfServe&&<Btn small variant="danger" onClick={()=>delClientProperty(p)}>Remove</Btn>}
+          </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(140px,100%),1fr))",gap:10}}>
             {[["Property Type",p.propertyType],["Purchase Price",fmtMoney(p.purchasePrice)],["Purchase Date",fmt(p.purchaseDate)],["Lender",p.lender||"—","mortgage"],["Loan Balance",fmtMoney(p.loanBalance),"mortgage"],["Interest Rate",fmtPct(p.interestRate)],["Monthly Payment",fmtMoney(p.loanPayment)],...(Number(p.secondMortgageBalance)>0?[["2nd Mtg Balance",fmtMoney(p.secondMortgageBalance)],["2nd Mtg Payment",p.secondMortgagePayment?`${fmtMoney(p.secondMortgagePayment)}/mo`:"—"]]:[]),["Loan Maturity",fmt(p.loanMaturityDate)],["Rental Income",p.rentalIncome?`${fmtMoney(p.rentalIncome)}/mo`:"—","rental"],["Property Taxes",p.propertyTaxes?`${fmtMoney(p.propertyTaxes)}/yr`:"—","tax"],["Insurance",p.insuranceCompany||"—","insurance_dec"],["Insurance Expires",p.insuranceExpiration?fmt(p.insuranceExpiration):"—"],["Flood Insurance",p.floodInsurance?"Yes":"No","flood_dec"]].map(([l,v,sec])=><div key={l} style={{background:B.bg,borderRadius:8,padding:"10px 12px"}}>
-              <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:3}}>{l}<DocLink doc={sec?docForSection(p.id,sec):null} toast={toast}/></div>
+              <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:3}}>{l}{sec&&(docForSection(p.id,sec)?<DocLink doc={docForSection(p.id,sec)} toast={toast}/>:(clientSelfServe?<AttachLink section={sec} onClick={()=>startPropertyAttach(p.id,sec)}/>:null))}</div>
               <div style={{fontSize:13,color:B.text,fontWeight:600}}>{v}</div>
             </div>)}
           </div>
@@ -10870,7 +10896,8 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
       {/* CHRIS */}
       {activeTab==="documents"&&<div style={{height:"calc(100vh - 200px)"}}>
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:20}}>CHRIS</div>
-        <DocumentsView familyId={family.id} canUpload={true} canDelete={false} canScan={false} toast={toast||(()=>{})} reload={reload}/>
+        <DocumentsView familyId={family.id} canUpload={true} canDelete={false} canScan={false} toast={toast||(()=>{})} reload={reload}
+          attachIntent={propAttachIntent} onAttachHandled={()=>setPropAttachIntent(null)}/>
       </div>}
 
       {/* BILLING */}
