@@ -102,6 +102,21 @@ function mapStripeStatus(status: string): "active" | "past_due" | "cancelled" | 
 // subscription was created), so fall back to the household that recorded this subscription id.
 // Before 2026-10-14 there was no fallback, and cancellations, plan changes and failed payments for
 // self-serve households were silently ignored.
+// The subscription an invoice belongs to. Stripe moved it in API 2025-03-31 ("basil") and later: the
+// event payload follows the webhook endpoint's API version, not this client's pinned one, and a live
+// endpoint can only be created on a current version (2026-09-30 at the 2026-10-20 cutover). Older
+// payloads carry invoice.subscription; newer ones carry invoice.parent.subscription_details.subscription.
+// Read either, so the endpoint's version can change without silently breaking billing updates.
+function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  const i = invoice as unknown as {
+    subscription?: string | { id?: string } | null;
+    parent?: { subscription_details?: { subscription?: string | { id?: string } | null } | null } | null;
+  };
+  const s = i.subscription ?? i.parent?.subscription_details?.subscription ?? null;
+  if (!s) return null;
+  return typeof s === "string" ? s : (s.id ?? null);
+}
+
 async function familyIdForSubscription(sub: Stripe.Subscription | null): Promise<string | null> {
   if (!sub) return null;
   if (sub.metadata?.family_id) return sub.metadata.family_id;
@@ -659,9 +674,8 @@ Deno.serve(async (req) => {
 
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
-        const sub = invoice.subscription
-          ? await stripe.subscriptions.retrieve(String(invoice.subscription))
-          : null;
+        const subId = invoiceSubscriptionId(invoice);
+        const sub = subId ? await stripe.subscriptions.retrieve(subId) : null;
         const familyId = await familyIdForSubscription(sub);
         if (familyId) {
           // Stripe retries a failed payment several times, and each retry lands here. Only the FIRST
@@ -699,9 +713,8 @@ Deno.serve(async (req) => {
           await recordInvoiceInLedger(invoice, null);
           break;
         }
-        const sub = invoice.subscription
-          ? await stripe.subscriptions.retrieve(String(invoice.subscription))
-          : null;
+        const subId = invoiceSubscriptionId(invoice);
+        const sub = subId ? await stripe.subscriptions.retrieve(subId) : null;
         // One-off invoices with no subscription (the Expert-assist fee) carry the household in their own metadata.
         const familyId = (await familyIdForSubscription(sub)) || invoice.metadata?.family_id;
         // Only clears a household that was overdue -- does not touch one already active,
@@ -725,9 +738,10 @@ Deno.serve(async (req) => {
         // Sent by Stripe ahead of a renewal. Needs this event ticked on the webhook endpoint in the
         // Stripe dashboard; until it is, this case simply never runs.
         const invoice = event.data.object as Stripe.Invoice;
-        if (invoice.subscription) {
+        const upcomingSubId = invoiceSubscriptionId(invoice);
+        if (upcomingSubId) {
           const { data: fam } = await admin.from("families")
-            .select("id").eq("stripe_subscription_id", String(invoice.subscription)).maybeSingle();
+            .select("id").eq("stripe_subscription_id", upcomingSubId).maybeSingle();
           if (fam?.id) await lowerWorkflowSlotsBeforeRenewal(fam.id);
         }
         break;
