@@ -4879,7 +4879,16 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
       };
     }).filter(Boolean).sort((a,b)=>a.periodDate-b.periodDate);
   };
-  const togglePeriodPaid=async(event,period,currentlyPaid)=>{
+  // Which expenses get "Mark Paid". Premier (bill pay): the bills ORDANIS pays (pcm_responsible).
+  // Basic and Core (self-service, 2026-10-20): the household ticks off every bill it pays itself; the
+  // database allows that register for any plan unless the bill is marked as ORDANIS's to pay.
+  const tracksPaid=ev=>!ev._synthetic&&(billPay?!!ev.pcmResponsible:true);
+  // Unchecking is two steps: a paid record says who paid what and when, and one stray tap should not
+  // erase it. Marking paid stays one tap.
+  const confirmUnpaid=(what,paidAt,paidBy)=>window.confirm(
+    `Mark ${what} as unpaid?${paidAt?` It was marked paid on ${fmt(paidAt)}${paidBy?` by ${paidBy}`:""}.`:""} This clears that record.`);
+  const togglePeriodPaid=async(event,period,currentlyPaid,info={})=>{
+    if(currentlyPaid&&!confirmUnpaid(`${event.description||"this bill"} for ${info.label||"this period"}`,info.paidAt,info.paidBy))return;
     const marking=!currentlyPaid;
     const{error}=await sb.from("cash_flow_payment_log").upsert(
       {event_id:event.id,family_id:family.id,period,paid:marking,paid_at:marking?new Date().toISOString():null,paid_by:marking?(CURRENT_USER_LABEL||null):null},
@@ -5109,6 +5118,7 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
   };
   // Mark/unmark a PCM-responsible expense as paid — mirrors the tasks done/completed_by pattern.
   const togglePaid=async(ev)=>{
+    if(ev.paid&&!confirmUnpaid(ev.description||"this bill",ev.paidAt,ev.paidBy))return;
     const marking=!ev.paid;
     const{error}=await sb.from("cash_flow_events").update(marking?{paid:true,paid_at:new Date().toISOString(),paid_by:CURRENT_USER_LABEL||null}:{paid:false,paid_at:null,paid_by:null}).eq("id",ev.id);
     if(error)toast(error.message,"error");else{toast(marking?"Marked paid":"Marked unpaid");reload("cash_flow_events");}
@@ -5372,10 +5382,11 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
                 ?<Badge scheme={{bg:"#e0f5e9",text:"#0d5c2b",dot:"#18a850"}}>✓ Paid by {BRAND.short}</Badge>
                 :<Badge scheme={{bg:"#e8f0f8",text:B.navy,dot:B.navy}}>{BRAND.short} Pays</Badge>)}
               {isExpense&&billPay&&e.pcmResponsible&&!e._synthetic&&isRegisterFreq(e)&&<Badge scheme={{bg:"#e8f0f8",text:B.navy,dot:B.navy}}>{BRAND.short} Pays · {e.frequency}</Badge>}
+              {isExpense&&!billPay&&tracksPaid(e)&&!isRegisterFreq(e)&&e.paid&&<Badge scheme={{bg:"#e0f5e9",text:"#0d5c2b",dot:"#18a850"}}>✓ Paid</Badge>}
             </div>
             {e.description&&<div style={{fontSize:13,color:B.textMid,marginBottom:4}}>{e.description}</div>}
             <div style={{fontSize:11,color:B.textSoft}}>{fmt(e.startDate)}{e.endDate?` → ${fmt(e.endDate)}`:""}{!isExpense?` · ${treatLabel}`:""}</div>
-            {isExpense&&billPay&&e.pcmResponsible&&!e._synthetic&&!isRegisterFreq(e)&&e.paid&&e.paidAt&&<div style={{fontSize:11,color:"#0d5c2b",marginTop:3,fontWeight:600}}>✓ Paid {fmt(e.paidAt)}{e.paidBy?` · by ${e.paidBy}`:""}</div>}
+            {isExpense&&tracksPaid(e)&&!isRegisterFreq(e)&&e.paid&&e.paidAt&&<div style={{fontSize:11,color:"#0d5c2b",marginTop:3,fontWeight:600}}>✓ Paid {fmt(e.paidAt)}{e.paidBy?` · by ${e.paidBy}`:""}</div>}
           </div>
           <div style={{textAlign:"right",flexShrink:0}}>
             <div style={{fontSize:12,color:B.textSoft}}>{e.frequency==="once"?"Amount":"Per occurrence"}</div>
@@ -5405,7 +5416,7 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
           </div>}
         </div>}
         {/* Monthly/quarterly/annual payment register for PCM-responsible recurring expenses */}
-        {isExpense&&billPay&&e.pcmResponsible&&!e._synthetic&&isRegisterFreq(e)&&(()=>{
+        {isExpense&&tracksPaid(e)&&isRegisterFreq(e)&&(()=>{
           const periods=getRegisterPeriods(e);
           const paidCount=periods.filter(p=>p.paid).length;
           const overdueCount=periods.filter(p=>p.overdue).length;
@@ -5424,7 +5435,7 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
                     :p.overdue?<div style={{fontSize:10,color:"#8b1a1a",fontWeight:600}}>Overdue</div>
                     :<div style={{fontSize:10,color:B.textMute}}>Unpaid</div>}
                 </div>
-                {!readOnly&&<Btn small variant={p.paid?"ghost":"primary"} onClick={()=>togglePeriodPaid(e,p.periodKey,p.paid)}>{p.paid?"Mark Unpaid":"Mark Paid"}</Btn>}
+                {!readOnly&&<Btn small variant={p.paid?"ghost":"primary"} onClick={()=>togglePeriodPaid(e,p.periodKey,p.paid,{label:p.label,paidAt:p.paidAt,paidBy:p.paidBy})}>{p.paid?"Mark Unpaid":"Mark Paid"}</Btn>}
               </div>)}
             </div>}
           </div>;
@@ -5436,7 +5447,7 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
             <button onClick={()=>moveEvent(e.id,"down")} disabled={!canMoveDown} title="Move down" style={{background:"none",border:`1px solid ${B.border}`,borderRadius:6,padding:"4px 10px",cursor:canMoveDown?"pointer":"not-allowed",color:canMoveDown?B.navy:B.textMute,fontSize:13,fontFamily:"inherit",opacity:canMoveDown?1:0.4}}>↓</button>
           </div>
           <div style={{display:"flex",gap:6}}>
-            {isExpense&&billPay&&e.pcmResponsible&&!isRegisterFreq(e)&&<Btn small variant={e.paid?"ghost":"primary"} onClick={()=>togglePaid(e)}>{e.paid?"Mark Unpaid":"Mark Paid"}</Btn>}
+            {isExpense&&tracksPaid(e)&&!isRegisterFreq(e)&&<Btn small variant={e.paid?"ghost":"primary"} onClick={()=>togglePaid(e)}>{e.paid?"Mark Unpaid":"Mark Paid"}</Btn>}
             <Btn small variant="ghost" onClick={()=>setModal({type:"edit",event:e})}>Edit</Btn>
             <Btn small variant="danger" onClick={()=>{if(confirm("Delete this event?"))delEvent(e.id);}}>Delete</Btn>
           </div>
