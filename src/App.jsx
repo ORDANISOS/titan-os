@@ -9667,22 +9667,67 @@ function loadGoogleMapsPlaces(){
 // Same value/onChange contract as <Inp>, so it drops into a Field unchanged. Renders its own
 // <input> (not <Inp>, which isn't ref-forwarding) so the DOM node is available to hand to
 // google.maps.places.Autocomplete once the script loads.
+// Suggestions come from Places API (New) -- AutocompleteSuggestion -- drawn as our own list under our own
+// input. The older Autocomplete widget used here before needs the legacy Places API, which Google stopped
+// offering to new projects on 2025-03-01; on this project it failed with ApiNotActivatedMapError, and Google
+// then DISABLED the input and filled it with error icons, so nobody could type an address at all
+// (2026-10-20). Now any failure (no key, script blocked, API not enabled, quota) just leaves a plain text
+// box: typing an address must always work, suggestions are a convenience.
 function AddressInput({value,onChange,placeholder}){
-  const ref=useRef(null);
-  useEffect(()=>{
-    if(!GOOGLE_MAPS_API_KEY||!ref.current)return;
-    let autocomplete,cancelled=false;
-    loadGoogleMapsPlaces().then(()=>{
-      if(cancelled||!ref.current)return;
-      autocomplete=new window.google.maps.places.Autocomplete(ref.current,{types:["address"]});
-      autocomplete.addListener("place_changed",()=>{
-        const place=autocomplete.getPlace();
-        if(place&&place.formatted_address)onChange({target:{value:place.formatted_address}});
-      });
-    }).catch(()=>{ /* no key configured, or the script failed to load -- stays a plain text input */ });
-    return()=>{cancelled=true;};
-  },[]);
-  return <input ref={ref} type="text" style={inp} value={value} onChange={onChange} placeholder={placeholder} autoComplete="off"/>;
+  const[suggestions,setSuggestions]=useState([]);
+  const[open,setOpen]=useState(false);
+  const[active,setActive]=useState(-1);
+  const deadRef=useRef(!GOOGLE_MAPS_API_KEY); // true once Google has failed: stop asking
+  const tokenRef=useRef(null);
+  const timerRef=useRef(null);
+  const seqRef=useRef(0);
+  useEffect(()=>()=>clearTimeout(timerRef.current),[]);
+  const lookup=text=>{
+    clearTimeout(timerRef.current);
+    if(deadRef.current||String(text).trim().length<3){setSuggestions([]);setOpen(false);return;}
+    timerRef.current=setTimeout(async()=>{
+      const seq=++seqRef.current;
+      try{
+        await loadGoogleMapsPlaces();
+        const places=window.google?.maps?.places;
+        if(!places?.AutocompleteSuggestion){deadRef.current=true;return;}
+        if(!tokenRef.current)tokenRef.current=new places.AutocompleteSessionToken();
+        const{suggestions:found}=await places.AutocompleteSuggestion.fetchAutocompleteSuggestions({input:text,sessionToken:tokenRef.current});
+        if(seq!==seqRef.current)return; // a newer keystroke already asked
+        const list=(found||[]).map(x=>x.placePrediction&&x.placePrediction.text&&x.placePrediction.text.toString()).filter(Boolean).slice(0,5);
+        setSuggestions(list);setActive(-1);setOpen(list.length>0);
+      }catch(_e){
+        // Not enabled, blocked or over quota: stay a plain text box from here on.
+        deadRef.current=true;setSuggestions([]);setOpen(false);
+      }
+    },250);
+  };
+  const choose=text=>{
+    onChange({target:{value:text}});
+    setOpen(false);setSuggestions([]);
+    tokenRef.current=null; // one session per address picked
+  };
+  return <div style={{position:"relative"}}>
+    <input type="text" style={inp} value={value} placeholder={placeholder} autoComplete="off"
+      role="combobox" aria-expanded={open} aria-autocomplete="list"
+      onChange={e=>{onChange(e);lookup(e.target.value);}}
+      onBlur={()=>setTimeout(()=>setOpen(false),150)}
+      onKeyDown={e=>{
+        if(!open||!suggestions.length)return;
+        if(e.key==="ArrowDown"){e.preventDefault();setActive(i=>Math.min(i+1,suggestions.length-1));}
+        else if(e.key==="ArrowUp"){e.preventDefault();setActive(i=>Math.max(i-1,0));}
+        else if(e.key==="Enter"&&active>=0){e.preventDefault();choose(suggestions[active]);}
+        else if(e.key==="Escape"){setOpen(false);}
+      }}/>
+    {open&&<div role="listbox" style={{position:"absolute",left:0,right:0,top:"100%",marginTop:4,background:B.white,border:`1px solid ${B.border}`,
+      borderRadius:8,boxShadow:B.shadowMd,zIndex:50,overflow:"hidden"}}>
+      {suggestions.map((t,i)=><div key={t} role="option" aria-selected={i===active}
+        onMouseDown={e=>{e.preventDefault();choose(t);}} onMouseEnter={()=>setActive(i)}
+        style={{padding:"11px 13px",fontSize:13.5,color:B.text,cursor:"pointer",background:i===active?B.bg:B.white,
+          borderTop:i?`1px solid ${B.borderLight}`:"none"}}>{t}</div>)}
+      <div style={{padding:"4px 10px",fontSize:10,color:B.textMute,textAlign:"right"}}>powered by Google</div>
+    </div>}
+  </div>;
 }
 function PropertyQuickForm({onSave,onCancel,saving}){
   const mkInit=()=>({address:"",propertyType:PROP_TYPES[0],purchasePrice:"",purchaseDate:"",currentValue:"",notes:""});
