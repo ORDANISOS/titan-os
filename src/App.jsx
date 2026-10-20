@@ -811,7 +811,7 @@ const pctChange=(s,c)=>{const sv=Number(s)||0;const cv=Number(c)||0;if(!sv)retur
 
 const toClient=obj=>{
   if(!obj)return obj;
-  const m={family_id:"familyId",contact_id:"contactId",account_id:"accountId",account_period:"accountPeriod",as_of:"asOf",balance_as_of:"balanceAsOf",source_document_id:"sourceDocumentId",balance_source_document_id:"balanceSourceDocumentId",entered_by:"enteredBy",close_date:"closeDate",due_date:"dueDate",created_at:"createdAt",uploaded_at:"uploadedAt",advisor_name:"advisorName",advisor_email:"advisorEmail",owner_name:"ownerName",property_type:"propertyType",property_id:"propertyId",purchase_price:"purchasePrice",purchase_date:"purchaseDate",current_value:"currentValue",loan_balance:"loanBalance",interest_rate:"interestRate",loan_payment:"loanPayment",loan_maturity_date:"loanMaturityDate",loan_type:"loanType",rental_income:"rentalIncome",property_taxes:"propertyTaxes",flood_insurance:"floodInsurance",insurance_company:"insuranceCompany",insurance_premium:"insurancePremium",flood_insurance_company:"floodInsuranceCompany",flood_insurance_premium:"floodInsurancePremium",insurance_expiration:"insuranceExpiration",flood_insurance_expiration:"floodInsuranceExpiration",account_type:"accountType",starting_balance:"startingBalance",current_balance:"currentBalance",banker_name:"bankerName",account_advisor_name:"accountAdvisorName",account_advisor_phone:"accountAdvisorPhone",account_advisor_email:"accountAdvisorEmail",make_model:"makeModel",estimated_value:"estimatedValue",file_type:"fileType",extracted_text:"extractedText",reminder_days:"reminderDays",reminder_sent:"reminderSent",full_name:"fullName",file_path:"filePath",file_size:"fileSize",uploaded_by:"uploadedBy",event_type:"eventType",start_date:"startDate",end_date:"endDate",tax_treatment:"taxTreatment",filing_status:"filingStatus",state_tax_rate:"stateTaxRate",base_income:"baseIncome",cash_flow_settings:"cashFlowSettings",hoa_fee:"hoaFee",property_management_fee_pct:"propertyManagementFeePct",include_mortgage_in_cashflow:"includeMortgageInCashflow",sort_order:"sortOrder",note_id:"noteId",recurrence_interval:"recurrenceInterval",recurrence_unit:"recurrenceUnit",completed_at:"completedAt",completed_by:"completedBy",item_key:"itemKey",item_label:"itemLabel",item_type:"itemType",occurrence_date:"occurrenceDate",second_mortgage_balance:"secondMortgageBalance",second_mortgage_payment:"secondMortgagePayment",assistant_name:"assistantName",is_advisor:"isAdvisor",is_primary:"isPrimary",updated_at:"updatedAt",is_secondary:"isSecondary",pcm_responsible:"pcmResponsible",invited_at:"invitedAt",partner_kind:"partnerKind",business_partner_seats_stripe_item_id:"businessPartnerSeatsStripeItemId",user_id:"userId",paid_at:"paidAt",paid_by:"paidBy",vendor_family_contact_id:"vendorFamilyContactId",vendor_property_contact_id:"vendorPropertyContactId",event_id:"eventId",document_id:"documentId",downloaded_by:"downloadedBy",downloaded_at:"downloadedAt",owner_user_id:"ownerUserId",owner_email:"ownerEmail",owner_role:"ownerRole",prompt_type:"promptType",template_key:"templateKey",custom_prompt:"customPrompt",schedule_preset:"schedulePreset",schedule_dow:"scheduleDow",schedule_hour_utc:"scheduleHourUtc",last_run_at:"lastRunAt",last_run_status:"lastRunStatus",last_run_error:"lastRunError",data_source:"dataSource",can_run_scheduled_prompts:"canRunScheduledPrompts",property_section:"propertySection",expiry_date:"expiryDate",doc_type:"docType",mime_type:"mimeType"};
+  const m={family_id:"familyId",contact_id:"contactId",account_id:"accountId",account_period:"accountPeriod",as_of:"asOf",balance_as_of:"balanceAsOf",source_document_id:"sourceDocumentId",balance_source_document_id:"balanceSourceDocumentId",entered_by:"enteredBy",close_date:"closeDate",due_date:"dueDate",created_at:"createdAt",uploaded_at:"uploadedAt",advisor_name:"advisorName",advisor_email:"advisorEmail",owner_name:"ownerName",property_type:"propertyType",property_id:"propertyId",purchase_price:"purchasePrice",purchase_date:"purchaseDate",current_value:"currentValue",loan_balance:"loanBalance",interest_rate:"interestRate",loan_payment:"loanPayment",loan_maturity_date:"loanMaturityDate",loan_type:"loanType",rental_income:"rentalIncome",property_taxes:"propertyTaxes",flood_insurance:"floodInsurance",insurance_company:"insuranceCompany",insurance_premium:"insurancePremium",flood_insurance_company:"floodInsuranceCompany",flood_insurance_premium:"floodInsurancePremium",insurance_expiration:"insuranceExpiration",policy_number:"policyNumber",coverage_amount:"coverageAmount",valuable_id:"valuableId",flood_insurance_expiration:"floodInsuranceExpiration",account_type:"accountType",starting_balance:"startingBalance",current_balance:"currentBalance",banker_name:"bankerName",account_advisor_name:"accountAdvisorName",account_advisor_phone:"accountAdvisorPhone",account_advisor_email:"accountAdvisorEmail",make_model:"makeModel",estimated_value:"estimatedValue",file_type:"fileType",extracted_text:"extractedText",reminder_days:"reminderDays",reminder_sent:"reminderSent",full_name:"fullName",file_path:"filePath",file_size:"fileSize",uploaded_by:"uploadedBy",event_type:"eventType",start_date:"startDate",end_date:"endDate",tax_treatment:"taxTreatment",filing_status:"filingStatus",state_tax_rate:"stateTaxRate",base_income:"baseIncome",cash_flow_settings:"cashFlowSettings",hoa_fee:"hoaFee",property_management_fee_pct:"propertyManagementFeePct",include_mortgage_in_cashflow:"includeMortgageInCashflow",sort_order:"sortOrder",note_id:"noteId",recurrence_interval:"recurrenceInterval",recurrence_unit:"recurrenceUnit",completed_at:"completedAt",completed_by:"completedBy",item_key:"itemKey",item_label:"itemLabel",item_type:"itemType",occurrence_date:"occurrenceDate",second_mortgage_balance:"secondMortgageBalance",second_mortgage_payment:"secondMortgagePayment",assistant_name:"assistantName",is_advisor:"isAdvisor",is_primary:"isPrimary",updated_at:"updatedAt",is_secondary:"isSecondary",pcm_responsible:"pcmResponsible",invited_at:"invitedAt",partner_kind:"partnerKind",business_partner_seats_stripe_item_id:"businessPartnerSeatsStripeItemId",user_id:"userId",paid_at:"paidAt",paid_by:"paidBy",vendor_family_contact_id:"vendorFamilyContactId",vendor_property_contact_id:"vendorPropertyContactId",event_id:"eventId",document_id:"documentId",downloaded_by:"downloadedBy",downloaded_at:"downloadedAt",owner_user_id:"ownerUserId",owner_email:"ownerEmail",owner_role:"ownerRole",prompt_type:"promptType",template_key:"templateKey",custom_prompt:"customPrompt",schedule_preset:"schedulePreset",schedule_dow:"scheduleDow",schedule_hour_utc:"scheduleHourUtc",last_run_at:"lastRunAt",last_run_status:"lastRunStatus",last_run_error:"lastRunError",data_source:"dataSource",can_run_scheduled_prompts:"canRunScheduledPrompts",property_section:"propertySection",expiry_date:"expiryDate",doc_type:"docType",mime_type:"mimeType"};
   return Object.fromEntries(Object.entries(obj).map(([k,v])=>[m[k]||k,v]));
 };
 
@@ -3489,11 +3489,11 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
 
   // Add valuable
   const addValuable=async(f)=>{
-    const{error}=await sb.from("valuables").insert({family_id:family.id,category:f.category,description:f.description,make_model:f.makeModel||null,year:f.year||null,estimated_value:numOrNull(f.estimatedValue),insured:!!f.insured,insurance_company:f.insuranceCompany||null,notes:f.notes||null});
+    const{error}=await sb.from("valuables").insert({family_id:family.id,...valuableRowFromForm(f)});
     if(error){toast(error.message,"error");return false;}else{toast("Valuable added. One more thing safely on file.");reload("valuables");}
   };
   const editValuable=async(id,f)=>{
-    const{error}=await sb.from("valuables").update({category:f.category,description:f.description,make_model:f.makeModel||null,year:f.year||null,estimated_value:numOrNull(f.estimatedValue),insured:!!f.insured,insurance_company:f.insuranceCompany||null,notes:f.notes||null}).eq("id",id);
+    const{error}=await sb.from("valuables").update(valuableRowFromForm(f)).eq("id",id);
     if(error){toast(error.message,"error");return false;}else{toast("Valuable updated. All saved.");reload("valuables");}
   };
   const delValuable=async(id)=>{if(!confirm("Delete this valuable? This can't be undone."))return;
@@ -3959,6 +3959,8 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
                   <div style={{fontWeight:700,color:B.navy,fontSize:13}}>{v.description}</div>
                   {v.makeModel&&<div style={{fontSize:12,color:B.textSoft}}>{v.makeModel}{v.year?` · ${v.year}`:""}</div>}
                   {v.insured?<div style={{fontSize:11,color:"#18a850",fontWeight:600,marginTop:3}}>✓ Insured{v.insuranceCompany?` — ${v.insuranceCompany}`:""}<DocLink doc={valuablesPolicyDoc()} toast={toast} label="📄 policy"/></div>:<div style={{fontSize:11,color:"#b4551f",fontWeight:600,marginTop:3}}>⚠ Not scheduled<DocLink doc={valuablesPolicyDoc()} toast={toast} label="📄 policy"/></div>}
+                  <ValuablePolicyDetails v={v} doc={(data.documents||[]).find(d=>d.valuableId===v.id&&d.propertySection==="valuable_policy")} toast={toast}
+                    onAttach={canEdit?()=>{setAttachIntent({valuableId:v.id,section:"valuable_policy"});setActiveTab("vault");}:null}/>
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
                   <div style={{fontSize:15,fontWeight:700,color:B.navy}}>{fmtMoney(v.estimatedValue)}</div>
@@ -4459,6 +4461,40 @@ function PropertyForm({initial,onSave,onClose,canExtract=false}){
 }
 
 // ── VALUABLE FORM ─────────────────────────────────────────────────────────────
+// A valuable's own policy, under its "Insured" line: number, premium, coverage, when it renews (flagged
+// when it is within 60 days or past), and the policy document in CHRIS, or a link to attach one.
+function ValuablePolicyDetails({v,doc,toast,onAttach}){
+  if(!v.insured)return null;
+  const parts=[v.policyNumber&&`Policy ${v.policyNumber}`,
+    v.coverageAmount!=null&&v.coverageAmount!==""&&`Covers ${fmtMoney(v.coverageAmount)}`,
+    v.insurancePremium!=null&&v.insurancePremium!==""&&`${fmtMoney(v.insurancePremium)}/yr`].filter(Boolean);
+  let due=null;
+  if(v.insuranceExpiration){
+    const d=parseLocalDate(v.insuranceExpiration);const today=new Date();today.setHours(0,0,0,0);
+    const days=Math.round((d-today)/86400000);
+    const when=d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+    due=days<0?{t:`Expired ${when}`,c:"#8b1a1a"}:days<=60?{t:`Renews in ${days} day${days===1?"":"s"} (${when})`,c:"#8a5c00"}:{t:`Renews ${when}`,c:B.textSoft};
+  }
+  if(!parts.length&&!due&&!doc&&!onAttach)return null;
+  return <div style={{fontSize:11.5,color:B.textSoft,marginTop:4,lineHeight:1.5}}>
+    {parts.length>0&&<span>{parts.join(" · ")}</span>}
+    {due&&<span style={{color:due.c,fontWeight:due.c===B.textSoft?400:700}}>{parts.length?" · ":""}{due.t}</span>}
+    {doc?<DocLink doc={doc} toast={toast} label="📄 this item's policy"/>
+      :onAttach?<button onClick={onAttach} style={{background:"none",border:"none",color:B.navyMid,fontSize:11.5,cursor:"pointer",fontFamily:"inherit",fontWeight:600,padding:0,marginLeft:(parts.length||due)?8:0}}>📎 Attach policy</button>:null}
+  </div>;
+}
+
+// The columns a valuable form writes. Shared by the staff and client sides so the two can never drift.
+// Policy fields are only kept while "Insured" is ticked: unticking clears them rather than leaving a
+// stale policy number behind on an item that is no longer covered.
+function valuableRowFromForm(f){
+  const ins=!!f.insured;
+  return{category:f.category,description:f.description,make_model:f.makeModel||null,year:f.year||null,
+    estimated_value:numOrNull(f.estimatedValue),insured:ins,insurance_company:ins?(f.insuranceCompany||null):null,
+    policy_number:ins?(String(f.policyNumber||"").trim().slice(0,80)||null):null,
+    insurance_premium:ins?numOrNull(f.insurancePremium):null,coverage_amount:ins?numOrNull(f.coverageAmount):null,
+    insurance_expiration:ins?(f.insuranceExpiration||null):null,notes:f.notes||null};
+}
 function ValuableForm({initial,onSave,onClose}){
   const[f,setF]=useState(initial||{category:"Car / Vehicle",description:"",makeModel:"",year:"",estimatedValue:"",insured:false,insuranceCompany:"",notes:""});
   const[saving,setSaving]=useState(false);
@@ -4473,7 +4509,17 @@ function ValuableForm({initial,onSave,onClose}){
     <Field label="Description" required><Inp placeholder="2023 Ferrari Roma" value={f.description} onChange={set("description")}/></Field>
     <Grid2><Field label="Make / Model" optional><Inp value={f.makeModel||""} onChange={set("makeModel")}/></Field><Field label="Estimated Value" optional><MoneyInput value={f.estimatedValue||""} onChange={set("estimatedValue")}/></Field></Grid2>
     <div style={{marginBottom:14}}><label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"10px 14px",background:f.insured?"#e8f0f8":B.bg,borderRadius:8,border:`1px solid ${f.insured?B.navyMid:B.border}`}}><input type="checkbox" checked={!!f.insured} onChange={e=>setF(p=>({...p,insured:e.target.checked}))} style={{width:16,height:16,accentColor:B.navy}}/><span style={{fontSize:13,color:B.navy,fontWeight:600}}>Insured</span></label></div>
-    {f.insured&&<Field label="Insurance Company" optional><Inp value={f.insuranceCompany||""} onChange={set("insuranceCompany")}/></Field>}
+    {f.insured&&<>
+      <Grid2>
+        <Field label="Insurance Company" optional><Inp value={f.insuranceCompany||""} onChange={set("insuranceCompany")}/></Field>
+        <Field label="Policy Number" optional><Inp maxLength={80} value={f.policyNumber||""} onChange={set("policyNumber")}/></Field>
+      </Grid2>
+      <Grid2>
+        <Field label="Annual Premium" optional><MoneyInput value={f.insurancePremium||""} onChange={set("insurancePremium")}/></Field>
+        <Field label="Coverage Amount" optional><MoneyInput value={f.coverageAmount||""} onChange={set("coverageAmount")}/></Field>
+      </Grid2>
+      <Field label="Renewal / Expiration Date" optional><Inp type="date" value={f.insuranceExpiration||""} onChange={set("insuranceExpiration")}/></Field>
+    </>}
     <Field label="Notes" optional><Tex value={f.notes||""} onChange={set("notes")}/></Field>
     {showReq&&<ReqHint/>}
     {err&&<div style={{fontSize:12,color:"#8b1a1a",background:"#fff5f5",border:"1px solid #f3c2c2",borderRadius:8,padding:"8px 10px",marginTop:8}}>{err}</div>}
@@ -8400,6 +8446,8 @@ const DOC_SECTIONS=[
   {key:"flood_dec",         label:"Flood Declarations",       scope:"property", suggestCategory:"Insurance"},
   {key:"rental",            label:"Rental Agreement",         scope:"property", suggestCategory:"Real Estate"},
   {key:"valuables_schedule",label:"Valuables Schedule",       scope:"family",   suggestCategory:"Insurance"},
+  // One specific valuable's policy (documents.valuable_id), e.g. the rider for a watch or a boat policy.
+  {key:"valuable_policy",   label:"Valuable Insurance Policy",scope:"valuable", suggestCategory:"Insurance"},
 ];
 const sectionLabel=k=>DOC_SECTIONS.find(s=>s.key===k)?.label||k;
 
@@ -9013,8 +9061,10 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
   const[extracting,setExtracting]=useState(false);
   // Optional link to a property section / valuables schedule.
   const[linkPropertyId,setLinkPropertyId]=useState("");
+  const[linkValuableId,setLinkValuableId]=useState("");
   const[linkSection,setLinkSection]=useState("");
   const[properties,setProperties]=useState([]);
+  const[valuablesList,setValuablesList]=useState([]);
   // Set when the chosen section already has a document, so we ask before
   // displacing it rather than silently swapping what the client sees.
   const[conflictDoc,setConflictDoc]=useState(null);
@@ -9035,6 +9085,8 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     if(!familyId){setProperties([]);return;}
     sb.from("properties").select("id,name,address,city").eq("family_id",familyId)
       .then(({data})=>setProperties((data||[]).map(toClient)));
+    sb.from("valuables").select("id,description,category").eq("family_id",familyId).order("description")
+      .then(({data})=>setValuablesList((data||[]).map(toClient)));
   },[familyId]);
 
   // Arriving from the paperclip on a property section: open the upload form with
@@ -9044,6 +9096,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     const sec=DOC_SECTIONS.find(x=>x.key===attachIntent.section);
     setLinkSection(attachIntent.section||"");
     setLinkPropertyId(sec&&sec.scope==="property"?(attachIntent.propertyId||""):"");
+    setLinkValuableId(sec&&sec.scope==="valuable"?(attachIntent.valuableId||""):"");
     if(sec&&sec.suggestCategory)setCategory(sec.suggestCategory);
     setOpenFolder(null);
     setModal("upload");
@@ -9052,21 +9105,34 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
 
   const propLabel=p=>p.name||[p.address,p.city].filter(Boolean).join(", ")||"Property";
   // The document currently occupying a given section, ignoring the one being edited.
-  const occupantOf=(section,propertyId,exceptId)=>docs.find(d=>
+  const occupantOf=(section,propertyId,exceptId,valuableId)=>docs.find(d=>
     d.propertySection===section&&
-    (section==="valuables_schedule"?true:d.propertyId===propertyId)&&
+    (section==="valuables_schedule"?true:section==="valuable_policy"?d.valuableId===valuableId:d.propertyId===propertyId)&&
     d.id!==exceptId);
+  const valuableLabel=v=>v.description||v.category||"Valuable";
+  // The record a section links to: a property, a valuable, or (family scope) neither.
+  const linkTargets=section=>{
+    const sc=DOC_SECTIONS.find(x=>x.key===section)?.scope;
+    return{propId:sc==="property"?(linkPropertyId||null):null,valId:sc==="valuable"?(linkValuableId||null):null};
+  };
+  const linkProblem=()=>{
+    const sc=DOC_SECTIONS.find(x=>x.key===linkSection)?.scope;
+    if(sc==="property"&&!linkPropertyId)return "Choose a property to complete the link, or set Section back to \"Not linked\".";
+    if(sc==="valuable"&&!linkValuableId)return "Choose a valuable to complete the link, or set Section back to \"Not linked\".";
+    return null;
+  };
   // Selecting a section implies a CHRIS folder; only pre-fill it if the user
   // hasn't deliberately chosen one already.
   const chooseSection=(key,touchedCategory)=>{
     setLinkSection(key);
     const s=DOC_SECTIONS.find(x=>x.key===key);
     if(s&&s.suggestCategory&&!touchedCategory)setCategory(s.suggestCategory);
-    if(s&&s.scope==="family")setLinkPropertyId("");
+    if(s&&s.scope!=="property")setLinkPropertyId("");
+    if(s&&s.scope!=="valuable")setLinkValuableId("");
   };
   const resetForm=()=>{
     setName("");setDescription("");setCategory("General");setFile(null);autoNameRef.current="";autoDescRef.current="";
-    setLinkPropertyId("");setLinkSection("");setConflictDoc(null);
+    setLinkPropertyId("");setLinkValuableId("");setLinkSection("");setConflictDoc(null);
     setSuggestion(null);setExtractedText(null);setExtracting(false);setCreatingSuggested(false);
     setTypedCategory(null);setTypedCategoryErr("");
   };
@@ -9196,8 +9262,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     if(!file||!name.trim()||extracting)return;
     const fileProblem=docFileProblem(file);
     if(fileProblem){toast(fileProblem,"error");return;}
-    {const sec0=DOC_SECTIONS.find(s=>s.key===linkSection);
-     if(sec0&&sec0.scope==="property"&&!linkPropertyId){toast("Choose a property to complete the link, or set Section back to \"Not linked\".","error");return;}}
+    {const lp=linkProblem();if(lp){toast(lp,"error");return;}}
     setUploading(true);
     try{
       // Upload file to Supabase storage
@@ -9216,16 +9281,16 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
       // Prior-year tax bills and expired policies still have real value, so they
       // stay in CHRIS — they just stop being the one shown on the card.
       const section=linkSection||null;
-      const propId=section&&DOC_SECTIONS.find(s=>s.key===section)?.scope==="property"?(linkPropertyId||null):null;
+      const{propId,valId}=section?linkTargets(section):{propId:null,valId:null};
       let displaced=null;
       if(section){
-        const occ=occupantOf(section,propId);
+        const occ=occupantOf(section,propId,undefined,valId);
         if(occ){
           await sb.from("documents").update({property_section:null}).eq("id",occ.id);
           displaced=occ.name;
         }
       }
-      const{error:dbError}=await sb.from("documents").insert({family_id:familyId||null,name,description:description||null,category,file_path:path,file_size:file.size,file_type:file.type||ext,extracted_text:extractedText,uploaded_by:CURRENT_USER_LABEL||null,property_id:propId,property_section:section});
+      const{error:dbError}=await sb.from("documents").insert({family_id:familyId||null,name,description:description||null,category,file_path:path,file_size:file.size,file_type:file.type||ext,extracted_text:extractedText,uploaded_by:CURRENT_USER_LABEL||null,property_id:propId,valuable_id:valId,property_section:section});
       if(dbError)throw new Error(dbError.message);
       toast(displaced
         ?`Uploaded and linked. "${displaced}" is still in CHRIS, no longer linked.`
@@ -9273,25 +9338,24 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     if(reload)reload("documents");
   };
 
-  const openEdit=doc=>{setName(doc.name||"");setDescription(doc.description||"");setCategory(doc.category||"General");setLinkSection(doc.propertySection||"");setLinkPropertyId(doc.propertyId||"");setConflictDoc(null);setSuggestion(null);setExtractedText(null);setModal({edit:doc});};
+  const openEdit=doc=>{setName(doc.name||"");setDescription(doc.description||"");setCategory(doc.category||"General");setLinkSection(doc.propertySection||"");setLinkPropertyId(doc.propertyId||"");setLinkValuableId(doc.valuableId||"");setConflictDoc(null);setSuggestion(null);setExtractedText(null);setModal({edit:doc});};
   const saveEdit=async()=>{
     const doc=modal?.edit;if(!doc||!name.trim())return;
-    {const sec0=DOC_SECTIONS.find(s=>s.key===linkSection);
-     if(sec0&&sec0.scope==="property"&&!linkPropertyId){toast("Choose a property to complete the link, or set Section back to \"Not linked\".","error");return;}}
+    {const lp=linkProblem();if(lp){toast(lp,"error");return;}}
     setUploading(true);
     const section=linkSection||null;
-    const propId=section&&DOC_SECTIONS.find(s=>s.key===section)?.scope==="property"?(linkPropertyId||null):null;
+    const{propId,valId}=section?linkTargets(section):{propId:null,valId:null};
     // Same rule as upload: the document being displaced is unlinked, never
     // deleted, so history stays in CHRIS.
     let displaced=null;
     if(section){
-      const occ=occupantOf(section,propId,doc.id);
+      const occ=occupantOf(section,propId,doc.id,valId);
       if(occ){
         await sb.from("documents").update({property_section:null}).eq("id",occ.id);
         displaced=occ.name;
       }
     }
-    const{error}=await sb.from("documents").update({name:name.trim(),description:description||null,category,property_id:propId,property_section:section}).eq("id",doc.id);
+    const{error}=await sb.from("documents").update({name:name.trim(),description:description||null,category,property_id:propId,valuable_id:valId,property_section:section}).eq("id",doc.id);
     if(error){toast(error.message,"error");setUploading(false);return;}
     toast(displaced?`Saved. "${displaced}" is still in CHRIS, no longer linked.`:"Document updated");
     setModal(null);resetForm();
@@ -9306,7 +9370,9 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     if(!familyId)return null;
     const sec=DOC_SECTIONS.find(s=>s.key===linkSection);
     const needsProperty=sec&&sec.scope==="property";
-    const occ=linkSection&&(!needsProperty||linkPropertyId)?occupantOf(linkSection,needsProperty?linkPropertyId:null,exceptId):null;
+    const needsValuable=sec&&sec.scope==="valuable";
+    const occ=linkSection&&(!needsProperty||linkPropertyId)&&(!needsValuable||linkValuableId)
+      ?occupantOf(linkSection,needsProperty?linkPropertyId:null,exceptId,needsValuable?linkValuableId:null):null;
     return <>
       <SectionLabel>Link to a record (optional)</SectionLabel>
       <Grid2>
@@ -9322,7 +9388,15 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
             {properties.map(p=><option key={p.id} value={p.id}>{propLabel(p)}</option>)}
           </Sel>
         </Field>}
+        {needsValuable&&<Field label="Valuable">
+          <Sel value={linkValuableId} onChange={e=>setLinkValuableId(e.target.value)}>
+            <option value="">Select a valuable…</option>
+            {valuablesList.map(v=><option key={v.id} value={v.id}>{valuableLabel(v)}</option>)}
+          </Sel>
+        </Field>}
       </Grid2>
+      {needsValuable&&linkSection&&!linkValuableId&&
+        <div style={{fontSize:11.5,color:"#8b1a1a",marginTop:-6,marginBottom:12}}>Choose a valuable to complete the link.</div>}
       {needsProperty&&linkSection&&!linkPropertyId&&
         <div style={{fontSize:11.5,color:"#8b1a1a",marginTop:-6,marginBottom:12}}>Choose a property to complete the link.</div>}
       {occ&&<div style={{fontSize:11.5,color:B.navy,background:"rgba(206,182,132,0.16)",border:`1px solid ${B.gold}`,borderRadius:8,padding:"9px 12px",marginBottom:12,lineHeight:1.5}}>
@@ -10400,6 +10474,18 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     if(error)toast(error.message,"error");else{toast("Property removed");await reload("properties");}
   };
   const startPropertyAttach=(propertyId,section)=>{setPropAttachIntent({propertyId,section});setActiveTab("documents");};
+  // Valuables, self-serve: edit (with the policy details) and remove, same columns as the staff side.
+  const[editingValuable,setEditingValuable]=useState(null);
+  const editClientValuable=async(id,f)=>{
+    const{error}=await sb.from("valuables").update(valuableRowFromForm(f)).eq("id",id).eq("family_id",family.id);
+    if(error){toast(error.message,"error");return false;}
+    toast("Valuable updated. All saved.");await reload("valuables");
+  };
+  const delClientValuable=async v=>{
+    if(!confirm(`Remove ${v.description||"this valuable"}? Its documents stay in CHRIS. This can't be undone.`))return;
+    const{error}=await sb.from("valuables").delete().eq("id",v.id).eq("family_id",family.id);
+    if(error)toast(error.message,"error");else{toast("Valuable removed");await reload("valuables");}
+  };
   // Vendors and service providers on a property (property_contacts), self-serve households only, same
   // form and columns as the staff side.
   const[vendorModal,setVendorModal]=useState(null); // {propertyId, contact?}
@@ -10894,6 +10980,9 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         {addValuableOpen&&<Modal title="Add a valuable" onClose={()=>setAddValuableOpen(false)}>
           <ValuableQuickForm saving={savingQuickAdd} onCancel={()=>setAddValuableOpen(false)} onSave={runQuickAdd(addValuable,()=>setAddValuableOpen(false))}/>
         </Modal>}
+        {editingValuable&&clientSelfServe&&<Modal title="Edit valuable" onClose={()=>setEditingValuable(null)}>
+          <ValuableForm initial={editingValuable} onSave={f=>editClientValuable(editingValuable.id,f)} onClose={()=>setEditingValuable(null)}/>
+        </Modal>}
         <div style={{marginBottom:20}}/>
         {valuables.length===0?<Empty text="No valuables on file yet."/>:VALUABLE_CATS.map(cat=>{
           // "Other" absorbs unrecognised categories so nothing is hidden.
@@ -10906,8 +10995,16 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
                 <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{v.description}</div>
                 {v.makeModel&&<div style={{fontSize:12,color:B.textSoft}}>{v.makeModel}{v.year?` · ${v.year}`:""}</div>}
                 {v.insured?<div style={{fontSize:11,color:"#18a850",fontWeight:600,marginTop:3}}>✓ Insured{v.insuranceCompany?` — ${v.insuranceCompany}`:""}<DocLink doc={valuablesPolicyDoc()} toast={toast} label="📄 policy"/></div>:<div style={{fontSize:11,color:"#b4551f",fontWeight:600,marginTop:3}}>⚠ Not scheduled<DocLink doc={valuablesPolicyDoc()} toast={toast} label="📄 policy"/></div>}
+                <ValuablePolicyDetails v={v} doc={(data.documents||[]).find(d=>d.valuableId===v.id&&d.propertySection==="valuable_policy")} toast={toast}
+                  onAttach={clientSelfServe?()=>{setPropAttachIntent({valuableId:v.id,section:"valuable_policy"});setActiveTab("documents");}:null}/>
               </div>
-              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:B.navy,fontWeight:600}}>{fmtMoney(v.estimatedValue)}</div>
+              <div style={{textAlign:"right",flexShrink:0}}>
+                <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:B.navy,fontWeight:600}}>{fmtMoney(v.estimatedValue)}</div>
+                {clientSelfServe&&<div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:4}}>
+                  <button onClick={()=>setEditingValuable(v)} style={{background:"none",border:"none",color:B.navyMid,fontSize:12,cursor:"pointer",fontFamily:"inherit",fontWeight:600,padding:0}}>Edit</button>
+                  <button onClick={()=>delClientValuable(v)} style={{background:"none",border:"none",color:B.textMute,fontSize:12,cursor:"pointer",fontFamily:"inherit",padding:0}}>Remove</button>
+                </div>}
+              </div>
             </div>)}
           </div>;
         })}
