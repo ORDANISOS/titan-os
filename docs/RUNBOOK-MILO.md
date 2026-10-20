@@ -3,13 +3,16 @@
 MILO = Marketing Intelligence, Leads & Outreach. Front end: `~/Documents/GitHub/ordanis-milo` (local repo, no remote yet).
 Back end (this repo): `supabase/functions/milo-command`, `milo-social`, `milo-speak`, migration `20261019120000_milo_marketing.sql`.
 
-## Status (2026-10-19)
+## Status (2026-10-20)
 | Step | Demo (`tkryueqzvgcigvxgjzsp`) | Production (`xreeruxuwtmjhvvxvjts`) |
 |---|---|---|
-| Migration 20261019120000 | applied, verified (RLS, grants, Vault secret) | not applied |
-| milo-command / milo-social / milo-speak | deployed (milo-social verify_jwt off) | not deployed |
-| Marketing pages (`milo_pages`) | 4 live pages loaded | not loaded |
-| Cron `milo-hourly` (minute 7) | scheduled, test run returned 200 | not scheduled |
+| Migration 20261019120000 (MILO) | applied, verified (RLS, grants, Vault secret) | applied, verified, recorded 2026-10-20 |
+| Migration 20261020120000 (signup attribution) | applied, recorded | applied, verified, recorded 2026-10-20 |
+| public-signup / stripe-webhook (attribution) | deployed | deployed 2026-10-20 (v32 / v48), JWT off; rollback copies of v31/v47 saved |
+| milo-command / milo-social / milo-speak | deployed (milo-social verify_jwt off) | deployed 2026-10-20, gates checked |
+| Marketing pages (`milo_pages`) | 4 live pages loaded | 4 pages loaded 2026-10-20 (hash-checked) |
+| Cron `milo-hourly` (minute 7) | scheduled, test run returned 200 | job 9, scheduled 2026-10-20, test run returned 200 |
+| `MILO_APP_ORIGINS` | default | Will to set to `https://milo.ordanisos.com` |
 | Instagram / LinkedIn app keys | not set (Connect shows "waiting on keys") | not set |
 | ElevenLabs voice | not set on demo (device voice) | shares ELEVENLABS_API_KEY with ELIOT |
 | Front end hosting | local only | Vercel project + milo.ordanisos.com not created |
