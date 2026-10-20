@@ -25,6 +25,12 @@ verify_jwt = false
 [functions.send-task-reminders]
 verify_jwt = false
 
+# run-scheduled-prompts: called hourly by cron job 1 with the x-cron-secret header (Vault cron_secret) and no
+# JWT. The function checks the secret (or the service key) itself. With JWT verification on, the gateway
+# refused every scheduled call before it reached the function (found 2026-10-20).
+[functions.run-scheduled-prompts]
+verify_jwt = false
+
 # milo-social: Instagram and LinkedIn send the browser back here after sign-in (OAuth callback),
 # with no Supabase session. It is protected by a one-time state value tied to the admin who started
 # the connection (see milo_oauth_states), not by a JWT.

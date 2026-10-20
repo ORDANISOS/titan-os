@@ -378,6 +378,11 @@ Deno.serve(async (req) => {
       // @ts-ignore -- managed_payments is a newer Checkout Session field not yet in this SDK
       // version's TypeScript types, but it is a real, documented API parameter.
       managed_payments: { enabled: true },
+      // Promotion codes (owner's decision, 2026-10-20): a "3 months free" code and a full complimentary
+      // code, both created in the Stripe dashboard. Checkout shows an "Add promotion code" box. The card is
+      // still collected (Stripe's default), so a 3-months-free household is billed normally from month 4
+      // without having to come back; a fully comped one has a card on file but is never charged.
+      allow_promotion_codes: true,
       success_url,
       cancel_url,
       // No family_id yet -- these are what stripe-webhook's checkout.session.completed handler
