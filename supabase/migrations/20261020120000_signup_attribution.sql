@@ -33,6 +33,9 @@ alter table public.signup_attribution enable row level security;
 
 revoke all on public.signup_attribution from public, anon, authenticated;
 grant select on public.signup_attribution to authenticated;
+-- public-signup and stripe-webhook write as service_role. Granted explicitly: from 2026-10-30 Supabase no longer
+-- auto-grants Data API access on new public tables.
+grant select, insert, update, delete on public.signup_attribution to service_role;
 
 drop policy if exists signup_attribution_admin_read on public.signup_attribution;
 create policy signup_attribution_admin_read on public.signup_attribution

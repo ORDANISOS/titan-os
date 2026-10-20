@@ -186,6 +186,13 @@ revoke all on public.milo_spend, public.milo_budgets, public.milo_pages, public.
               public.milo_social_daily, public.milo_social_posts, public.milo_oauth_states
   from anon, authenticated;
 
+-- The edge functions (milo-command, milo-social) read and write every MILO table as service_role.
+-- Granted explicitly: from 2026-10-30 Supabase no longer auto-grants Data API access on new public tables.
+grant select, insert, update, delete on public.milo_spend, public.milo_budgets, public.milo_pages,
+  public.milo_social_accounts, public.milo_social_daily, public.milo_social_posts, public.milo_oauth_states,
+  public.milo_briefings, public.milo_push_subscriptions
+  to service_role;
+
 drop policy if exists milo_briefings_own_read on public.milo_briefings;
 create policy milo_briefings_own_read on public.milo_briefings
   for select to authenticated using (user_id = auth.uid());
