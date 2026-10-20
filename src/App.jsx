@@ -1500,6 +1500,10 @@ function MfaGate({mode,factorId,role,onDone,onSignOut}){
   const signOut=<button type="button" onClick={onSignOut} style={{display:"block",margin:"16px auto 0",background:"none",border:"none",color:B.textSoft,fontSize:12,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>Sign out</button>;
   return <div style={{minHeight:"100vh",background:B.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",padding:20}}>
     <div style={MFA_CARD}>
+      {/* Same stacked lockup as the login screen (and the firm's own logo on a white-label host), so the
+          step right after the password still reads as ORDANIS rather than a bare utility page. */}
+      <div style={{margin:"0 auto 18px",maxWidth:300}}><PCMLogo/></div>
+      <div style={{height:1,background:B.borderLight,margin:"0 0 20px"}}/>
       <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:6}}>{mode==="enroll"?"Set up two-step sign-in":mode==="error"?"Two-step sign-in":"Enter your code"}</div>
       {mode==="enroll"&&<>
         <div style={{fontSize:13,color:B.textSoft,marginBottom:16,lineHeight:1.5}}>{ROLE_LABELS[role]||"Team"} accounts can see many households, so ORDANIS asks for a code from your phone each time you sign in. This takes about a minute, once.</div>
