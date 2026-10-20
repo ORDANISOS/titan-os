@@ -39,6 +39,11 @@ Owner: Will Perez (wperez@pcmfamilyoffice.com), PCM Family Office / Ordanis OS L
   verification OFF; pin `npm:@supabase/supabase-js@2.49.4`. Before replacing a function, read production's deployed source and
   diff it with the repo file (demo's assistant drifted once). Save the old source for rollback.
 - Security-definer functions: `revoke ... from public, anon; grant execute ... to authenticated`. Check RLS on every new table.
+- Table grants (Supabase change, 2026-10-30): new tables in `public` no longer get Data API grants automatically (existing tables
+  keep theirs; it also hits fresh rebuilds and branches). Every migration that creates a table grants explicitly, least privilege:
+  `service_role` select/insert/update/delete (server functions); `authenticated` only what the app needs, RLS still filtering;
+  `anon` nothing unless the table is truly public. Never copy Supabase's template that grants select to anon. A migration
+  applied after 2026-10-30 without grants gives "permission denied" to the app and functions.
 - Plan data lives in `plan_features` (Basic $15/5 GB no workflows; Core $100/15 GB, 10 workflows then $8, advisor seats + white label,
   optional Expert on one workflow $25 one time via `expert_assist_price`; Premier $500, named Expert, bill pay, unlimited workflows).
   Firm rate card (Core $1,000 / Premier $2,000, fees) is separate and is not for client or OpenArc material.
