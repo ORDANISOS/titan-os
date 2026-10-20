@@ -273,6 +273,42 @@ function toE164(raw) {
   return d.length === 10 && /^[2-9]\d{2}[2-9]\d{6}$/.test(d) ? `+1${d}` : null;
 }
 
+// Marketing attribution. A campaign link lands here as /signup?utm_campaign=...&utm_source=...; the tags are
+// kept in sessionStorage so they survive the Plans -> Account steps and a return from a cancelled Stripe
+// Checkout (cancel_url is plain /signup). They are short marketing tags only: anything that looks like an
+// email address is dropped, odd characters are stripped, and lengths are capped (public-signup checks again
+// and the table has length checks). Nothing personal is ever added to a URL here.
+const ATTRIBUTION_KEY = "ordanis_signup_attribution";
+const UTM_KEYS = [["utm_source", 100], ["utm_medium", 100], ["utm_campaign", 150], ["utm_content", 150]];
+export const HEARD_ABOUT = [
+  ["search", "Search engine"], ["social", "Social media"], ["podcast", "Podcast"], ["conference", "Conference or event"],
+  ["advisor", "My advisor"], ["friend", "Friend or family"], ["email", "Email"], ["press", "News or article"], ["other", "Other"],
+];
+export function cleanTag(v, max) {
+  const s = String(v ?? "").trim();
+  if (!s || s.includes("@")) return null;
+  const t = s.replace(/[^A-Za-z0-9 ._+/-]/g, "").replace(/\s+/g, " ").trim().slice(0, max);
+  return t || null;
+}
+function readAttribution() {
+  try { const v = JSON.parse(sessionStorage.getItem(ATTRIBUTION_KEY) || "null"); return v && typeof v === "object" ? v : {}; } catch (_e) { return {}; }
+}
+function saveAttribution(v) {
+  try { sessionStorage.setItem(ATTRIBUTION_KEY, JSON.stringify(v)); } catch (_e) { /* storage blocked: attribution is best-effort */ }
+}
+// Called once when /signup opens. A landing address with any utm_ tag replaces the stored tags (the latest
+// campaign click wins); one without keeps what this browser session already had.
+function captureAttribution() {
+  try {
+    const q = new URLSearchParams(window.location.search);
+    if (!UTM_KEYS.some(([k]) => q.get(k))) return;
+    const next = { ...readAttribution() };
+    for (const [k, max] of UTM_KEYS) next[k] = cleanTag(q.get(k), max);
+    next.landing_path = cleanTag(window.location.pathname, 200);
+    saveAttribution(next);
+  } catch (_e) { /* ignore */ }
+}
+
 function Field({ label, type, required, optional, ...props }) {
   // Password fields get a Show/Hide toggle so people can check what they typed before submitting.
   const [show, setShow] = useState(false);
@@ -312,6 +348,8 @@ function AccountStep({ planKey, prices, onBack, onDone, onSkin }) {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [householdName, setHouseholdName] = useState("");
+  const [heardAbout, setHeardAbout] = useState(() => readAttribution().heard_about || "");
+  const chooseHeardAbout = (v) => { setHeardAbout(v); saveAttribution({ ...readAttribution(), heard_about: v || null }); };
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -426,6 +464,8 @@ function AccountStep({ planKey, prices, onBack, onDone, onSkin }) {
           household_name: householdName.trim(),
           plan: planKey,
           ...(firmInfo ? { firm_code: firmInfo.code, firm_notice_id: firmInfo.notice?.id } : {}),
+          // Campaign tags and "how did you hear about us" (optional, marketing totals only).
+          attribution: { ...readAttribution(), heard_about: heardAbout || null },
           success_url: `${origin}/welcome`,
           cancel_url: `${origin}/signup`,
           // public-signup re-validates these are the CURRENT version of each disclosure and
@@ -471,6 +511,21 @@ function AccountStep({ planKey, prices, onBack, onDone, onSkin }) {
           <Field label="Password" required type="password" placeholder="At least 12 characters" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
           <Field label="Confirm password" required type="password" placeholder="Type it again" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" />
           <Field label="What should we call the household?" required type="text" maxLength={100} placeholder="The Bennett Family" value={householdName} onChange={(e) => setHouseholdName(e.target.value)} autoComplete="off" />
+
+          <div style={{ marginBottom: 18 }}>
+            <label htmlFor="signup-heard-about" style={{ display: "block", fontSize: ".78rem", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: C.navy, marginBottom: 7 }}>
+              How did you hear about us?<span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: C.muted, marginLeft: 6, fontSize: ".72rem" }}>(optional)</span>
+            </label>
+            <select
+              id="signup-heard-about"
+              value={heardAbout}
+              onChange={(e) => chooseHeardAbout(e.target.value)}
+              style={{ width: "100%", boxSizing: "border-box", padding: "14px 16px", fontSize: ".98rem", fontWeight: 300, fontFamily: "inherit", color: heardAbout ? C.navy : C.muted, border: `1px solid ${C.rule}`, borderRadius: 2, background: "#fff" }}
+            >
+              <option value="">Choose one</option>
+              {HEARD_ABOUT.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+            </select>
+          </div>
 
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: "block", fontSize: ".72rem", fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: C.muted, marginBottom: 6 }}>
@@ -642,6 +697,7 @@ export function SignupWelcome() {
 }
 
 export default function SignupFlow() {
+  useState(captureAttribution); // once, on first render, before any step changes
   const [step, setStep] = useState("plans");
   const [selectedPlan, setSelectedPlan] = useState("core");
   const [prices, setPrices] = useState({});

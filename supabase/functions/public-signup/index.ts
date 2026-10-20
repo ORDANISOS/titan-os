@@ -85,6 +85,26 @@ const isBlocked = (u?: { banned_until?: string | null } | null) =>
 const BAD_FIRM_CODE = "That firm code is not valid. Check it and try again.";
 const clientIp = (req: Request) =>
   req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("cf-connecting-ip") ?? null;
+// Marketing attribution from the /signup page (UTM tags + "how did you hear about us"). Re-cleaned here,
+// not trusted from the page: short tags only, anything that looks like an email address is dropped, and
+// lengths match the signup_attribution table's checks. Carried in the Checkout Session metadata and
+// written by stripe-webhook when payment creates the household.
+const HEARD_ABOUT = ["search", "social", "podcast", "conference", "advisor", "friend", "email", "press", "other"];
+const ATTR_LIMITS: Record<string, number> = { utm_source: 100, utm_medium: 100, utm_campaign: 150, utm_content: 150, landing_path: 200 };
+function cleanAttribution(raw: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!raw || typeof raw !== "object") return out;
+  const r = raw as Record<string, unknown>;
+  for (const [k, max] of Object.entries(ATTR_LIMITS)) {
+    const s = String(r[k] ?? "").trim();
+    if (!s || s.includes("@")) continue;
+    const t = s.replace(/[^A-Za-z0-9 ._+\/-]/g, "").replace(/\s+/g, " ").trim().slice(0, max);
+    if (t) out[k] = t;
+  }
+  if (HEARD_ABOUT.includes(String(r.heard_about))) out.heard_about = String(r.heard_about);
+  return out;
+}
+
 async function currentFirmNotice() {
   const { data } = await admin.from("signup_disclosures")
     .select("id, title, body_html, version").eq("kind", "firm_data_sharing").eq("is_draft", false)
@@ -106,7 +126,7 @@ Deno.serve(async (req) => {
   let body: {
     action?: string; code?: string; firm_code?: string; firm_notice_id?: string;
     email?: string; phone?: string; password?: string; full_name?: string; household_name?: string;
-    plan?: string; success_url?: string; cancel_url?: string;
+    plan?: string; success_url?: string; cancel_url?: string; attribution?: unknown;
     disclosures_acknowledged?: { subscription_terms_disclosure_id?: string; sms_consent_disclosure_id?: string };
   };
   try {
@@ -365,6 +385,7 @@ Deno.serve(async (req) => {
       metadata: {
         auth_user_id: authUserId, household_name, plan: tier.plan, full_name, email, phone,
         ...(firmEnterpriseId ? { enterprise_id: firmEnterpriseId, firm_notice_id: String(firmNoticeId) } : {}),
+        ...cleanAttribution(body.attribution),
       },
       subscription_data: { metadata: { auth_user_id: authUserId, household_name, plan: tier.plan } },
     }, {

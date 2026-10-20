@@ -175,6 +175,20 @@ async function syncFamilyFromSubscription(sub: Stripe.Subscription) {
   if (error) console.error(`families update failed for ${familyId}:`, error.message);
 }
 
+// Marketing attribution captured on /signup (public-signup has already cleaned it into the Checkout Session
+// metadata). One row per household in signup_attribution, which MILO reads only as totals. Upsert, so a
+// replayed event is harmless. Logged, not thrown: a missing tag must never undo or retry a paid household.
+async function recordSignupAttribution(session: Stripe.Checkout.Session, familyId: string) {
+  const m = session.metadata ?? {};
+  const row: Record<string, string> = {};
+  for (const k of ["utm_source", "utm_medium", "utm_campaign", "utm_content", "heard_about", "landing_path"]) {
+    if (m[k]) row[k] = String(m[k]);
+  }
+  if (!Object.keys(row).length) return;
+  const { error } = await admin.from("signup_attribution").upsert({ family_id: familyId, ...row }, { onConflict: "family_id" });
+  if (error) console.error(`signup attribution not recorded for family ${familyId}:`, error.message);
+}
+
 // The public sign-up flow's Checkout Session carries auth_user_id/household_name/plan/full_name/
 // email in metadata instead of an existing family_id, because the family does not exist yet -- see
 // public-signup. This is where it is actually born, once Stripe confirms the subscription exists.
@@ -196,6 +210,7 @@ async function createFamilyFromSignup(session: Stripe.Checkout.Session, authUser
     await tagSubscriptionWithFamily(sub.id, existing.id);
     await unblockSignupLogin(authUserId);
     await recordFirstInvoice(session, existing.id);
+    await recordSignupAttribution(session, existing.id);
     return;
   }
 
@@ -248,6 +263,7 @@ async function createFamilyFromSignup(session: Stripe.Checkout.Session, authUser
   // Payment has created the household: the login made at sign-up may now sign in.
   await unblockSignupLogin(authUserId);
   await recordFirstInvoice(session, family.id);
+  await recordSignupAttribution(session, family.id);
 
   // Signed up with a firm code (validated by public-signup before payment): place the household in the
   // firm now that it exists, keep the client's acceptance of the notice on the membership log, give it the
