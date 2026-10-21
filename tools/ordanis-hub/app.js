@@ -160,12 +160,13 @@
       node.append(el("span", { class: "name" }, app.name), el("span", { class: "badge" }, live ? app.role : "COMING SOON"));
       for (const { period, at } of arrivals[i]) {
         const ping = el("span", { class: "ping", "aria-hidden": "true" });
-        node.appendChild(ping);
+        node.prepend(ping);
         ping.animate([
-          { opacity: 0.95, transform: "scale(1)" },
-          { opacity: 0, transform: "scale(1.18)", offset: 0.28 },
-          { opacity: 0, transform: "scale(1.18)" },
-        ], { duration: period, delay: at, iterations: Infinity, easing: "ease-out" });
+          { opacity: 0 },
+          { opacity: 1, offset: 0.06 },
+          { opacity: 0, offset: 0.4 },
+          { opacity: 0 },
+        ], { duration: period, delay: at, iterations: Infinity, easing: "ease-in-out" });
       }
       stage.appendChild(node);
     });

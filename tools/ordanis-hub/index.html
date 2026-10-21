@@ -79,11 +79,13 @@
     filter: drop-shadow(0 0 1.5px var(--gold)) drop-shadow(0 0 3px rgba(201, 169, 97, 0.6));
   }
   .beams .spoke { opacity: 0.85; }
-  /* Gold ripple when a beam reaches an app (timed in app.js). */
+  /* Soft glow inside an app's circle when a beam enters it (timed in app.js). */
   .ping {
-    position: absolute; inset: -2px; border-radius: 50%; pointer-events: none; opacity: 0;
-    border: 2px solid var(--gold-hi); box-shadow: 0 0 22px rgba(201, 169, 97, 0.7), inset 0 0 18px rgba(201, 169, 97, 0.35);
+    position: absolute; inset: 0; border-radius: 50%; pointer-events: none; opacity: 0;
+    background: radial-gradient(circle at 50% 50%, rgba(201, 169, 97, 0.24) 0%, rgba(201, 169, 97, 0.09) 55%, rgba(201, 169, 97, 0) 72%);
+    box-shadow: inset 0 0 26px rgba(201, 169, 97, 0.26);
   }
+  .node > :not(.ping) { position: relative; }
 
   .core {
     position: absolute; left: 50%; top: 50%; width: 30%; aspect-ratio: 1;
