@@ -1,8 +1,8 @@
 // ORDANIS Hub launcher.
 //
 // This page is a public shell. The app links, Guides and Team & Access come from the
-// hub-content server function, which returns them only to an ORDANIS administrator signed in
-// with MFA (aal2). The checks below just pick the right screen; the server is the gate.
+// hub-content server function, which returns them only to a signed-in ORDANIS administrator.
+// No MFA here: each app the hub opens asks for its own sign-in and MFA. The server is the gate.
 
 (function () {
   "use strict";
@@ -84,56 +84,8 @@
       if (error) { setError(err, "That email and password didn't match. Please try again."); return; }
       evaluate();
     });
-    showCard("Team sign-in", "Use your ORDANIS Platform account. You'll confirm with your authenticator app next.", form);
+    showCard("Team sign-in", "Use your ORDANIS Platform account.", form);
     emailIn.focus();
-  }
-
-  function codeForm(cta, onCode) {
-    const form = el("form");
-    const codeIn = el("input", { class: "code", inputmode: "numeric", autocomplete: "one-time-code", maxlength: "8", required: "" });
-    const err = errorLine();
-    const btn = el("button", { type: "submit", class: "btn" }, cta);
-    const l = el("label", {}, "6-digit code"); l.appendChild(codeIn);
-    form.append(l, err, btn);
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      btn.disabled = true; setError(err, "");
-      const msg = await onCode(codeIn.value.replace(/\s/g, ""));
-      btn.disabled = false;
-      if (msg) setError(err, msg);
-    });
-    setTimeout(() => codeIn.focus(), 0);
-    return form;
-  }
-
-  function verifyScreen(factorId) {
-    const form = codeForm("Verify", async (code) => {
-      const { error } = await sb.auth.mfa.challengeAndVerify({ factorId, code });
-      if (error) return "That code didn't work. Codes change every 30 seconds, so try the newest one.";
-      evaluate();
-    });
-    showCard("Confirm it's you", "Enter the code from your authenticator app.", form, signOutLink());
-  }
-
-  async function enrollScreen() {
-    showCard("Set up your authenticator", "Getting things ready…");
-    // Clear any half-finished factor from an earlier attempt first.
-    const { data: list } = await sb.auth.mfa.listFactors();
-    for (const f of (list && list.all) || []) {
-      if (f.factor_type === "totp" && f.status !== "verified") await sb.auth.mfa.unenroll({ factorId: f.id });
-    }
-    const { data, error } = await sb.auth.mfa.enroll({ factorType: "totp", friendlyName: "ORDANIS Hub " + new Date().toISOString().slice(0, 10) });
-    if (error) { showCard("Set up your authenticator", "Couldn't start authenticator setup. Please ask Will.", signOutLink()); return; }
-    const qr = el("div", { class: "qr" });
-    qr.appendChild(el("img", { src: data.totp.qr_code, alt: "Authenticator QR code" }));
-    const secret = el("details", { class: "secret" });
-    secret.append(el("summary", {}, "Can't scan? Enter the key by hand"), el("code", {}, data.totp.secret));
-    const form = codeForm("Turn on and continue", async (code) => {
-      const { error: vErr } = await sb.auth.mfa.challengeAndVerify({ factorId: data.id, code });
-      if (vErr) return "That code didn't work. Try the newest code from the app.";
-      evaluate();
-    });
-    showCard("Set up your authenticator", "Scan this with an authenticator app (1Password, Google Authenticator, Authy), then enter the code it shows.", qr, secret, form, signOutLink());
   }
 
   function deniedScreen(msg) {
@@ -227,13 +179,6 @@
   async function evaluate() {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) { signInScreen(); return; }
-    const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (!aal || aal.currentLevel !== "aal2") {
-      const { data: factors } = await sb.auth.mfa.listFactors();
-      const totp = ((factors && factors.totp) || []).find((f) => f.status === "verified");
-      if (totp) verifyScreen(totp.id); else enrollScreen();
-      return;
-    }
     showCard("Opening the hub", "One moment…");
     const { data, error } = await sb.functions.invoke("hub-content", { body: {} });
     if (error) {

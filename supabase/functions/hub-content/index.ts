@@ -2,12 +2,13 @@
 //
 // The hub page itself is a public shell: sign-in screen, the orbit and the ORDANIS mark. The app
 // links, the SOPs (Guides) and the team list (Team & Access) live here and are returned only to a
-// signed-in ORDANIS administrator at MFA level aal2, the same gate as hub-command (ELIOT) and
-// milo-command (MILO). Nothing private ships in the page's own source.
+// signed-in, active ORDANIS administrator. Nothing private ships in the page's own source.
 //
 // SECURITY
-// - The caller must be signed in, at MFA level aal2, and hold role 'admin'. All three are checked
-//   here on the server; hiding the page in the browser is not protection.
+// - The caller must be signed in and hold role 'admin' (active). Both are checked here on the
+//   server; hiding the page in the browser is not protection.
+// - No MFA step here, by Will's decision (2026-10-21): the hub only launches apps, and each app
+//   (Platform, ELIOT, Email Portal, MILO) asks for its own sign-in and MFA.
 // - The service role is used only to read the caller's own role.
 // - Read-only. No writes, no email, no household data.
 // - To update the SOPs or the team list: edit the content below, then redeploy this function
@@ -42,16 +43,6 @@ function json(req: Request, body: unknown, status = 200): Response {
   });
 }
 
-// The token has already been verified by auth.getUser(); this only reads its claims.
-function jwtClaims(token: string): Record<string, unknown> {
-  try {
-    const part = token.split(".")[1] ?? "";
-    const b64 = part.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(part.length / 4) * 4, "=");
-    return JSON.parse(atob(b64));
-  } catch {
-    return {};
-  }
-}
 
 // ── Content ────────────────────────────────────────────────────────────────────
 
@@ -271,11 +262,6 @@ Deno.serve(async (req) => {
     if (prof?.role !== "admin" || prof?.active === false) {
       return json(req, { error: "The ORDANIS Hub is for the ORDANIS team only." }, 403);
     }
-    const claims = jwtClaims(token);
-    if (claims.aal !== "aal2") {
-      return json(req, { error: "Verify with your authenticator app to open the hub.", mfa_required: true }, 403);
-    }
-
     const firstName = String(prof?.full_name ?? "").trim().split(/\s+/)[0].slice(0, 30);
     return json(req, { firstName, fullName: String(prof?.full_name ?? "").trim().slice(0, 80), apps: APPS, guides: GUIDES_HTML, team: TEAM_HTML });
   } catch (e) {
