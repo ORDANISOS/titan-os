@@ -149,6 +149,34 @@ async function recordFirstInvoice(session: Stripe.Checkout.Session, familyId: st
   }
 }
 
+// The end of a household's paid period after it cancelled (or after billing finally gave up): take it
+// off the system -- logins blocked, marked archived, a deletion-log row -- exactly as archive-family does
+// for a deletion request, minus the Stripe cancel, which has already happened. Data is kept; purging stays
+// a separate, deliberate admin step. Will's decision, 2026-10-21.
+const PERMANENT_BAN = "876000h"; // ~100 years; same value as archive-family (never the literal 'infinity')
+async function archiveAtPeriodEnd(familyId: string, reason: string) {
+  const { data: fam } = await admin.from("families")
+    .select("id, name, customer_number, plan, archived_at").eq("id", familyId).maybeSingle();
+  if (!fam || fam.archived_at) return;
+  const { data: clientUsers } = await admin.from("user_profiles")
+    .select("id").eq("family_id", familyId).eq("role", "client");
+  for (const u of clientUsers || []) {
+    const { error } = await admin.auth.admin.updateUserById(u.id, { ban_duration: PERMANENT_BAN });
+    if (error) console.error(`archiveAtPeriodEnd: could not block login ${u.id}`);
+  }
+  if ((clientUsers || []).length) {
+    await admin.from("user_profiles").update({ active: false }).eq("family_id", familyId).eq("role", "client");
+  }
+  const { error: upErr } = await admin.from("families").update({
+    archived_at: new Date().toISOString(), archived_by: "Subscription ended (end of paid period)", subscription_state: "archived",
+  }).eq("id", familyId);
+  if (upErr) throw new Error(`archive at period end failed for ${familyId}: ${upErr.message}`); // Stripe retries
+  await admin.from("family_deletion_log").insert({
+    family_id: fam.id, family_name: fam.name, customer_number: fam.customer_number, plan: fam.plan,
+    action: "archived", reason, performed_by: "system (subscription ended)",
+  });
+}
+
 // Stamp the household onto the subscription so every later event finds it directly. Logged, not
 // thrown: familyIdForSubscription's fallback covers it if this fails.
 async function tagSubscriptionWithFamily(subId: string, familyId: string) {
@@ -165,6 +193,15 @@ async function syncFamilyFromSubscription(sub: Stripe.Subscription) {
 
   const mapped = mapStripeStatus(sub.status);
   const patch: Record<string, unknown> = { stripe_subscription_id: sub.id };
+  // End-of-period cancellation, as Stripe has it (scheduled or undone in the app or the Stripe dashboard).
+  // Re-read on this client's pinned API version: on the endpoint's newer version the period end lives on
+  // the subscription items, not the subscription. A read failure leaves the column alone.
+  try {
+    const full = await stripe.subscriptions.retrieve(sub.id);
+    patch.cancel_at = full.cancel_at_period_end && full.current_period_end
+      ? new Date(full.current_period_end * 1000).toISOString() : null;
+    if (!full.cancel_at_period_end) { patch.cancel_requested_at = null; patch.cancel_requested_by = null; }
+  } catch (_e) { /* keep what we had */ }
   if (mapped) {
     // Decisions made here, not by Stripe, must survive routine Stripe events (2026-10-14):
     //  * archived stays archived;
@@ -664,9 +701,23 @@ Deno.serve(async (req) => {
         // firm decision like archiving).
         if (familyId) {
           const { data: fam } = await admin.from("families")
-            .select("subscription_state").eq("id", familyId).maybeSingle();
-          if (fam?.subscription_state !== "archived") {
-            await admin.from("families").update({ subscription_state: "cancelled" }).eq("id", familyId);
+            .select("subscription_state, stripe_subscription_id, stripe_customer_id").eq("id", familyId).maybeSingle();
+          if (fam && fam.subscription_state !== "archived") {
+            // Only the household's CURRENT subscription ending takes it off the system, and only if the
+            // customer has no other live subscription (a plan move can briefly overlap two). Anything else
+            // is just marked cancelled, as before.
+            let otherLive = false;
+            if (fam.stripe_customer_id) {
+              try {
+                const subs = await stripe.subscriptions.list({ customer: String(fam.stripe_customer_id), status: "all", limit: 20 });
+                otherLive = subs.data.some((x) => x.id !== sub.id && ["active", "trialing", "past_due", "unpaid", "incomplete"].includes(x.status));
+              } catch (_e) { otherLive = true; } // unsure: do not close a household on a guess
+            }
+            if (fam.stripe_subscription_id === sub.id && !otherLive) {
+              await archiveAtPeriodEnd(familyId, "Subscription ended at the end of the paid period.");
+            } else {
+              await admin.from("families").update({ subscription_state: "cancelled" }).eq("id", familyId);
+            }
           }
         }
         break;

@@ -8078,6 +8078,19 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
   // Requires typing the household's exact name to confirm, same as the permanent-delete step --
   // this is a real, billing-affecting action and a mis-click here was exactly what caused the
   // earlier accidental deletion, so it gets the same friction as the irreversible step.
+  const[adminCancelBusy,setAdminCancelBusy]=useState(false);
+  const adminCancel=async(familyId,action)=>{
+    setAdminCancelBusy(true);setDangerMsg(null);
+    try{
+      const{data:resp,error}=await sb.functions.invoke("cancel-subscription",{body:{family_id:familyId,action}});
+      let msg=resp&&resp.error;
+      if(error&&!msg){try{msg=(await error.context.json()).error;}catch(_e){msg=error.message;}}
+      if(msg){setDangerMsg({type:"error",text:msg});return;}
+      setDangerMsg({type:"success",text:action==="schedule"?`Scheduled: the subscription ends ${resp.cancel_at?fmtDate(resp.cancel_at):"at the end of the paid month"}.`:"Undone: the subscription continues."});
+      toast&&toast(action==="schedule"?"Cancellation scheduled":"Cancellation undone");
+      if(reload)await reload("families");
+    }finally{setAdminCancelBusy(false);}
+  };
   const archiveFamily=async(familyId,familyName)=>{
     setArchiving(true); setDangerMsg(null);
     try{
@@ -8300,8 +8313,23 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
             </div>
           </div>}
         </>:<>
+          {/* End-of-period cancellation: the household keeps access to the end of its paid month, then the
+              payment webhook archives it. The "end now" path (archive) stays below for urgent cases. */}
+          {family.stripe_subscription_id&&<div style={{marginBottom:16,paddingBottom:14,borderBottom:`1px solid ${B.borderLight}`}}>
+            {family.cancel_at?<>
+              <div style={{fontSize:13,color:B.text,marginBottom:10,lineHeight:1.5}}>
+                <strong style={{color:"#8a5c00"}}>Subscription ends {fmtDate(family.cancel_at)}</strong>{family.cancel_requested_by?` (requested by ${family.cancel_requested_by})`:""}. The household keeps full access until then, and is archived automatically on that date.
+              </div>
+              <Btn small variant="ghost" disabled={adminCancelBusy} onClick={()=>adminCancel(family.id,"undo")}>{adminCancelBusy?"Working…":"Undo — keep the subscription"}</Btn>
+            </>:<>
+              <div style={{fontSize:13,color:B.textSoft,marginBottom:10,lineHeight:1.5}}>
+                Cancel at the end of the paid month: the household keeps full access until then, isn't charged again, and is archived automatically on that date.
+              </div>
+              <Btn small variant="ghost" disabled={adminCancelBusy} onClick={()=>{if(confirm(`Cancel ${family.name}'s subscription at the end of their paid month?`))adminCancel(family.id,"schedule");}}>{adminCancelBusy?"Working…":"Cancel at end of paid month"}</Btn>
+            </>}
+          </div>}
           <div style={{fontSize:13,color:B.textSoft,marginBottom:14,lineHeight:1.5}}>
-            If this household has asked to be removed from the platform, archiving cancels their subscription and disables their login immediately. Their data stays in place until a separate, deliberate step permanently deletes it.
+            To end it right now instead (for example a deletion request), archiving cancels their subscription and disables their login immediately. Their data stays in place until a separate, deliberate step permanently deletes it.
           </div>
           {!showArchiveConfirm?
             <button onClick={()=>{setShowArchiveConfirm(true);setArchiveConfirmText("");setDangerMsg(null);}} style={{background:"none",border:"1px solid #d43030",color:"#d43030",borderRadius:8,padding:"9px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Archive This Household…</button>
@@ -10347,6 +10375,24 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const billingPriceOf=p=>Number(billingPlans.find(x=>x.plan===p)?.monthly_price)||0;
   const[billingBusy,setBillingBusy]=useState(false);
   const[billingMsg,setBillingMsg]=useState(null); // {type:"success"|"error", text}
+  // End-of-period cancellation (2026-10-21): the household keeps everything until the end of the month it
+  // has paid for, then it is closed automatically. Undo is possible until that date.
+  const[cancelOpen,setCancelOpen]=useState(false);
+  const[cancelBusy,setCancelBusy]=useState(false);
+  const runCancel=async action=>{
+    setCancelBusy(true);setBillingMsg(null);
+    try{
+      const{data:resp,error}=await sb.functions.invoke("cancel-subscription",{body:{family_id:family.id,action}});
+      let msg=resp&&resp.error;
+      if(error&&!msg){try{msg=(await error.context.json()).error;}catch(_e){msg=error.message;}}
+      if(msg){setBillingMsg({type:"error",text:msg});return;}
+      setCancelOpen(false);
+      setBillingMsg({type:"success",text:action==="schedule"
+        ?`Your subscription will end on ${resp.cancel_at?new Date(resp.cancel_at).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}):"the last day of your paid month"}. You have full access until then.`
+        :"Your subscription will continue as normal."});
+      await reload("families");
+    }finally{setCancelBusy(false);}
+  };
   const[confirmDowngrade,setConfirmDowngrade]=useState(null); // {plan, count} of open workflows
   // Households are warned before a downgrade (the confirm dialog below), but the move can land
   // long after that click (a scheduled downgrade applies at the end of the billing period) --
@@ -11166,6 +11212,12 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           <strong>Your plan is paid by {firmLabel}.</strong> The plan fee and any extra workflows are billed to {firmLabel}, not to you, and there is no card to manage here. To change your plan, contact {firmLabel}.
         </div>}
 
+        {fam.cancel_at&&<div style={{background:"#fef3e2",border:"1px solid #f3d29a",borderRadius:12,padding:"14px 18px",marginBottom:16,fontSize:13.5,color:B.text,lineHeight:1.6}}>
+          <strong style={{color:"#8a5c00"}}>Your subscription ends on {new Date(fam.cancel_at).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}.</strong> You have full access until then, and you won't be charged again.
+          On that date your login closes and your household is archived. Download anything you'd like to keep from CHRIS before then.
+          <div style={{marginTop:10}}><Btn small onClick={()=>runCancel("undo")} disabled={cancelBusy}>{cancelBusy?"Working…":"Keep my subscription"}</Btn></div>
+        </div>}
+
         {/* Current plan */}
         <div style={{background:B.white,border:`1px solid ${B.borderLight}`,borderTop:`4px solid ${B.gold}`,borderRadius:14,padding:"22px 24px",marginBottom:16,boxShadow:B.shadow}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
@@ -11328,6 +11380,27 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
             <Btn variant="ghost" onClick={()=>setConfirmDowngrade(null)}>Cancel</Btn>
             <Btn onClick={()=>{const p=confirmDowngrade.plan;setConfirmDowngrade(null);requestPlanChange(p);}} disabled={billingBusy}>{billingBusy?"Working…":"Continue with downgrade"}</Btn>
+          </div>
+        </Modal>}
+
+        {!firmPaid&&fam.stripe_subscription_id&&!fam.cancel_at&&<div style={{marginTop:22,paddingTop:16,borderTop:`1px solid ${B.borderLight}`}}>
+          <div style={{fontSize:13,fontWeight:700,color:B.navy,marginBottom:4}}>Cancel your subscription</div>
+          <div style={{fontSize:12.5,color:B.textSoft,lineHeight:1.55,marginBottom:10}}>You keep full access until the end of the month you've paid for, and you won't be charged again. You can change your mind until then.</div>
+          <Btn small variant="ghost" onClick={()=>setCancelOpen(true)}>Cancel my subscription…</Btn>
+        </div>}
+        {cancelOpen&&<Modal title="Cancel your subscription?" onClose={()=>!cancelBusy&&setCancelOpen(false)}>
+          <div style={{fontSize:14,color:B.text,lineHeight:1.65,marginBottom:14}}>
+            Your plan stays fully active until the <strong>end of the month you've already paid for</strong>. There's no partial refund and no further charge.
+          </div>
+          <ul style={{fontSize:13.5,color:B.textMid,lineHeight:1.7,margin:"0 0 16px",paddingLeft:20}}>
+            <li>On that date your login closes and your household is archived.</li>
+            <li>Before then, download anything you'd like to keep from CHRIS.</li>
+            <li>Changed your mind? Choose <strong>Keep my subscription</strong> on this page any time before that date.</li>
+          </ul>
+          {billingMsg&&billingMsg.type==="error"&&<div style={{fontSize:12.5,color:"#8b1a1a",marginBottom:12}}>{billingMsg.text}</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end",flexWrap:"wrap"}}>
+            <Btn variant="ghost" onClick={()=>setCancelOpen(false)} disabled={cancelBusy}>Keep my subscription</Btn>
+            <Btn variant="danger" onClick={()=>runCancel("schedule")} disabled={cancelBusy}>{cancelBusy?"Working…":"Cancel at the end of my paid month"}</Btn>
           </div>
         </Modal>}
       </div>}
