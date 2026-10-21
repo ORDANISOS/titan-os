@@ -1381,6 +1381,8 @@ function PrivateHouseholdPanel({familyId,familyName,toast,isMobile}){
   const[busy,setBusy]=useState(false);
   const load=useCallback(async()=>{
     const{data,error}=await sb.rpc("household_privacy_status",{p_family_id:familyId});
+    // Not on this database yet (the migration has not been applied): show nothing rather than an error.
+    if(error&&(error.code==="PGRST202"||/could not find the function|does not exist/i.test(error.message||""))){setSt("unavailable");return;}
     if(error){setErr(error.message);return;}
     setSt(data);setPicked((data.viewers||[]).map(v=>v.id));
   },[familyId]);
@@ -1400,6 +1402,7 @@ function PrivateHouseholdPanel({familyId,familyName,toast,isMobile}){
     toast&&toast(makePrivate?"Private household saved":"No longer private");
   };
   const roleWord=r=>r==="advisor"?"ORDANIS Expert":r==="analyst"?"Analyst":"Admin";
+  if(st==="unavailable")return null;
   const box={background:B.bgCard,borderRadius:12,padding:isMobile?"18px 16px":"20px 22px",border:`1px solid ${st&&st.is_private?"#c9b37a":B.borderLight}`,boxShadow:B.shadow,marginBottom:16};
   return <div style={box}>
     <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>🔒 Private household</div>
@@ -7963,6 +7966,9 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
   const[purgeConfirmText,setPurgeConfirmText]=useState("");
   const[purging,setPurging]=useState(false);
   const[dangerMsg,setDangerMsg]=useState(null); // {type:"success"|"error", text} | null
+  // Declared with the other hooks, above the loading return: a hook declared after an early return changes
+  // the hook order between renders and crashes the page (it did, 2026-10-21).
+  const[adminCancelBusy,setAdminCancelBusy]=useState(false);
   useEffect(()=>{
     let stopped=false;
     (async()=>{
@@ -8143,7 +8149,6 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
   // Requires typing the household's exact name to confirm, same as the permanent-delete step --
   // this is a real, billing-affecting action and a mis-click here was exactly what caused the
   // earlier accidental deletion, so it gets the same friction as the irreversible step.
-  const[adminCancelBusy,setAdminCancelBusy]=useState(false);
   const adminCancel=async(familyId,action)=>{
     setAdminCancelBusy(true);setDangerMsg(null);
     try{
