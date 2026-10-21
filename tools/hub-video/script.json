@@ -1,0 +1,57 @@
+{
+  "title": "ORDANIS Hub: one front door to every part of ORDANIS",
+  "audience": "Investors. Hub only. No household data, no team names, no prices, no firm rate card, no OpenArc or litigation content.",
+  "voice": {
+    "name": "The Real ORDANIS",
+    "voice_id": "5KMM9UghKZYIixsSDtWP",
+    "model_id": "eleven_multilingual_v2"
+  },
+  "scenes": [
+    {
+      "id": "01-open",
+      "visual": "Dark navy field. The ORDANIS mark fades in and flips. Wordmark ORDANIS with HUB in gold.",
+      "caption": "One front door to every part of ORDANIS",
+      "voice": "ORDANIS runs on a set of connected systems. The ORDANIS Hub brings them together in one place."
+    },
+    {
+      "id": "02-front-door",
+      "visual": "The Hub sign-in card, then the orbit draws itself: six circles around the turning core.",
+      "caption": "One secure sign-in. Every app a tap away.",
+      "voice": "It is one secure front door. Our team signs in once, and every part of ORDANIS is a single tap away."
+    },
+    {
+      "id": "03-apps",
+      "visual": "Each app circle lights in turn as it is named, with a one-line label.",
+      "caption": "Platform. ELIOT. Email Portal. MILO. Database. Demo.",
+      "voice": "The ORDANIS Platform, where families keep their records, obligations and documents. ELIOT, the voice console for our administrators. The Email Portal, where family email is routed and resolved. MILO, our marketing intelligence. And the database and demo environments behind them."
+    },
+    {
+      "id": "04-connected",
+      "visual": "Gold relay beams: ring to app, app to core; the core glows on each arrival.",
+      "caption": "Connected through the core. Protected at every door.",
+      "voice": "Everything connects through the core. And each app keeps its own sign-in and two-step verification, so the Hub never weakens what sits behind it."
+    },
+    {
+      "id": "05-team",
+      "visual": "Guides panel slides in (titles only), then an access grid with blurred placeholder rows.",
+      "caption": "Built-in guides. A clear view of who can open what.",
+      "voice": "Built-in guides give every team member the same operating procedures, alongside a clear view of who can open what."
+    },
+    {
+      "id": "06-anywhere",
+      "visual": "The Hub icon drops onto a phone home screen and a laptop dock; tapping a tile opens the app.",
+      "caption": "Installs like an app. On phone and desktop.",
+      "voice": "It installs like an app on phone and desktop, and opens our installed apps directly wherever the device allows."
+    },
+    {
+      "id": "07-close",
+      "visual": "Orbit pulls back to the full ring, beams flowing; ORDANIS wordmark and tagline.",
+      "caption": "One hub. Every part of ORDANIS. Connected.",
+      "voice": "One hub. Every part of ORDANIS. Connected."
+    }
+  ],
+  "pronounce": {
+    "ORDANIS": "Or-Dan-Iss"
+  },
+  "pronounce_note": "Applied to the narration only (never the captions): OR-DAN-IS, three equal syllables, 'dan' as in Daniel."
+}

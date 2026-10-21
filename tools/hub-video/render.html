@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ORDANIS Hub video</title>
+<style>
+  body { margin: 0; background: #020a14; color: #F8F6F1; font: 14px Arial, sans-serif; }
+  canvas { display: block; width: 100%; max-width: 1280px; margin: 0 auto; aspect-ratio: 16 / 9; background: #061629; }
+  .bar { max-width: 1280px; margin: 10px auto; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 0 12px; }
+  button { font: 700 14px Arial; background: #C9A961; color: #061629; border: 0; border-radius: 999px; padding: 8px 16px; cursor: pointer; }
+  input[type=range] { flex: 1; min-width: 200px; }
+  #status { color: #9AA8BA; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<div class="bar">
+  <button id="play">Play</button>
+  <input id="scrub" type="range" min="0" max="1000" value="0">
+  <span id="clock">0.0s</span>
+  <button id="render">Render MP4</button>
+  <span id="status"></span>
+</div>
+<script src="vendor/mp4-muxer.js"></script>
+<script>
+"use strict";
+// ORDANIS Hub investor video. Every frame is drawn from the time t alone, so preview and render match
+// exactly. Scene text and narration come from script.json; scene lengths follow the narration files
+// in voice/ (or a reading-speed estimate until they exist).
+
+const W = 1920, H = 1080, FPS = 30;
+const C = { navy: "#0A2540", ink: "#061629", ink2: "#0C1E36", gold: "#C9A961", goldHi: "#E4C98A", paper: "#F8F6F1", muted: "#9AA8BA" };
+const SERIF = "Georgia, 'Times New Roman', serif", SANS = "Arial, Helvetica, sans-serif";
+const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+
+const APPS = [
+  { name: ["ORDANIS", "Platform"], badge: "PRODUCTION", icon: "home", line: "Families' records, obligations and documents" },
+  { name: ["ELIOT"], badge: "ADMIN", icon: "mic", line: "The voice console for administrators" },
+  { name: ["Email", "Portal"], badge: "TEAM", icon: "mail", line: "Family email, routed and resolved" },
+  { name: ["MILO"], badge: "MARKETING", icon: "chart", line: "Marketing intelligence" },
+  { name: ["Database"], badge: "OWNER", icon: "database", line: "The data layer behind every app" },
+  { name: ["Demo"], badge: "SANDBOX", icon: "flask", line: "A safe copy for testing and training" },
+];
+const ICONS = {
+  home: "M3 11 12 4l9 7 M5 10v10h14V10 M10 20v-6h4v6",
+  mic: "M9 6a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0z M5 11a7 7 0 0 0 14 0 M12 18v3",
+  mail: "M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z M3 7l9 6 9-6",
+  chart: "M4 20h16 M7 16v-5 M12 16V6 M17 16v-8",
+  database: "M5 5.5a7 2.5 0 1 0 14 0a7 2.5 0 1 0-14 0 M5 5.5v13c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-13 M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5",
+  flask: "M9 3h6 M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3 M7.5 15h9",
+  lock: "M7 11V8a5 5 0 0 1 10 0v3 M5 11h14v10H5z",
+};
+const ICON_PATHS = Object.fromEntries(Object.entries(ICONS).map(([k, d]) => [k, new Path2D(d)]));
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const ease = (x) => { x = clamp(x); return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const lerp = (a, b, k) => a + (b - a) * k;
+const fade = (t, inAt, inLen, outAt, outLen) => clamp((t - inAt) / inLen) * (outAt == null ? 1 : 1 - clamp((t - outAt) / outLen));
+const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+
+function text(str, x, y, { font, color = C.paper, align = "center", spacing = 0, alpha = 1, base = "alphabetic" }) {
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  ctx.font = font; ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = base;
+  ctx.letterSpacing = spacing + "px";
+  ctx.fillText(str, x, y);
+  ctx.restore();
+}
+
+// The ORDANIS mark: an O, left half paper, right half gold. `turn` in turns (0..1) flips it front to back.
+function mark(x, y, size, turn = 0, alpha = 1) {
+  const c = Math.cos(turn * Math.PI * 2);
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  ctx.translate(x, y);
+  ctx.scale(Math.max(0.04, Math.abs(c)) * size / 100, size / 100);
+  const back = c < 0;
+  const half = (side, color) => {
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 33, 36, 0, -Math.PI / 2, Math.PI / 2, side < 0);
+    ctx.ellipse(0, 0, 24, 27, 0, Math.PI / 2, -Math.PI / 2, side > 0);
+    ctx.closePath();
+    ctx.fillStyle = color; ctx.fill();
+  };
+  half(-1, back ? C.gold : C.paper);
+  half(1, back ? C.paper : C.gold);
+  ctx.restore();
+}
+
+function background(t) {
+  const g = ctx.createRadialGradient(W / 2, H * 0.52, 40, W / 2, H * 0.52, W * 0.75);
+  g.addColorStop(0, "#0E2B4A"); g.addColorStop(0.6, C.ink); g.addColorStop(1, "#030d1a");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  // Faint drifting gold dust for depth.
+  ctx.save();
+  for (let i = 0; i < 60; i++) {
+    const sx = (i * 397) % W, sy = (i * 211) % H;
+    const y = (sy - t * (6 + (i % 5) * 3)) % H;
+    ctx.globalAlpha = 0.05 + ((i * 13) % 10) / 120;
+    ctx.fillStyle = C.gold;
+    ctx.beginPath(); ctx.arc(sx, y < 0 ? y + H : y, 1.2 + (i % 3) * 0.6, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+
+// ── The orbit (same geometry and relay as the live hub) ──────────────────────
+const PERIOD = 4.8, SPEED = 0.009 * 1000; // viewBox units per second
+function orbitPoints(n) {
+  return Array.from({ length: n }, (_, i) => {
+    const a = (-90 + (360 / n) * i) * Math.PI / 180;
+    return { x: 50 + 34 * Math.cos(a), y: 50 + 34 * Math.sin(a) };
+  });
+}
+const PTS = orbitPoints(APPS.length);
+const NODE_R = 14, CORE_R = 15;
+// Relay timings (seconds within a cycle), as in tools/ordanis-hub/app.js.
+const RELAY = PTS.map((p, i) => {
+  const n = (i + 1) % PTS.length;
+  const ringLen = Math.hypot(PTS[n].x - p.x, PTS[n].y - p.y);
+  const start = (i * PERIOD) / PTS.length;
+  const reach = start + (ringLen - 2 * NODE_R) / SPEED;
+  const spokeLen = Math.hypot(PTS[n].x - 50, PTS[n].y - 50);
+  const core = reach + (spokeLen - CORE_R - NODE_R) / SPEED;
+  return { from: i, to: n, start, reach, core, ringLen, spokeLen };
+});
+// 0..1 glow for an arrival at `at` (seconds in cycle), at cycle time `ct`.
+function glowAt(ct, at) {
+  let d = ((ct - at) % PERIOD + PERIOD) % PERIOD;
+  if (d < 0.15) return ease(d / 0.15);
+  if (d < 1.2) return 1 - ease((d - 0.15) / 1.05);
+  return 0;
+}
+
+// o = { cx, cy, size, build (0..1), beams (0..1), hi: Set of highlighted app indexes, locks (0..1), alpha }
+function orbit(t, o) {
+  const S = o.size, k = S / 100;
+  const X = (u) => o.cx + (u - 50) * k, Y = (v) => o.cy + (v - 50) * k;
+  const ct = t % PERIOD;
+  ctx.save();
+  ctx.globalAlpha *= o.alpha ?? 1;
+
+  // Rails
+  const railA = ease(clamp((o.build - 0.2) / 0.6));
+  ctx.lineWidth = 0.6 * k; ctx.strokeStyle = rgba(C.gold, 0.28 * railA);
+  PTS.forEach((p, i) => {
+    const n = PTS[(i + 1) % PTS.length];
+    ctx.beginPath(); ctx.moveTo(X(p.x), Y(p.y)); ctx.lineTo(X(n.x), Y(n.y)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X(50), Y(50)); ctx.lineTo(X(p.x), Y(p.y)); ctx.stroke();
+  });
+
+  // Relay beams
+  const beamA = o.beams ?? 0;
+  if (beamA > 0) {
+    const seg = (a, b, len, headAt, dash, w) => {
+      const h1 = clamp(headAt, 0, len), h0 = clamp(headAt - dash, 0, len);
+      if (h1 <= h0) return;
+      const ux = (b.x - a.x) / len, uy = (b.y - a.y) / len;
+      ctx.beginPath();
+      ctx.moveTo(X(a.x + ux * h0), Y(a.y + uy * h0)); ctx.lineTo(X(a.x + ux * h1), Y(a.y + uy * h1));
+      ctx.lineWidth = w * k; ctx.stroke();
+    };
+    ctx.save();
+    ctx.globalAlpha *= beamA;
+    ctx.strokeStyle = C.goldHi; ctx.lineCap = "round"; ctx.shadowColor = C.gold; ctx.shadowBlur = 0.9 * k;
+    RELAY.forEach((r) => {
+      const a = PTS[r.from], b = PTS[r.to];
+      const dt = ((ct - r.start) % PERIOD + PERIOD) % PERIOD;
+      seg(a, b, r.ringLen, NODE_R + dt * SPEED, 9, 1.1);
+      const ds = ((ct - r.reach) % PERIOD + PERIOD) % PERIOD;
+      seg(b, { x: 50, y: 50 }, r.spokeLen, NODE_R + ds * SPEED, 4, 1.1);
+    });
+    ctx.restore();
+  }
+
+  // Core
+  const coreA = ease(clamp(o.build / 0.4));
+  if (coreA > 0) {
+    ctx.save();
+    ctx.globalAlpha *= coreA;
+    const cx = X(50), cy = Y(50), cr = CORE_R * k;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, cr);
+    g.addColorStop(0, "#10304F"); g.addColorStop(0.7, C.ink2); g.addColorStop(1, C.ink2);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, cr, 0, Math.PI * 2); ctx.fill();
+    let cg = 0;
+    if (beamA > 0) RELAY.forEach((r) => { cg = Math.max(cg, glowAt(ct, r.core)); });
+    if (cg > 0) {
+      const gg = ctx.createRadialGradient(cx, cy, 0, cx, cy, cr);
+      gg.addColorStop(0, rgba(C.gold, 0.26 * cg * beamA)); gg.addColorStop(0.55, rgba(C.gold, 0.1 * cg * beamA)); gg.addColorStop(0.75, rgba(C.gold, 0));
+      ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(cx, cy, cr, 0, Math.PI * 2); ctx.fill();
+    }
+    // Turning rings
+    ctx.lineWidth = 1.5 * k / 6;
+    ctx.strokeStyle = rgba(C.gold, 0.55);
+    ctx.beginPath(); ctx.arc(cx, cy, cr * 1.18, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([6 * k / 6, 6 * k / 6]); ctx.lineDashOffset = -t * 20;
+    ctx.strokeStyle = rgba(C.gold, 0.45);
+    ctx.beginPath(); ctx.arc(cx, cy, cr * 1.02, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([2 * k / 6, 5 * k / 6]); ctx.lineDashOffset = t * 30;
+    ctx.strokeStyle = rgba(C.gold, 0.3);
+    ctx.beginPath(); ctx.arc(cx, cy, cr * 0.72, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle = C.gold; ctx.lineWidth = 2 * k / 6;
+    const a0 = t * 0.35 * Math.PI * 2;
+    ctx.beginPath(); ctx.arc(cx, cy, cr * 1.3, a0, a0 + Math.PI * 0.5); ctx.stroke();
+    ctx.restore();
+    mark(cx, cy, cr * 2 * 0.46, t / 4, coreA); // same proportion as the live hub
+  }
+
+  if (o.veil > 0) {
+    ctx.save(); ctx.globalAlpha = o.veil;
+    const vg = ctx.createRadialGradient(X(50), Y(50), 0, X(50), Y(50), 50 * k);
+    vg.addColorStop(0, C.ink); vg.addColorStop(0.85, rgba(C.ink, 0.95)); vg.addColorStop(1, rgba(C.ink, 0));
+    ctx.fillStyle = vg; ctx.fillRect(X(0), Y(0), 100 * k, 100 * k);
+    ctx.restore();
+  }
+  // App circles
+  PTS.forEach((p, i) => {
+    const appear = ease(clamp((o.build - 0.25 - i * 0.08) / 0.3));
+    if (appear <= 0) return;
+    const app = APPS[i];
+    const nx = X(p.x), ny = Y(p.y), r = NODE_R * k * (0.85 + 0.15 * appear);
+    const hi = o.hi && o.hi.has(i) ? 1 : 0;
+    const dim = (o.hi && o.hi.size && !hi ? 0.5 : 0) + (o.veil || 0) * (1 - (o.hi && o.hi.size && !hi ? 0.5 : 0));
+    ctx.save();
+    ctx.globalAlpha *= appear;
+    ctx.shadowColor = "rgba(0,0,0,0.45)"; ctx.shadowBlur = 30; ctx.shadowOffsetY = 10;
+    const g = ctx.createRadialGradient(nx, ny - r * 0.3, 0, nx, ny, r);
+    g.addColorStop(0, "#123459"); g.addColorStop(0.75, C.ink2); g.addColorStop(1, C.ink2);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(nx, ny, r, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowColor = "transparent";
+    // Soft inner glow when a ring beam enters
+    let ng = 0;
+    if (beamA > 0) RELAY.forEach((rl) => { if (rl.to === i) ng = Math.max(ng, glowAt(ct, rl.reach)); });
+    const glowAmt = Math.max(ng * beamA, hi * 0.9);
+    if (glowAmt > 0) {
+      const gg = ctx.createRadialGradient(nx, ny, 0, nx, ny, r);
+      gg.addColorStop(0, rgba(C.gold, 0.24 * glowAmt)); gg.addColorStop(0.55, rgba(C.gold, 0.09 * glowAmt)); gg.addColorStop(0.72, rgba(C.gold, 0));
+      ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(nx, ny, r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = hi ? C.gold : "rgba(248,246,241,0.14)";
+    if (hi) { ctx.shadowColor = C.gold; ctx.shadowBlur = 28; }
+    ctx.beginPath(); ctx.arc(nx, ny, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.shadowColor = "transparent";
+    // Icon
+    const lines = app.name.length;
+    const iconY = ny - r * (lines > 1 ? 0.5 : 0.38);
+    ctx.save();
+    ctx.translate(nx - r * 0.13, iconY - r * 0.13); ctx.scale(r * 0.26 / 24, r * 0.26 / 24);
+    ctx.strokeStyle = C.gold; ctx.lineWidth = 1.7; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.stroke(ICON_PATHS[app.icon]);
+    ctx.restore();
+    // Name and badge
+    const fs = r * 0.22;
+    app.name.forEach((ln, j) => text(ln, nx, ny + (lines > 1 ? -fs * 0.15 + j * fs * 1.12 : fs * 0.35), { font: `700 ${fs}px ${SERIF}` }));
+    const by = ny + r * (lines > 1 ? 0.52 : 0.4), bf = r * 0.1;
+    ctx.font = `700 ${bf}px ${SANS}`; ctx.letterSpacing = bf * 0.16 + "px";
+    const bw = ctx.measureText(app.badge).width + bf * 2.2;
+    roundRect(nx - bw / 2, by - bf * 1.2, bw, bf * 2.3, bf * 1.2);
+    ctx.lineWidth = 1.5; ctx.strokeStyle = rgba(C.gold, 0.6); ctx.stroke();
+    ctx.letterSpacing = "0px";
+    text(app.badge, nx, by + bf * 0.38, { font: `700 ${bf}px ${SANS}`, color: C.gold, spacing: bf * 0.16 });
+    // Lock badge (each app keeps its own sign-in)
+    if (o.locks > 0) {
+      const la = ease(clamp((o.locks - i * 0.08) / 0.4));
+      const lx = nx + r * 0.72, ly = ny - r * 0.72, lr = r * 0.2;
+      ctx.globalAlpha *= la;
+      ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(lx, ly, lr, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = C.gold; ctx.stroke();
+      ctx.save(); ctx.translate(lx - lr * 0.55, ly - lr * 0.6); ctx.scale(lr * 1.1 / 24, lr * 1.1 / 24);
+      ctx.lineWidth = 2.2; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.stroke(ICON_PATHS.lock); ctx.restore();
+    }
+    if (dim > 0) { ctx.globalAlpha = appear * (o.alpha ?? 1) * dim; ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(nx, ny, r + 2, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
+  });
+  ctx.restore();
+}
+
+// ── Pieces used by individual scenes ─────────────────────────────────────────
+function wordmark(cx, cy, scale, alpha, withHub = true) {
+  text("ORDANIS", cx, cy, { font: `700 ${110 * scale}px ${SERIF}`, spacing: 110 * scale * 0.18, alpha });
+  if (withHub) {
+    ctx.save(); ctx.globalAlpha *= alpha;
+    ctx.fillStyle = rgba(C.gold, 0.9); ctx.fillRect(cx - 160 * scale, cy + 34 * scale, 320 * scale, 2 * scale);
+    ctx.restore();
+    text("HUB", cx + 18 * scale * 0.3, cy + 96 * scale, { font: `700 ${40 * scale}px ${SANS}`, color: C.gold, spacing: 40 * scale * 0.3, alpha });
+  }
+}
+
+function caption(str, alpha, sub) {
+  if (alpha <= 0) return;
+  ctx.save(); ctx.globalAlpha = alpha;
+  const g = ctx.createLinearGradient(0, H - 230, 0, H);
+  g.addColorStop(0, "rgba(2,10,20,0)"); g.addColorStop(1, "rgba(2,10,20,0.75)");
+  ctx.fillStyle = g; ctx.fillRect(0, H - 230, W, 230);
+  ctx.restore();
+  ctx.save(); ctx.globalAlpha = alpha;
+  ctx.fillStyle = C.gold; ctx.fillRect(W / 2 - 40, H - 128, 80, 3);
+  ctx.restore();
+  text(str, W / 2, H - 70, { font: `700 46px ${SERIF}`, alpha });
+  if (sub) text(sub, W / 2, H - 28, { font: `24px ${SANS}`, color: C.muted, alpha });
+}
+
+function signInCard(cx, cy, alpha, typed) {
+  if (alpha <= 0) return;
+  ctx.save(); ctx.globalAlpha = alpha;
+  const w = 560, h = 430;
+  ctx.shadowColor = rgba(C.gold, 0.25); ctx.shadowBlur = 50;
+  roundRect(cx - w / 2, cy - h / 2, w, h, 28); ctx.fillStyle = "rgba(12,30,54,0.92)"; ctx.fill();
+  ctx.shadowColor = "transparent";
+  ctx.lineWidth = 2; ctx.strokeStyle = rgba(C.gold, 0.5); ctx.stroke();
+  ctx.restore();
+  mark(cx, cy - h / 2 - 70, 110, 0.07, alpha);
+  text("Team sign-in", cx, cy - h / 2 + 78, { font: `700 40px ${SERIF}`, alpha });
+  text("Use your ORDANIS Platform account.", cx, cy - h / 2 + 118, { font: `20px ${SANS}`, color: C.muted, alpha });
+  const field = (label, y, fill) => {
+    text(label, cx - w / 2 + 44, y - 14, { font: `700 15px ${SANS}`, color: C.gold, align: "left", spacing: 2, alpha });
+    ctx.save(); ctx.globalAlpha = alpha;
+    roundRect(cx - w / 2 + 44, y, w - 88, 54, 12); ctx.fillStyle = C.ink; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(248,246,241,0.2)"; ctx.stroke();
+    ctx.restore();
+    if (fill > 0) text("•".repeat(Math.round(fill * 12)), cx - w / 2 + 64, y + 36, { font: `24px ${SANS}`, align: "left", alpha });
+  };
+  field("EMAIL", cy - h / 2 + 175, typed);
+  field("PASSWORD", cy - h / 2 + 275, clamp(typed * 2 - 1));
+  ctx.save(); ctx.globalAlpha = alpha;
+  roundRect(cx - w / 2 + 44, cy + h / 2 - 76, w - 88, 52, 26); ctx.fillStyle = C.gold; ctx.fill();
+  ctx.restore();
+  text("Sign in", cx, cy + h / 2 - 42, { font: `700 20px ${SANS}`, color: C.ink, alpha });
+}
+
+function guidesPanel(x, y, alpha, rows) {
+  if (alpha <= 0) return;
+  const w = 700;
+  text("Guides", x, y, { font: `700 44px ${SERIF}`, align: "left", alpha });
+  text("Standard operating procedures, built in", x, y + 40, { font: `22px ${SANS}`, color: C.muted, align: "left", alpha });
+  ["ORDANIS Platform", "ELIOT", "Email Portal", "MILO", "Database", "Demo"].forEach((name, i) => {
+    const a = alpha * ease(clamp(rows * 6 - i));
+    const ry = y + 80 + i * 66;
+    ctx.save(); ctx.globalAlpha = a;
+    roundRect(x, ry, w, 54, 14); ctx.fillStyle = "rgba(12,30,54,0.85)"; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = i === 0 ? rgba(C.gold, 0.5) : "rgba(248,246,241,0.1)"; ctx.stroke();
+    ctx.restore();
+    text(name, x + 24, ry + 36, { font: `700 24px ${SERIF}`, align: "left", alpha: a });
+    text("SOP", x + w - 24, ry + 35, { font: `700 14px ${SANS}`, color: C.gold, align: "right", spacing: 3, alpha: a });
+  });
+}
+
+function accessPanel(x, y, alpha, rows) {
+  if (alpha <= 0) return;
+  const w = 700;
+  text("Team & Access", x, y, { font: `700 44px ${SERIF}`, align: "left", alpha });
+  text("Who can open each app, at a glance", x, y + 40, { font: `22px ${SANS}`, color: C.muted, align: "left", alpha });
+  ctx.save(); ctx.globalAlpha = alpha;
+  roundRect(x, y + 74, w, 300, 18); ctx.fillStyle = "rgba(12,30,54,0.85)"; ctx.fill();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(248,246,241,0.1)"; ctx.stroke();
+  ctx.restore();
+  const cols = ["Platform", "ELIOT", "Email", "MILO", "Data", "Demo"];
+  cols.forEach((c, i) => text(c.toUpperCase(), x + 214 + i * 84, y + 116, { font: `700 13px ${SANS}`, color: C.gold, spacing: 1.5, alpha }));
+  for (let r = 0; r < 4; r++) {
+    const a = alpha * ease(clamp(rows * 4 - r));
+    const ry = y + 150 + r * 54;
+    // Names are placeholders on purpose: no real people in investor material.
+    ctx.save(); ctx.globalAlpha = a;
+    roundRect(x + 26, ry, 130 - r * 12, 18, 9); ctx.fillStyle = "rgba(248,246,241,0.22)"; ctx.fill();
+    cols.forEach((_, i) => {
+      const on = (r * 7 + i * 3) % 5 !== 0;
+      ctx.beginPath(); ctx.arc(x + 214 + i * 84, ry + 9, 9, 0, Math.PI * 2);
+      ctx.fillStyle = on ? rgba(C.gold, 0.85) : "rgba(248,246,241,0.12)"; ctx.fill();
+    });
+    ctx.restore();
+  }
+}
+
+function devices(cx, cy, alpha, drop, tap) {
+  if (alpha <= 0) return;
+  // Laptop
+  const lw = 600, lh = 380, lx = cx - 190, ly = cy - 40;
+  ctx.save(); ctx.globalAlpha = alpha;
+  roundRect(lx - lw / 2, ly - lh / 2, lw, lh, 18); ctx.fillStyle = "#081a2e"; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = "rgba(248,246,241,0.25)"; ctx.stroke();
+  ctx.fillStyle = "rgba(248,246,241,0.18)"; roundRect(lx - lw / 2 - 50, ly + lh / 2, lw + 100, 22, 11); ctx.fill();
+  // Dock with the hub icon
+  roundRect(lx - 170, ly + lh / 2 - 70, 340, 56, 16); ctx.fillStyle = "rgba(248,246,241,0.08)"; ctx.fill();
+  for (let i = 0; i < 5; i++) {
+    const ix = lx - 140 + i * 66, iy = ly + lh / 2 - 62;
+    roundRect(ix, iy, 42, 42, 10);
+    ctx.fillStyle = i === 2 ? C.navy : "rgba(248,246,241,0.14)"; ctx.fill();
+    if (i === 2) { ctx.lineWidth = 1.5; ctx.strokeStyle = rgba(C.gold, 0.6); ctx.stroke(); }
+  }
+  ctx.restore();
+  mark(lx - 140 + 2 * 66 + 21, ly + lh / 2 - 41, 34, 0, alpha * ease(drop));
+  // The app window that opens on tap
+  const open = ease(tap);
+  if (open > 0) {
+    ctx.save(); ctx.globalAlpha = alpha * open;
+    roundRect(lx - lw / 2 + 30, ly - lh / 2 + 30, (lw - 60) * (0.6 + 0.4 * open), (lh - 120) * (0.6 + 0.4 * open), 12);
+    ctx.fillStyle = "#0d2440"; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = rgba(C.gold, 0.5); ctx.stroke();
+    ctx.restore();
+    text("ORDANIS Platform", lx - lw / 2 + 60, ly - lh / 2 + 80, { font: `700 26px ${SERIF}`, align: "left", alpha: alpha * open });
+    for (let i = 0; i < 3; i++) {
+      ctx.save(); ctx.globalAlpha = alpha * open * 0.8;
+      roundRect(lx - lw / 2 + 60, ly - lh / 2 + 110 + i * 46, 300 - i * 50, 24, 8); ctx.fillStyle = "rgba(248,246,241,0.14)"; ctx.fill();
+      ctx.restore();
+    }
+  }
+  // Phone
+  const pw = 230, ph = 460, px = cx + 360, py = cy + 10;
+  ctx.save(); ctx.globalAlpha = alpha;
+  roundRect(px - pw / 2, py - ph / 2, pw, ph, 36); ctx.fillStyle = "#081a2e"; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = "rgba(248,246,241,0.3)"; ctx.stroke();
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) {
+    const ix = px - 78 + c * 58, iy = py - 160 + r * 74;
+    const isHub = r === 1 && c === 1;
+    roundRect(ix, iy - (isHub ? (1 - ease(drop)) * 120 : 0), 40, 40, 10);
+    ctx.globalAlpha = alpha * (isHub ? ease(drop) : 1);
+    ctx.fillStyle = isHub ? C.navy : "rgba(248,246,241,0.12)"; ctx.fill();
+    if (isHub) { ctx.lineWidth = 1.5; ctx.strokeStyle = rgba(C.gold, 0.6); ctx.stroke(); }
+    ctx.globalAlpha = alpha;
+  }
+  ctx.restore();
+  mark(px - 78 + 58 + 20, py - 160 + 74 + 20 - (1 - ease(drop)) * 120, 30, 0, alpha * ease(drop));
+  text("ORDANIS Hub", px - 78 + 58 + 20, py - 160 + 74 + 62, { font: `13px ${SANS}`, alpha: alpha * ease(drop) });
+  // Tap ripple on the laptop dock icon
+  if (tap > 0 && tap < 1) {
+    ctx.save(); ctx.globalAlpha = alpha * (1 - tap);
+    ctx.lineWidth = 3; ctx.strokeStyle = C.gold;
+    ctx.beginPath(); ctx.arc(lx - 140 + 2 * 66 + 21, ly + lh / 2 - 41, 20 + tap * 50, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+}
+
+// ── Timeline ─────────────────────────────────────────────────────────────────
+let SCRIPT = null, TIMES = null, AUDIO = {}, TOTAL = 60;
+const PRE = 0.5, POST = 0.7, LEAD = 1.4, TAIL = 3.2;
+
+async function load() {
+  SCRIPT = await (await fetch("script.json")).json();
+  const ac = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(2, 48000, 48000);
+  let t = 0;
+  TIMES = [];
+  for (const [i, s] of SCRIPT.scenes.entries()) {
+    let dur = null;
+    try {
+      const r = await fetch(`voice/${s.id}.mp3`);
+      if (r.ok) { const buf = await ac.decodeAudioData(await r.arrayBuffer()); AUDIO[s.id] = buf; dur = buf.duration; }
+    } catch (_) { /* no narration yet */ }
+    const est = s.voice.split(/\s+/).length / 2.5;
+    const vDur = dur ?? est;
+    const pre = i === 0 ? LEAD : PRE;
+    const post = i === SCRIPT.scenes.length - 1 ? TAIL : POST;
+    TIMES.push({ id: s.id, start: t, voice: t + pre, voiceDur: vDur, end: t + pre + vDur + post, real: dur != null });
+    t += pre + vDur + post;
+  }
+  TOTAL = t;
+  return TIMES.every((x) => x.real);
+}
+
+// Where each app is named inside scene 3, by word count of its sentence.
+function appCue(local, sc) {
+  const parts = SCRIPT.scenes[2].voice.split(/(?<=\.)\s+/);
+  const words = parts.map((p) => p.split(/\s+/).length);
+  const total = words.reduce((a, b) => a + b, 0);
+  let acc = sc.voice - sc.start;
+  for (let i = 0; i < parts.length; i++) {
+    const len = (words[i] / total) * sc.voiceDur;
+    if (local < acc + len || i === parts.length - 1) return i;
+    acc += len;
+  }
+  return parts.length - 1;
+}
+
+function frame(t) {
+  background(t);
+  const idx = Math.max(0, TIMES.findIndex((s) => t >= s.start && t < s.end));
+  const sc = TIMES[idx], local = t - sc.start, len = sc.end - sc.start;
+  const scene = SCRIPT.scenes[idx];
+  const capA = fade(local, sc.voice - sc.start - 0.2, 0.5, len - 0.45, 0.45);
+
+  // Orbit layout per scene, eased across scene changes.
+  const layouts = [
+    null,
+    { cx: W / 2, cy: 470, size: 800 },
+    { cx: W / 2, cy: 470, size: 800 },
+    { cx: W / 2, cy: 470, size: 800 },
+    { cx: 560, cy: 480, size: 720 },
+    { cx: 470, cy: 480, size: 660 },
+    { cx: W / 2, cy: 430, size: 640 },
+  ];
+  const prevL = layouts[idx - 1] || layouts[idx];
+  const L = layouts[idx];
+  const mv = ease(local / 1.1);
+  const lay = L && prevL ? { cx: lerp(prevL.cx, L.cx, mv), cy: lerp(prevL.cy, L.cy, mv), size: lerp(prevL.size, L.size, mv) } : L;
+
+  if (idx === 0) {
+    const a = fade(local, 0.2, 0.9, len - 0.6, 0.6);
+    mark(W / 2, 330, 230, local / 4, a);
+    wordmark(W / 2, 610, 1, a);
+    caption(scene.caption, capA);
+    return;
+  }
+  if (idx === 1) {
+    const cardA = fade(local, 0, 0.5, len * 0.42, 0.6);
+    const build = ease((local - len * 0.42) / (len * 0.5));
+    signInCard(W / 2, 470, cardA, clamp(local / (len * 0.35)));
+    orbit(t, { ...lay, build, beams: 0, alpha: 1 });
+    caption(scene.caption, capA);
+    return;
+  }
+  if (idx === 2) {
+    const cue = appCue(local, sc);
+    const hi = local < sc.voice - sc.start ? new Set() : new Set(cue >= 4 ? [4, 5] : [cue]);
+    orbit(t, { ...lay, build: 1, beams: 0, hi });
+    const app = APPS[Math.min(cue, 5)];
+    const name = cue >= 4 ? "Database and Demo" : app.name.join(" ");
+    const sub = cue >= 4 ? "The data layer and a safe copy behind every app" : app.line;
+    caption(name, capA, sub);
+    return;
+  }
+  if (idx === 3) {
+    orbit(t, { ...lay, build: 1, beams: ease(local / 0.8), locks: clamp((local - len * 0.45) / (len * 0.4)) });
+    caption(scene.caption, capA);
+    return;
+  }
+  if (idx === 4) {
+    orbit(t, { ...lay, build: 1, beams: 1 });
+    const half = len * 0.48;
+    guidesPanel(1080, 250, fade(local, 0.6, 0.6, half, 0.5), clamp((local - 0.6) / 1.6));
+    accessPanel(1080, 330, fade(local, half + 0.3, 0.6), clamp((local - half - 0.3) / 1.4));
+    caption(scene.caption, capA);
+    return;
+  }
+  if (idx === 5) {
+    orbit(t, { ...lay, build: 1, beams: 1, veil: ease(local / 0.8) * 0.7 });
+    devices(1390, 470, fade(local, 0.3, 0.7), clamp((local - 1.0) / 1.0), clamp((local - len * 0.55) / 0.9));
+    caption(scene.caption, capA);
+    return;
+  }
+  // Close
+  orbit(t, { ...lay, build: 1, beams: 1 });
+  wordmark(W / 2, 850, 0.62, fade(local, 0.8, 1.0), false);
+  text("ONE HUB  ·  EVERY PART OF ORDANIS  ·  CONNECTED", W / 2, 925, { font: `700 22px ${SANS}`, color: C.gold, spacing: 5, alpha: fade(local, 1.4, 1.0) });
+  const end = fade(local, len - 1.0, 1.0);
+  if (end > 0) { ctx.save(); ctx.globalAlpha = end; ctx.fillStyle = "#020a14"; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+}
+
+// ── Preview controls ─────────────────────────────────────────────────────────
+const statusEl = document.getElementById("status"), clockEl = document.getElementById("clock"), scrub = document.getElementById("scrub");
+let playing = false, t0 = 0, tNow = 0, audioCtx = null, sources = [];
+function show(t) { tNow = clamp(t, 0, TOTAL); frame(tNow); clockEl.textContent = tNow.toFixed(1) + "s / " + TOTAL.toFixed(1) + "s"; scrub.value = Math.round(tNow / TOTAL * 1000); }
+function stopAudio() { sources.forEach((s) => { try { s.stop(); } catch (_) {} }); sources = []; }
+document.getElementById("play").onclick = () => {
+  playing = !playing;
+  document.getElementById("play").textContent = playing ? "Pause" : "Play";
+  stopAudio();
+  if (!playing) return;
+  audioCtx = audioCtx || new AudioContext();
+  const startAt = audioCtx.currentTime + 0.05, from = tNow;
+  TIMES.forEach((sc) => {
+    const buf = AUDIO[sc.id]; if (!buf || sc.voice + buf.duration < from) return;
+    const src = audioCtx.createBufferSource(); src.buffer = buf; src.connect(audioCtx.destination);
+    const when = sc.voice - from;
+    if (when >= 0) src.start(startAt + when); else src.start(startAt, -when);
+    sources.push(src);
+  });
+  t0 = performance.now() - from * 1000;
+  const loop = () => { if (!playing) return; const t = (performance.now() - t0) / 1000; if (t >= TOTAL) { playing = false; document.getElementById("play").textContent = "Play"; show(TOTAL); return; } show(t); requestAnimationFrame(loop); };
+  loop();
+};
+scrub.oninput = () => { playing = false; stopAudio(); document.getElementById("play").textContent = "Play"; show(scrub.value / 1000 * TOTAL); };
+
+// ── Render to MP4 (frame-exact, with the narration) ──────────────────────────
+async function renderMp4() {
+  statusEl.textContent = "Rendering…";
+  const haveAudio = TIMES.every((s) => AUDIO[s.id]);
+  const SR = 48000;
+  const target = new Mp4Muxer.ArrayBufferTarget();
+  const muxer = new Mp4Muxer.Muxer({
+    target, fastStart: "in-memory",
+    video: { codec: "avc", width: W, height: H, frameRate: FPS },
+    audio: haveAudio ? { codec: "aac", numberOfChannels: 2, sampleRate: SR } : undefined,
+  });
+  let vErr = null;
+  const ve = new VideoEncoder({ output: (c, m) => muxer.addVideoChunk(c, m), error: (e) => { vErr = e; } });
+  ve.configure({ codec: "avc1.640028", width: W, height: H, bitrate: 12_000_000, framerate: FPS });
+  const frames = Math.ceil(TOTAL * FPS);
+  for (let f = 0; f < frames; f++) {
+    if (vErr) throw vErr;
+    frame(f / FPS);
+    const vf = new VideoFrame(cv, { timestamp: Math.round(f * 1e6 / FPS), duration: Math.round(1e6 / FPS) });
+    ve.encode(vf, { keyFrame: f % (FPS * 2) === 0 });
+    vf.close();
+    if (ve.encodeQueueSize > 8) await new Promise((r) => setTimeout(r, 0));
+    if (f % 30 === 0) { statusEl.textContent = `Video ${Math.round(f / frames * 100)}%`; await new Promise((r) => setTimeout(r, 0)); }
+  }
+  await ve.flush();
+  if (haveAudio) {
+    statusEl.textContent = "Narration…";
+    const n = Math.ceil(TOTAL * SR);
+    const L = new Float32Array(n), R = new Float32Array(n);
+    for (const sc of TIMES) {
+      const buf = AUDIO[sc.id];
+      const off = Math.round(sc.voice * SR);
+      // Resample by linear interpolation if the narration isn't 48 kHz.
+      const ratio = buf.sampleRate / SR, ch0 = buf.getChannelData(0), ch1 = buf.numberOfChannels > 1 ? buf.getChannelData(1) : ch0;
+      const len = Math.floor(buf.length / ratio);
+      for (let i = 0; i < len && off + i < n; i++) {
+        const p = i * ratio, j = Math.floor(p), fr = p - j;
+        L[off + i] += ch0[j] + ((ch0[j + 1] ?? ch0[j]) - ch0[j]) * fr;
+        R[off + i] += ch1[j] + ((ch1[j + 1] ?? ch1[j]) - ch1[j]) * fr;
+      }
+    }
+    let aErr = null;
+    const aeEnc = new AudioEncoder({ output: (c, m) => muxer.addAudioChunk(c, m), error: (e) => { aErr = e; } });
+    aeEnc.configure({ codec: "mp4a.40.2", sampleRate: SR, numberOfChannels: 2, bitrate: 192000 });
+    const CH = 4800;
+    for (let i = 0; i < n; i += CH) {
+      if (aErr) throw aErr;
+      const m = Math.min(CH, n - i), data = new Float32Array(m * 2);
+      data.set(L.subarray(i, i + m), 0); data.set(R.subarray(i, i + m), m);
+      const ad = new AudioData({ format: "f32-planar", sampleRate: SR, numberOfFrames: m, numberOfChannels: 2, timestamp: Math.round(i * 1e6 / SR), data });
+      aeEnc.encode(ad); ad.close();
+    }
+    await aeEnc.flush();
+  }
+  muxer.finalize();
+  const name = haveAudio ? "ORDANIS-Hub.mp4" : "ORDANIS-Hub-silent-draft.mp4";
+  statusEl.textContent = "Saving…";
+  const res = await fetch("/save?name=" + name, { method: "POST", body: target.buffer });
+  const info = await res.json();
+  statusEl.textContent = `Saved ${info.saved} (${(info.bytes / 1e6).toFixed(1)} MB, ${TOTAL.toFixed(1)} s${haveAudio ? ", with narration" : ", no narration yet"})`;
+  return info;
+}
+document.getElementById("render").onclick = () => renderMp4().catch((e) => { statusEl.textContent = "Render failed: " + e.message; });
+window.renderMp4 = renderMp4;
+window.showAt = show;
+
+load().then((allVoice) => {
+  statusEl.textContent = allVoice ? "Narration loaded." : "No narration yet: timings are estimates.";
+  show(Number(new URLSearchParams(location.search).get("t") || 0));
+});
+</script>
+</body>
+</html>
