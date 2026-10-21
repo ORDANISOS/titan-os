@@ -1368,6 +1368,71 @@ function BrandMark({reversed=false,size=40}){
     </svg>
   );
 }
+// Private household (2026-10-21): only the household itself and the staff named here can see it; the
+// database enforces that on every household table and on its files (migration private_households).
+// Admins only. Once private, only someone on the list can change it -- another admin cannot see it at all.
+// Changes need a session that passed two-step sign-in, and each one is written to the audit log.
+function PrivateHouseholdPanel({familyId,familyName,toast,isMobile}){
+  const[st,setSt]=useState(null);
+  const[err,setErr]=useState("");
+  const[staff,setStaff]=useState([]);
+  const[editing,setEditing]=useState(false);
+  const[picked,setPicked]=useState([]);
+  const[busy,setBusy]=useState(false);
+  const load=useCallback(async()=>{
+    const{data,error}=await sb.rpc("household_privacy_status",{p_family_id:familyId});
+    if(error){setErr(error.message);return;}
+    setSt(data);setPicked((data.viewers||[]).map(v=>v.id));
+  },[familyId]);
+  useEffect(()=>{load();},[load]);
+  useEffect(()=>{
+    if(!editing||staff.length)return;
+    sb.from("user_profiles").select("id,full_name,email,role").in("role",["admin","advisor","analyst"]).order("full_name")
+      .then(({data})=>setStaff(data||[]));
+  },[editing,staff.length]);
+  const save=async makePrivate=>{
+    if(!makePrivate&&!confirm(`Make ${familyName} an ordinary household again? Every admin, its Expert and its firm will be able to see it.`))return;
+    setBusy(true);setErr("");
+    const{data,error}=await sb.rpc("household_privacy_set",{p_family_id:familyId,p_private:makePrivate,p_viewers:makePrivate?picked:null});
+    setBusy(false);
+    if(error){setErr(/two-step/i.test(error.message)?"Sign out and sign in again with your two-step code, then try again.":error.message);return;}
+    setSt(data);setPicked((data.viewers||[]).map(v=>v.id));setEditing(false);
+    toast&&toast(makePrivate?"Private household saved":"No longer private");
+  };
+  const roleWord=r=>r==="advisor"?"ORDANIS Expert":r==="analyst"?"Analyst":"Admin";
+  const box={background:B.bgCard,borderRadius:12,padding:isMobile?"18px 16px":"20px 22px",border:`1px solid ${st&&st.is_private?"#c9b37a":B.borderLight}`,boxShadow:B.shadow,marginBottom:16};
+  return <div style={box}>
+    <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>🔒 Private household</div>
+    {err&&<div style={{fontSize:12.5,color:"#8b1a1a",marginBottom:10}}>{err}</div>}
+    {!st?<div style={{fontSize:12.5,color:B.textSoft}}>Loading…</div>:<>
+      <div style={{fontSize:13,color:B.text,lineHeight:1.55,marginBottom:12}}>
+        {st.is_private
+          ?<>Only the household itself and the people below can see <strong>{familyName}</strong>. Everyone else on staff, including other admins, Experts and its firm, sees nothing.</>
+          :<>Make this household visible only to people you choose, for clients who want no other eyes on their records. The household itself always keeps its access.</>}
+      </div>
+      {st.is_private&&!editing&&<div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
+        {(st.viewers||[]).map(v=><span key={v.id} style={{fontSize:12,background:B.white,border:`1px solid ${B.border}`,borderRadius:20,padding:"4px 10px",color:B.navy}}>{v.name} · {roleWord(v.role)}</span>)}
+      </div>}
+      {editing&&<div style={{marginBottom:12}}>
+        <div style={{fontSize:12,color:B.textSoft,marginBottom:8}}>Who can see it (you are always included):</div>
+        <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:220,overflowY:"auto"}}>
+          {staff.map(u=><label key={u.id} style={{display:"flex",alignItems:"center",gap:10,fontSize:13,color:B.text,cursor:"pointer"}}>
+            <input type="checkbox" checked={picked.includes(u.id)} onChange={e=>setPicked(p=>e.target.checked?[...p,u.id]:p.filter(x=>x!==u.id))} style={{width:16,height:16,accentColor:B.navy}}/>
+            {u.full_name||u.email} <span style={{color:B.textMute,fontSize:11.5}}>· {roleWord(u.role)}</span>
+          </label>)}
+        </div>
+      </div>}
+      <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+        {!editing&&!st.is_private&&<Btn small onClick={()=>setEditing(true)}>Make private…</Btn>}
+        {!editing&&st.is_private&&<Btn small variant="ghost" onClick={()=>setEditing(true)}>Change who can see it</Btn>}
+        {!editing&&st.is_private&&<Btn small variant="ghost" disabled={busy} onClick={()=>save(false)}>Make ordinary again</Btn>}
+        {editing&&<Btn small disabled={busy} onClick={()=>save(true)}>{busy?"Saving…":st.is_private?"Save":"Make private"}</Btn>}
+        {editing&&<Btn small variant="ghost" disabled={busy} onClick={()=>{setEditing(false);setPicked((st.viewers||[]).map(v=>v.id));}}>Cancel</Btn>}
+      </div>
+    </>}
+  </div>;
+}
+
 // "Powered by ORDANIS" under a firm's own logo. Drawn as live text, never baked into the firm's artwork:
 // text inside a logo image shrinks with the image and becomes unreadable in the 64px sidebar slot, while
 // this stays a fixed, legible size everywhere the logo appears. The ORDANIS colour is fixed (not B.navy),
@@ -8287,6 +8352,8 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
           })}
         </div>
       </div>
+
+      <PrivateHouseholdPanel familyId={family.id} familyName={family.name} toast={toast} isMobile={isMobile}/>
 
       {/* Danger Zone: honoring a household's request to be removed from the platform. Two
           deliberate steps -- archive (immediate, non-destructive) then, only once archived,
