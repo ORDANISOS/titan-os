@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ORDANIS Hub</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#061629">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ORDANIS Hub">
+<meta name="robots" content="noindex, nofollow">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 14a33 36 0 0 0 0 72v-9a24 27 0 0 1 0-54z' fill='%230A2540'/%3E%3Cpath d='M50 14a33 36 0 0 1 0 72v-9a24 27 0 0 0 0-54z' fill='%23C9A961'/%3E%3C/svg%3E">
 <style>
   :root {
@@ -122,8 +130,44 @@
   .node.live .badge { color: var(--gold); border-color: rgba(201, 169, 97, 0.6); }
   .node.soon { cursor: default; opacity: 0.72; }
 
-  .panel { color: var(--muted); max-width: 560px; margin: 40px auto; line-height: 1.6; }
-  .panel h2 { font-family: Georgia, serif; color: var(--paper); }
+  .panel { color: var(--muted); max-width: 760px; margin: 8px auto 40px; line-height: 1.6; text-align: left; }
+  .panel h2 { font-family: Georgia, serif; color: var(--paper); font-size: clamp(26px, 5vw, 36px); text-align: center; margin: 0 0 6px; }
+  .panel .lead { text-align: center; margin: 0 0 26px; }
+  .panel h3 { font-family: Georgia, serif; color: var(--gold); font-size: 16px; margin: 20px 0 6px; }
+  .panel ol, .panel ul { margin: 0; padding-left: 22px; }
+  .panel li { margin: 4px 0; }
+  .panel li::marker { color: var(--gold); }
+  .sop {
+    background: rgba(12, 30, 54, 0.75); border: 1px solid rgba(248, 246, 241, 0.1);
+    border-radius: 14px; margin: 0 0 12px; padding: 0 20px;
+  }
+  .sop[open] { border-color: rgba(201, 169, 97, 0.45); padding-bottom: 18px; }
+  .sop summary {
+    list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 16px 0; font-family: Georgia, serif; font-weight: 700; font-size: 19px; color: var(--paper);
+  }
+  .sop summary::-webkit-details-marker { display: none; }
+  .sop summary::after { content: "+"; color: var(--gold); font-family: Arial, sans-serif; font-size: 22px; margin-left: auto; }
+  .sop[open] summary::after { content: "\2212"; }
+  .sop summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 6px; }
+  .tag {
+    font-family: Arial, sans-serif; font-size: 10px; letter-spacing: .16em; color: var(--gold);
+    border: 1px solid rgba(201, 169, 97, 0.6); border-radius: 999px; padding: 3px 9px;
+  }
+  .sop .what { margin: 0; color: var(--paper); opacity: .85; }
+  .table-wrap { overflow-x: auto; border: 1px solid rgba(248, 246, 241, 0.1); border-radius: 14px; background: rgba(12, 30, 54, 0.75); }
+  table.access { width: 100%; border-collapse: collapse; min-width: 560px; }
+  .access th, .access td { padding: 12px 14px; text-align: left; border-bottom: 1px solid rgba(248, 246, 241, 0.08); font-size: 14px; }
+  .access th { color: var(--gold); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+  .access tr:last-child td { border-bottom: 0; }
+  .access td strong { color: var(--paper); display: block; }
+  .access .who { font-size: 12px; }
+  .access .yes { color: var(--paper); }
+  .access .no { color: rgba(154, 168, 186, 0.55); }
+  .people { list-style: none; padding: 0 !important; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+  .people li { background: rgba(12, 30, 54, 0.75); border: 1px solid rgba(248, 246, 241, 0.1); border-radius: 12px; padding: 10px 14px; margin: 0; }
+  .people strong { color: var(--paper); display: block; }
+  .note { margin: 0 0 10px; }
   footer { text-align: center; color: rgba(154, 168, 186, 0.6); font-size: 12px; padding-bottom: 28px; letter-spacing: .08em; }
 
   @media (max-width: 560px) {
@@ -136,11 +180,44 @@
   @media (prefers-reduced-motion: reduce) {
     .core .ring, .core svg.mark, .beams .pulse { animation: none; }
   }
+  /* Sign-in */
+  .gate { max-width: 420px; margin: 6vh auto 40px; padding: 0 16px; }
+  .gate .mark-lg { width: 76px; height: 76px; display: block; margin: 0 auto 18px; animation: flip 4s linear infinite; filter: drop-shadow(0 0 10px rgba(201, 169, 97, 0.45)); }
+  .card {
+    background: rgba(12, 30, 54, 0.85); border: 1px solid rgba(201, 169, 97, 0.45); border-radius: 18px;
+    padding: 26px 24px; box-shadow: 0 0 30px rgba(201, 169, 97, 0.12);
+  }
+  .card h2 { font-family: Georgia, serif; margin: 0 0 8px; font-size: 24px; text-align: center; }
+  .card p { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 0 0 18px; text-align: center; }
+  .card form { display: grid; gap: 14px; }
+  .card label { display: grid; gap: 6px; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); }
+  .card input {
+    font: 16px Arial, sans-serif; color: var(--paper); background: var(--ink); border: 1px solid rgba(248, 246, 241, 0.2);
+    border-radius: 10px; padding: 12px 14px; outline: none;
+  }
+  .card input:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(201, 169, 97, 0.2); }
+  .card input.code { font-size: 24px; letter-spacing: .4em; text-align: center; }
+  .btn {
+    font: 700 15px Arial, sans-serif; color: var(--ink); background: var(--gold); border: 0; border-radius: 999px;
+    padding: 13px 18px; cursor: pointer;
+  }
+  .btn:hover { background: var(--gold-hi); }
+  .btn:disabled { opacity: .6; cursor: default; }
+  .link { background: none; border: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font-size: 13px; justify-self: center; padding: 4px; }
+  .err { color: #F2A7A0; font-size: 13px; text-align: center; }
+  .qr { background: var(--paper); border-radius: 12px; padding: 12px; width: 196px; margin: 0 auto; }
+  .qr img { display: block; width: 172px; height: 172px; }
+  .secret { color: var(--muted); font-size: 12px; text-align: center; }
+  .secret code { display: block; word-break: break-all; color: var(--gold); margin-top: 6px; }
+  .signout { all: unset; cursor: pointer; color: var(--muted); font-size: 14px; }
+  .signout:hover { color: var(--paper); }
+  .signout:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <header>
-  <a class="brand" href="#" aria-label="ORDANIS Hub">
+  <a class="brand" href="./" aria-label="ORDANIS Hub">
     <svg viewBox="0 0 100 100" aria-hidden="true">
       <path d="M50 14a33 36 0 0 0 0 72v-9a24 27 0 0 1 0-54z" fill="#F8F6F1"/>
       <path d="M50 14a33 36 0 0 1 0 72v-9a24 27 0 0 0 0-54z" fill="#C9A961"/>
@@ -149,18 +226,29 @@
     <span class="divider"></span>
     <span class="hubname">HUB</span>
   </a>
-  <div class="user"><span class="avatar">W</span><span class="label">Will Perez</span></div>
+  <div class="user" id="user" hidden>
+    <span class="avatar" id="avatar"></span><span class="label" id="user-name"></span>
+    <button class="signout" id="signout" type="button">Sign out</button>
+  </div>
 </header>
 
-<nav role="tablist">
+<nav role="tablist" id="tabs" hidden>
   <button role="tab" aria-selected="true" data-tab="tools">Apps</button>
   <button role="tab" aria-selected="false" data-tab="guides">Guides</button>
   <button role="tab" aria-selected="false" data-tab="team">Team &amp; Access</button>
 </nav>
 
-<main>
+<div class="gate" id="gate">
+  <svg class="mark-lg" viewBox="0 0 100 100" aria-hidden="true">
+    <path d="M50 14a33 36 0 0 0 0 72v-9a24 27 0 0 1 0-54z" fill="#F8F6F1"/>
+    <path d="M50 14a33 36 0 0 1 0 72v-9a24 27 0 0 0 0-54z" fill="#C9A961"/>
+  </svg>
+  <div class="card" id="card" aria-live="polite"><p>Loading…</p></div>
+</div>
+
+<main id="app" hidden>
   <section id="tab-tools">
-    <h1 id="greeting">Welcome, Will</h1>
+    <h1 id="greeting">Welcome</h1>
     <p class="sub">Pick an app. It opens in a new tab.</p>
     <div class="stage" id="stage">
       <svg class="beams" id="beams" viewBox="0 0 100 100" aria-hidden="true">
@@ -181,96 +269,12 @@
       </div>
     </div>
   </section>
-
-  <section id="tab-guides" class="panel" hidden>
-    <h2>Guides</h2>
-    <p>Runbooks and how-tos for each app will live here.</p>
-  </section>
-  <section id="tab-team" class="panel" hidden>
-    <h2>Team &amp; Access</h2>
-    <p>Who can open which app, and in what role, will be managed here.</p>
-  </section>
+  <div id="private"></div>
 </main>
 
 <footer>ORDANIS OS LLC</footer>
 
-<script>
-  // Edit the apps here. Leave url empty to show the tile as "coming soon".
-  const APPS = [
-    { name: "ORDANIS Platform", role: "PRODUCTION", url: "https://portal.ordanisos.com", icon: "home" },
-    { name: "ELIOT",            role: "ADMIN",      url: "https://eliot.ordanisos.com", icon: "mic" },
-    { name: "MILO",             role: "MARKETING",  url: "",                            icon: "chart" },
-    { name: "Server",           role: "OWNER",      url: "https://supabase.com/dashboard/project/xreeruxuwtmjhvvxvjts", icon: "server" },
-    { name: "Demo",             role: "SANDBOX",    url: "https://ordanis-demo.vercel.app", icon: "flask" },
-  ];
-
-  const ICONS = {
-    home:   '<path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
-    mic:    '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/>',
-    chart:  '<path d="M4 20h16"/><path d="M7 16v-5"/><path d="M12 16V6"/><path d="M17 16v-8"/>',
-    server: '<rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/><path d="M8 7h.01M8 17h.01"/>',
-    flask:  '<path d="M9 3h6"/><path d="M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3"/><path d="M7.5 15h9"/>',
-  };
-
-  const hour = new Date().getHours();
-  const part = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  document.getElementById("greeting").textContent = part + ", Will";
-
-  const stage = document.getElementById("stage");
-  const beams = document.getElementById("beams");
-  const NS = "http://www.w3.org/2000/svg";
-  const R = 34;
-  const pts = APPS.map((_, i) => {
-    const a = (-90 + (360 / APPS.length) * i) * Math.PI / 180;
-    return { x: 50 + R * Math.cos(a), y: 50 + R * Math.sin(a) };
-  });
-
-  function line(a, b, cls) {
-    const l = document.createElementNS(NS, "line");
-    l.setAttribute("x1", a.x); l.setAttribute("y1", a.y);
-    l.setAttribute("x2", b.x); l.setAttribute("y2", b.y);
-    l.setAttribute("class", cls);
-    beams.appendChild(l);
-    return l;
-  }
-
-  const center = { x: 50, y: 50 };
-  pts.forEach((p, i) => {
-    const next = pts[(i + 1) % pts.length];
-    line(p, next, "rail");
-    line(p, next, "pulse").style.animationDelay = (-i * 0.6) + "s";
-    line(center, p, "rail");
-    line(center, p, "pulse spoke").style.animationDelay = (-i * 0.45) + "s";
-  });
-
-  APPS.forEach((app, i) => {
-    const live = Boolean(app.url);
-    const el = document.createElement(live ? "a" : "div");
-    el.className = "node " + (live ? "live" : "soon");
-    el.style.left = pts[i].x + "%";
-    el.style.top = pts[i].y + "%";
-    if (live) {
-      el.href = app.url;
-      el.target = "_blank";
-      el.rel = "noopener noreferrer";
-      el.setAttribute("aria-label", "Open " + app.name);
-    }
-    el.innerHTML =
-      '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS[app.icon] + '</svg>' +
-      '<span class="name"></span><span class="badge"></span>';
-    el.querySelector(".name").textContent = app.name;
-    el.querySelector(".badge").textContent = live ? app.role : "COMING SOON";
-    stage.appendChild(el);
-  });
-
-  document.querySelectorAll("nav button").forEach(btn => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll("nav button").forEach(b => b.setAttribute("aria-selected", String(b === btn)));
-      ["tools", "guides", "team"].forEach(t => {
-        document.getElementById("tab-" + t).hidden = t !== btn.dataset.tab;
-      });
-    });
-  });
-</script>
+<script src="supabase.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
