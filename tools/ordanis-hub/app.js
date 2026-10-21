@@ -122,13 +122,26 @@
       beams.appendChild(l);
       return l;
     };
+    // A beam is one gold dash that runs along its line once per cycle. Each records when its head
+    // reaches the edge of the app it points at, so that app can pulse right then.
+    const NODE_R = 14; // half the node width (28% of the stage, in the 0-100 viewBox)
+    const arrivals = apps.map(() => []);
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const beam = (a, b, cls, dash, period, delay, target) => {
+      const l = line(a, b, cls);
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      l.style.strokeDasharray = dash + " " + (len + dash);
+      if (still) return;
+      l.animate([{ strokeDashoffset: dash }, { strokeDashoffset: -len }], { duration: period, delay, iterations: Infinity });
+      arrivals[target].push({ period, at: delay + period * (len - NODE_R) / (len + dash) });
+    };
     const center = { x: 50, y: 50 };
     pts.forEach((p, i) => {
-      const next = pts[(i + 1) % pts.length];
-      line(p, next, "rail");
-      line(p, next, "pulse").style.animationDelay = (-i * 0.6) + "s";
+      const n = (i + 1) % pts.length;
+      line(p, pts[n], "rail");
+      beam(p, pts[n], "pulse", 9, 3200, i * 600, n);
       line(center, p, "rail");
-      line(center, p, "pulse spoke").style.animationDelay = (-i * 0.45) + "s";
+      beam(center, p, "pulse spoke", 4, 2400, i * 450, i);
     });
 
     apps.forEach((app, i) => {
@@ -145,6 +158,15 @@
       }
       node.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[app.icon] || "") + "</svg>";
       node.append(el("span", { class: "name" }, app.name), el("span", { class: "badge" }, live ? app.role : "COMING SOON"));
+      for (const { period, at } of arrivals[i]) {
+        const ping = el("span", { class: "ping", "aria-hidden": "true" });
+        node.appendChild(ping);
+        ping.animate([
+          { opacity: 0.95, transform: "scale(1)" },
+          { opacity: 0, transform: "scale(1.18)", offset: 0.28 },
+          { opacity: 0, transform: "scale(1.18)" },
+        ], { duration: period, delay: at, iterations: Infinity, easing: "ease-out" });
+      }
       stage.appendChild(node);
     });
 

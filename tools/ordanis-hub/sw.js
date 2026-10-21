@@ -1,7 +1,7 @@
 // ORDANIS Hub service worker: lets the hub install as an app and open quickly.
 // Only the public shell is cached. Sign-in and hub content (Supabase, another origin) are never
 // touched, so nothing private is stored here.
-const CACHE = "ordanis-hub-v2";
+const CACHE = "ordanis-hub-v3";
 const SHELL = ["./", "index.html", "app.js", "supabase.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
 self.addEventListener("install", (e) => {
