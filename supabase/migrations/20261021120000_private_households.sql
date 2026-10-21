@@ -107,8 +107,9 @@ begin
   else
     v_list := array(select distinct x from unnest(coalesce(p_viewers, '{}'::uuid[]) || auth.uid()) as x where x is not null);
     select count(*) into v_bad from unnest(v_list) as x
-     where not exists (select 1 from public.user_profiles p where p.id = x and p.role in ('admin', 'advisor', 'analyst'));
-    if v_bad > 0 then raise exception 'Only ORDANIS staff (admins, Experts, Analysts) can be named.' using errcode = '22023'; end if;
+     where not exists (select 1 from public.user_profiles p where p.id = x and p.role in ('admin', 'advisor', 'analyst')
+                         and p.active is distinct from false);
+    if v_bad > 0 then raise exception 'Only active ORDANIS staff (admins, Experts, Analysts) can be named.' using errcode = '22023'; end if;
     insert into public.household_privacy (family_id, viewers, updated_by, updated_at)
     values (p_family_id, v_list, auth.uid(), now())
     on conflict (family_id) do update set viewers = excluded.viewers, updated_by = excluded.updated_by, updated_at = now();

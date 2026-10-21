@@ -1438,7 +1438,8 @@ function PrivateHouseholdPanel({familyId,familyName,toast,isMobile}){
   useEffect(()=>{load();},[load]);
   useEffect(()=>{
     if(!editing||staff.length)return;
-    sb.from("user_profiles").select("id,full_name,email,role").in("role",["admin","advisor","analyst"]).order("full_name")
+    // Active staff only: a deactivated login can't be named (the database refuses it too).
+    sb.from("user_profiles").select("id,full_name,email,role,active").in("role",["admin","advisor","analyst"]).neq("active",false).order("full_name")
       .then(({data})=>setStaff(data||[]));
   },[editing,staff.length]);
   const save=async makePrivate=>{
