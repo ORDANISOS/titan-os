@@ -20,6 +20,8 @@ import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2.49.4";
 import postgres from "npm:postgres@3.4.9";
 import { loadVapid, sendPush, PUSH_ENDPOINT, type Vapid } from "./webpush.ts";
 import { expertDesk, deskForModel, type Desk, type DeskEmail } from "./coverage.ts";
+// MILO's marketing reports (read-only), shared with milo-command so ELIOT and MILO give the same numbers.
+import { runReport as runMarketingReport, PERIOD_PROPS as MILO_PERIOD_PROPS, CHANNELS as MILO_CHANNELS } from "../milo-command/reports.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -321,6 +323,26 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
     },
   },
   // ── Presentation (no data access): puts a structured visual on the administrator's screen ──
+  {
+    name: "marketing_report",
+    description: "Read-only marketing numbers from MILO (the marketing team's console): marketing spend (conferences and every other channel), the conference scorecard (cost per lead, meeting, deal), budget vs actual, new-household signup TOTALS (by month, plan, self-serve/advisor/firm, and by campaign link, with blended or attributed cost per signup), and Instagram/LinkedIn results. Pick one report per call. It cannot add, change or void spend, set budgets, or connect accounts; those are done in MILO at milo.ordanisos.com.",
+    input_schema: {
+      type: "object",
+      properties: {
+        report: { type: "string", enum: ["spend_summary", "spend_list", "conference_scorecard", "budget_status", "signup_overview", "signup_by_campaign", "social_overview", "social_top_posts"] },
+        ...MILO_PERIOD_PROPS,
+        group_by: { type: "string", enum: ["channel", "month", "campaign", "vendor", "kind"], description: "spend_summary only. Default channel." },
+        channel: { type: "string", enum: [...MILO_CHANNELS], description: "spend_list only." },
+        kind: { type: "string", enum: ["conference", "other"], description: "spend_list only." },
+        search: { type: "string", description: "spend_list only: words in the title, vendor, campaign or city." },
+        campaign: { type: "string", description: "signup_by_campaign only: focus on one campaign." },
+        platform: { type: "string", enum: ["instagram", "linkedin"], description: "social reports only." },
+        metric: { type: "string", enum: ["reach", "impressions", "likes", "comments", "saves", "shares"], description: "social_top_posts only." },
+      },
+      required: ["report"],
+      additionalProperties: false,
+    },
+  },
   {
     name: "show_on_screen",
     description: "Show a clean visual on the administrator's screen next to your spoken answer. Use it for financial, numeric, comparative or analytical answers and for lists of four or more items. Block types: 'stats' (headline numbers: items of {label, value, note?}), 'bars' (one measure compared across categories: items of {label, value} with unit '$', '%' or 'count'; at least two items), 'table' (columns + rows, numbers as numbers, plus units per column such as ['', '$']), 'list' (short text items). Use real numbers from the tools only. Call it at most once per answer, after you have the data.",
@@ -1382,6 +1404,7 @@ const SYSTEM_PROMPT = [
   "- Do not give investment, tax or legal advice.",
   "- Utilization: when you look up a household, use its utilization. Say briefly what it actively uses, what it used before but has gone quiet on, and what its plan includes that it has never used, then suggest the one or two things its ORDANIS Expert could raise with the family. Present it as helpful, never as a judgement of the family. \"Use\" means records added or changed (or signing in); simply viewing isn't recorded, so say \"hasn't added\" rather than \"never looked at\".",
   "- Covering for an Expert: when asked what an ORDANIS Expert has on their plate, or to cover for one who is out, use expert_desk. The full list is on screen automatically, so don't call show_on_screen and don't read the list out. Say one or two sentences: how much is overdue or due today, the single most urgent item, and that the rest is on screen. If several Experts match, ask which one. If their email isn't shown, say why in a few words.",
+  "- Marketing: for questions about marketing spend, conferences, budgets, signups by source or campaign, or Instagram/LinkedIn, use marketing_report (MILO's numbers, read-only). Signup figures are totals only. Say 'blended' for cost per signup from signup_overview and 'attributed' for signup_by_campaign; blank leads mean 'not recorded'. To add or change spend, budgets or social connections, point them to MILO at milo.ordanisos.com.",
   "- Team tasks: you can draft tasks for the ORDANIS team's internal list with propose_task (households never see them). You never save a task yourself: say the draft is on screen, read it back, and ask a yes-or-no question. If they then say yes or no, the app handles it. Phone reminders are lock-screen alerts that show a count only, never the task text.",
 ].join("\n");
 
@@ -1693,6 +1716,14 @@ Deno.serve(async (req) => {
             const content = r.desk ? deskForModel(r.desk) : { error: r.error, experts: r.options ?? [] };
             return { type: "tool_result" as const, tool_use_id: tu.id, content: `<database_result tool="expert_desk">\n${JSON.stringify(content)}\n</database_result>` };
           }
+          if (tu.name === "marketing_report") {
+            // MILO's tables have no browser access, so this reads with the service role. The caller has
+            // already passed this function's admin + MFA gate; the reports only read and return totals.
+            const report = String(input.report ?? "");
+            const out = await runMarketingReport(admin, report, input);
+            toolLog.push({ name: `marketing_report:${report}`, input, ok: true, rows: out.rows });
+            return { type: "tool_result" as const, tool_use_id: tu.id, content: `<database_result tool="marketing_report">\n${JSON.stringify(out.data)}\n</database_result>` };
+          }
           if (tu.name === "show_on_screen") {
             display = sanitizeDisplay(input);
             toolLog.push({ name: tu.name, input: { title: display?.title ?? null }, ok: !!display, rows: display?.blocks.length ?? 0 });
@@ -1720,8 +1751,10 @@ Deno.serve(async (req) => {
     audit.tool_calls = toolLog;
     // Record which system(s) the answer drew on.
     const usedEmail = toolLog.some((t) => String(t.name).startsWith("email_"));
-    const usedPlatform = toolLog.some((t) => !String(t.name).startsWith("email_") && t.name !== "show_on_screen");
-    audit.module = usedEmail && usedPlatform ? "platform+email" : usedEmail ? "email" : "platform";
+    const usedPlatform = toolLog.some((t) => !String(t.name).startsWith("email_") && !String(t.name).startsWith("marketing_report") && t.name !== "show_on_screen");
+    const usedMarketing = toolLog.some((t) => String(t.name).startsWith("marketing_report"));
+    audit.module = usedMarketing && !usedEmail && !usedPlatform ? "marketing"
+      : usedEmail && usedPlatform ? "platform+email" : usedEmail ? "email" : "platform";
     if (refused) answer = "I can't help with that one.";
     if (!answer) answer = "I couldn't finish that lookup. Try asking it a simpler way.";
 
