@@ -52,7 +52,7 @@ const APPS = [
   { name: "ELIOT", role: "ADMIN", url: "https://eliot.ordanisos.com", icon: "mic" },
   { name: "Email Portal", role: "TEAM", url: "https://emailportal.ordanisos.com", icon: "mail" },
   { name: "MILO", role: "MARKETING", url: "", icon: "chart" },
-  { name: "Server", role: "OWNER", url: "https://supabase.com/dashboard/project/xreeruxuwtmjhvvxvjts", icon: "server" },
+  { name: "Database", role: "OWNER", url: "https://supabase.com/dashboard/project/xreeruxuwtmjhvvxvjts", icon: "database" },
   { name: "Demo", role: "SANDBOX", url: "https://ordanis-demo.vercel.app", icon: "flask" },
 ];
 
@@ -164,7 +164,7 @@ const GUIDES_HTML = `  <section id="tab-guides" class="panel" hidden>
     </details>
 
     <details class="sop">
-      <summary><span>Server</span><span class="tag">OWNER</span></summary>
+      <summary><span>Database</span><span class="tag">OWNER</span></summary>
       <p class="what">The production database, file storage and server functions behind the Platform, ELIOT and MILO (Supabase). Changes here affect real clients immediately.</p>
       <h3>Who can use it</h3>
       <ul>
@@ -214,7 +214,7 @@ const TEAM_HTML = `  <section id="tab-team" class="panel" hidden>
     <div class="table-wrap">
       <table class="access">
         <thead>
-          <tr><th>Person</th><th>Platform</th><th>ELIOT</th><th>Email Portal</th><th>MILO</th><th>Server</th><th>Demo</th></tr>
+          <tr><th>Person</th><th>Platform</th><th>ELIOT</th><th>Email Portal</th><th>MILO</th><th>Database</th><th>Demo</th></tr>
         </thead>
         <tbody>
           <tr><td><strong>Will Perez</strong><span class="who">Owner</span></td><td class="yes">Admin</td><td class="yes">Admin</td><td class="yes">Admin</td><td class="yes">Admin</td><td class="yes">Owner</td><td class="yes">Admin</td></tr>

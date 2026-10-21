@@ -1,7 +1,7 @@
 {
   "name": "ORDANIS Hub",
   "short_name": "ORDANIS Hub",
-  "description": "One place to open ORDANIS Platform, ELIOT, the Email Portal, MILO, Server and Demo.",
+  "description": "One place to open ORDANIS Platform, ELIOT, the Email Portal, MILO, Database and Demo.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
