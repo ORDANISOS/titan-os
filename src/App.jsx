@@ -811,7 +811,7 @@ const pctChange=(s,c)=>{const sv=Number(s)||0;const cv=Number(c)||0;if(!sv)retur
 
 const toClient=obj=>{
   if(!obj)return obj;
-  const m={family_id:"familyId",contact_id:"contactId",account_id:"accountId",account_period:"accountPeriod",as_of:"asOf",balance_as_of:"balanceAsOf",source_document_id:"sourceDocumentId",balance_source_document_id:"balanceSourceDocumentId",entered_by:"enteredBy",close_date:"closeDate",due_date:"dueDate",created_at:"createdAt",uploaded_at:"uploadedAt",advisor_name:"advisorName",advisor_email:"advisorEmail",owner_name:"ownerName",property_type:"propertyType",property_id:"propertyId",purchase_price:"purchasePrice",purchase_date:"purchaseDate",current_value:"currentValue",loan_balance:"loanBalance",interest_rate:"interestRate",loan_payment:"loanPayment",loan_maturity_date:"loanMaturityDate",loan_type:"loanType",rental_income:"rentalIncome",property_taxes:"propertyTaxes",flood_insurance:"floodInsurance",insurance_company:"insuranceCompany",insurance_premium:"insurancePremium",flood_insurance_company:"floodInsuranceCompany",flood_insurance_premium:"floodInsurancePremium",insurance_expiration:"insuranceExpiration",policy_number:"policyNumber",coverage_amount:"coverageAmount",valuable_id:"valuableId",flood_insurance_expiration:"floodInsuranceExpiration",account_type:"accountType",starting_balance:"startingBalance",current_balance:"currentBalance",banker_name:"bankerName",account_advisor_name:"accountAdvisorName",account_advisor_phone:"accountAdvisorPhone",account_advisor_email:"accountAdvisorEmail",make_model:"makeModel",estimated_value:"estimatedValue",file_type:"fileType",extracted_text:"extractedText",reminder_days:"reminderDays",reminder_sent:"reminderSent",full_name:"fullName",file_path:"filePath",file_size:"fileSize",uploaded_by:"uploadedBy",event_type:"eventType",start_date:"startDate",end_date:"endDate",tax_treatment:"taxTreatment",filing_status:"filingStatus",state_tax_rate:"stateTaxRate",base_income:"baseIncome",cash_flow_settings:"cashFlowSettings",hoa_fee:"hoaFee",property_management_fee_pct:"propertyManagementFeePct",include_mortgage_in_cashflow:"includeMortgageInCashflow",sort_order:"sortOrder",note_id:"noteId",recurrence_interval:"recurrenceInterval",recurrence_unit:"recurrenceUnit",completed_at:"completedAt",completed_by:"completedBy",item_key:"itemKey",item_label:"itemLabel",item_type:"itemType",occurrence_date:"occurrenceDate",second_mortgage_balance:"secondMortgageBalance",second_mortgage_payment:"secondMortgagePayment",assistant_name:"assistantName",is_advisor:"isAdvisor",is_primary:"isPrimary",updated_at:"updatedAt",is_secondary:"isSecondary",pcm_responsible:"pcmResponsible",invited_at:"invitedAt",partner_kind:"partnerKind",business_partner_seats_stripe_item_id:"businessPartnerSeatsStripeItemId",user_id:"userId",paid_at:"paidAt",paid_by:"paidBy",vendor_family_contact_id:"vendorFamilyContactId",vendor_property_contact_id:"vendorPropertyContactId",event_id:"eventId",document_id:"documentId",downloaded_by:"downloadedBy",downloaded_at:"downloadedAt",owner_user_id:"ownerUserId",owner_email:"ownerEmail",owner_role:"ownerRole",prompt_type:"promptType",template_key:"templateKey",custom_prompt:"customPrompt",schedule_preset:"schedulePreset",schedule_dow:"scheduleDow",schedule_hour_utc:"scheduleHourUtc",last_run_at:"lastRunAt",last_run_status:"lastRunStatus",last_run_error:"lastRunError",data_source:"dataSource",can_run_scheduled_prompts:"canRunScheduledPrompts",property_section:"propertySection",expiry_date:"expiryDate",doc_type:"docType",mime_type:"mimeType"};
+  const m={family_id:"familyId",contact_id:"contactId",account_id:"accountId",account_period:"accountPeriod",as_of:"asOf",balance_as_of:"balanceAsOf",source_document_id:"sourceDocumentId",balance_source_document_id:"balanceSourceDocumentId",entered_by:"enteredBy",close_date:"closeDate",due_date:"dueDate",created_at:"createdAt",uploaded_at:"uploadedAt",advisor_name:"advisorName",advisor_email:"advisorEmail",owner_name:"ownerName",property_type:"propertyType",property_id:"propertyId",purchase_price:"purchasePrice",purchase_date:"purchaseDate",current_value:"currentValue",loan_balance:"loanBalance",interest_rate:"interestRate",loan_payment:"loanPayment",loan_maturity_date:"loanMaturityDate",loan_type:"loanType",rental_income:"rentalIncome",property_taxes:"propertyTaxes",flood_insurance:"floodInsurance",insurance_company:"insuranceCompany",insurance_premium:"insurancePremium",flood_insurance_company:"floodInsuranceCompany",flood_insurance_premium:"floodInsurancePremium",insurance_expiration:"insuranceExpiration",policy_number:"policyNumber",coverage_amount:"coverageAmount",valuable_id:"valuableId",private_owner_id:"privateOwnerId",flood_insurance_expiration:"floodInsuranceExpiration",account_type:"accountType",starting_balance:"startingBalance",current_balance:"currentBalance",banker_name:"bankerName",account_advisor_name:"accountAdvisorName",account_advisor_phone:"accountAdvisorPhone",account_advisor_email:"accountAdvisorEmail",make_model:"makeModel",estimated_value:"estimatedValue",file_type:"fileType",extracted_text:"extractedText",reminder_days:"reminderDays",reminder_sent:"reminderSent",full_name:"fullName",file_path:"filePath",file_size:"fileSize",uploaded_by:"uploadedBy",event_type:"eventType",start_date:"startDate",end_date:"endDate",tax_treatment:"taxTreatment",filing_status:"filingStatus",state_tax_rate:"stateTaxRate",base_income:"baseIncome",cash_flow_settings:"cashFlowSettings",hoa_fee:"hoaFee",property_management_fee_pct:"propertyManagementFeePct",include_mortgage_in_cashflow:"includeMortgageInCashflow",sort_order:"sortOrder",note_id:"noteId",recurrence_interval:"recurrenceInterval",recurrence_unit:"recurrenceUnit",completed_at:"completedAt",completed_by:"completedBy",item_key:"itemKey",item_label:"itemLabel",item_type:"itemType",occurrence_date:"occurrenceDate",second_mortgage_balance:"secondMortgageBalance",second_mortgage_payment:"secondMortgagePayment",assistant_name:"assistantName",is_advisor:"isAdvisor",is_primary:"isPrimary",updated_at:"updatedAt",is_secondary:"isSecondary",pcm_responsible:"pcmResponsible",invited_at:"invitedAt",partner_kind:"partnerKind",business_partner_seats_stripe_item_id:"businessPartnerSeatsStripeItemId",user_id:"userId",paid_at:"paidAt",paid_by:"paidBy",vendor_family_contact_id:"vendorFamilyContactId",vendor_property_contact_id:"vendorPropertyContactId",event_id:"eventId",document_id:"documentId",downloaded_by:"downloadedBy",downloaded_at:"downloadedAt",owner_user_id:"ownerUserId",owner_email:"ownerEmail",owner_role:"ownerRole",prompt_type:"promptType",template_key:"templateKey",custom_prompt:"customPrompt",schedule_preset:"schedulePreset",schedule_dow:"scheduleDow",schedule_hour_utc:"scheduleHourUtc",last_run_at:"lastRunAt",last_run_status:"lastRunStatus",last_run_error:"lastRunError",data_source:"dataSource",can_run_scheduled_prompts:"canRunScheduledPrompts",property_section:"propertySection",expiry_date:"expiryDate",doc_type:"docType",mime_type:"mimeType"};
   return Object.fromEntries(Object.entries(obj).map(([k,v])=>[m[k]||k,v]));
 };
 
@@ -2503,7 +2503,8 @@ function buildFamilySnapshot(family,data){
   // prompt stays a sane size even with dozens of documents.
   const PER_DOC=40000, DOC_BUDGET=160000;
   let docTextUsed=0;
-  const documents=(data.documents||[]).filter(d=>d.familyId===fid).map(d=>{
+  // A client's Private folder never reaches the AI assistant (migration client_private_documents).
+  const documents=(data.documents||[]).filter(d=>d.familyId===fid&&!d.privateOwnerId).map(d=>{
     const out={ name:d.name||null, category:d.category||null, fileType:d.fileType||null,
       description:d.description||null, uploadedAt:d.uploadedAt||d.createdAt||null };
     const raw=(d.extractedText||"").trim();
@@ -9213,7 +9214,7 @@ function ChrisBatchFiler({familyId,toast,onFiled}){
   </div>;
 }
 
-function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canEditMetadata,toast,reload,attachIntent,onAttachHandled}){
+function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canEditMetadata,toast,reload,attachIntent,onAttachHandled,privateFolder=false}){
   // Backward compat: if readOnly passed, default canUpload=false canDelete=false
   // If canUpload/canDelete passed explicitly, use those
   const allowUpload=canUpload!==undefined?canUpload:!readOnly;
@@ -9335,13 +9336,38 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
   // displacing it rather than silently swapping what the client sees.
   const[conflictDoc,setConflictDoc]=useState(null);
 
+  // The client's own Private folder: files only they can see (the database hides them from everyone else).
+  // Kept apart from the ordinary folders, and never read by AI.
+  const PRIVATE_KEY="__private__";
+  const[privateDocs,setPrivateDocs]=useState([]);
+  const[myId,setMyId]=useState(null);
+  useEffect(()=>{if(privateFolder)sb.auth.getUser().then(({data})=>setMyId(data?.user?.id||null));},[privateFolder]);
+  const[privName,setPrivName]=useState("");
+  const[privFile,setPrivFile]=useState(null);
+  const[privBusy,setPrivBusy]=useState(false);
+  const uploadPrivate=async()=>{
+    if(!privFile||!privName.trim()||!myId||!familyId)return;
+    const problem=docFileProblem(privFile);if(problem){toast(problem,"error");return;}
+    setPrivBusy(true);
+    try{
+      const ext=(privFile.name.split(".").pop()||"").toLowerCase();
+      const path=`${familyId}/private/${myId}/${Date.now()}_${privFile.name.replace(/[^A-Za-z0-9._-]+/g,"_")}`;
+      const{error:upErr}=await sb.storage.from("documents").upload(path,privFile,{upsert:false});
+      if(upErr)throw new Error(upErr.message);
+      const{error:dbErr}=await sb.from("documents").insert({family_id:familyId,name:privName.trim(),category:"Private",file_path:path,
+        file_size:privFile.size,file_type:privFile.type||ext,extracted_text:null,uploaded_by:CURRENT_USER_LABEL||null,private_owner_id:myId});
+      if(dbErr){await sb.storage.from("documents").remove([path]).catch(()=>{});throw new Error(dbErr.message);}
+      toast("Saved to your Private folder");setModal(null);setPrivName("");setPrivFile(null);loadDocs();
+    }catch(e){toast(e.message||"Upload failed","error");}
+    finally{setPrivBusy(false);}
+  };
   const loadDocs=async()=>{
     const q=sb.from("documents").select("*").order("created_at",{ascending:false});
     if(familyId) q.eq("family_id",familyId);
     const dq=sb.from("document_downloads").select("*").order("downloaded_at",{ascending:false});
     if(familyId) dq.eq("family_id",familyId);
     const[{data},{data:dlData}]=await Promise.all([q,dq]);
-    if(data)setDocs(data.map(toClient));
+    if(data){const all=data.map(toClient);setDocs(all.filter(d=>!d.privateOwnerId));setPrivateDocs(all.filter(d=>d.privateOwnerId));}
     if(dlData)setDownloads(dlData.map(toClient));
     setLoading(false);
   };
@@ -9762,14 +9788,14 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
       ? (!known.includes(d.category)||d.category==="Other")
       : d.category===cat;
   };
-  const folderCount=cat=>docs.filter(d=>inFolder(d,cat)).length;
+  const folderCount=cat=>cat===PRIVATE_KEY?privateDocs.length:docs.filter(d=>inFolder(d,cat)).length;
 
   return <div style={{height:"100%",display:"flex",flexDirection:"column",minHeight:0}}>
     <style>{`.pcm-folder-card{transition:transform .15s ease, box-shadow .15s ease;}.pcm-folder-card:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(9,43,73,0.13);}`}</style>
     <div style={{padding:"14px 24px",borderBottom:`1px solid ${B.borderLight}`,background:B.white,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
       <div style={{flex:1,display:"flex",alignItems:"center",gap:10,minWidth:0}}>
         {openFolder&&<button onClick={()=>setOpenFolder(null)} style={{background:"none",border:`1px solid ${B.border}`,color:B.textSoft,cursor:"pointer",fontSize:13,fontFamily:"inherit",padding:"6px 10px",borderRadius:6,flexShrink:0}}>← CHRIS</button>}
-        {openFolder&&<div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{openFolder}</div>}
+        {openFolder&&<div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{openFolder===PRIVATE_KEY?"🔒 Private":openFolder}</div>}
         {openFolder&&<span style={{fontSize:12,color:B.textMute,flexShrink:0}}>{folderCount(openFolder)} file{folderCount(openFolder)!==1?"s":""}</span>}
         {openFolder&&customFolders.some(f=>f.name===openFolder)&&folderCount(openFolder)===0&&
           <button onClick={()=>removeFolder({name:openFolder,custom:true,count:0})}
@@ -9777,8 +9803,9 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
               fontSize:11.5,fontFamily:"inherit",padding:"4px 9px",borderRadius:6,flexShrink:0}}>
             Remove folder</button>}
       </div>
-      {allowUpload&&familyId&&<Btn variant="ghost" onClick={()=>setModal("batch")}>📷 Snap or add several</Btn>}
-      {allowUpload&&<Btn onClick={()=>{setCategory(openFolder||"General");setModal("upload");}}>⬆ Upload Document</Btn>}
+      {allowUpload&&familyId&&openFolder!==PRIVATE_KEY&&<Btn variant="ghost" onClick={()=>setModal("batch")}>📷 Snap or add several</Btn>}
+      {allowUpload&&openFolder!==PRIVATE_KEY&&<Btn onClick={()=>{setCategory(openFolder||"General");setModal("upload");}}>⬆ Upload Document</Btn>}
+      {privateFolder&&openFolder===PRIVATE_KEY&&<Btn onClick={()=>{setPrivName("");setPrivFile(null);setModal("privateUpload");}}>🔒 Upload to Private</Btn>}
       {allowScan&&unscannedCount>0&&<Btn variant="ghost" onClick={scanAllUnscanned} disabled={!!bulkScan} title="Extract text from existing documents so the AI assistant can read them">{bulkScan?`Scanning ${bulkScan.done}/${bulkScan.total}${scanMsg?" · "+scanMsg:""}…`:`✦ Scan ${unscannedCount} for AI`}</Btn>}
     </div>
     <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
@@ -9806,6 +9833,15 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
         const fmtDate=v=>{ if(!v)return "—"; const d=new Date(v);
           return isNaN(d)?"—":d.toLocaleDateString("en-US",{day:"numeric",month:"short"}); };
         return <div>
+          {privateFolder&&<button onClick={()=>setOpenFolder(PRIVATE_KEY)} style={{width:"100%",textAlign:"left",display:"flex",alignItems:"center",gap:12,
+            background:"#fbf8f1",border:`1px solid ${B.gold}`,borderRadius:12,padding:"14px 16px",marginBottom:16,cursor:"pointer",fontFamily:"inherit"}}>
+            <span style={{fontSize:22}}>🔒</span>
+            <span style={{flex:1,minWidth:0}}>
+              <span style={{display:"block",fontSize:15,fontWeight:700,color:B.navy}}>Private</span>
+              <span style={{display:"block",fontSize:12,color:B.textSoft,marginTop:2}}>Only you can see these files. Not your household's other logins, not ORDANIS, not your firm. No AI reads them.</span>
+            </span>
+            <span style={{fontSize:12,color:B.textMute,whiteSpace:"nowrap"}}>{privateDocs.length} file{privateDocs.length===1?"":"s"}</span>
+          </button>}
           <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:14}}>
             <div style={{fontSize:13,color:B.textSoft}}>
               {sum.total} document{sum.total===1?"":"s"}
@@ -9853,7 +9889,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
         </div>;
       })()
       :(()=>{
-        const list=docs.filter(d=>inFolder(d,openFolder));
+        const list=openFolder===PRIVATE_KEY?privateDocs:docs.filter(d=>inFolder(d,openFolder));
         return list.length===0
           ? <div style={{padding:"60px 0",textAlign:"center",color:B.textMute}}><div style={{fontSize:40,marginBottom:12}}>📁</div>No documents in this folder yet.</div>
           : <div style={{display:"flex",flexDirection:"column",gap:14}}>
@@ -9889,8 +9925,8 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
                     <Btn small onClick={()=>download(doc)}>⬇ Download</Btn>
                     {allowScan&&needsScan(doc)&&<Btn small variant="ghost" onClick={()=>scanOne(doc)} disabled={scanningId===doc.id} title="Make this document readable by the AI assistant">{scanningId===doc.id?(scanMsg?`Scanning ${scanMsg}…`:"Scanning…"):"✦ Scan"}</Btn>}
                     {allowScan&&(doc.extractedText||"").trim()&&<span title="The assistant can read this document" style={{fontSize:10,fontWeight:800,letterSpacing:"0.04em",color:B.navyMid,background:"rgba(206,182,132,0.18)",border:`1px solid ${B.gold}`,borderRadius:12,padding:"2px 7px"}}>✦ AI</span>}
-                    {allowEditMeta&&<Btn small variant="ghost" onClick={()=>openEdit(doc)}>✏ Edit</Btn>}
-                    {allowDelete&&<Btn small variant="danger" onClick={()=>del(doc)}>✕</Btn>}
+                    {allowEditMeta&&!doc.privateOwnerId&&<Btn small variant="ghost" onClick={()=>openEdit(doc)}>✏ Edit</Btn>}
+                    {(allowDelete||(doc.privateOwnerId&&doc.privateOwnerId===myId))&&<Btn small variant="danger" onClick={()=>del(doc)}>✕</Btn>}
                   </div>
                 </div>;
               })}
@@ -9913,6 +9949,26 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
         <Btn variant="ghost" onClick={()=>setModal(null)} disabled={savingFolder}>Cancel</Btn>
         <Btn onClick={createFolder} disabled={savingFolder||!newFolderName.trim()}>
           {savingFolder?"Adding…":"Add folder"}</Btn>
+      </div>
+    </Modal>}
+
+    {modal==="privateUpload"&&<Modal title="Upload to Private" onClose={()=>!privBusy&&setModal(null)}>
+      <div style={{fontSize:12.5,color:B.textSoft,lineHeight:1.55,marginBottom:14,background:"#fbf8f1",border:`1px solid ${B.gold}`,borderRadius:8,padding:"10px 12px"}}>
+        🔒 Only you will be able to see this file: not your household's other logins, not ORDANIS staff, not your firm. CHRIS won't read it, so there are no suggestions and it isn't searchable by its contents.
+      </div>
+      <Field label="Name" required><Inp maxLength={150} placeholder="Passport" value={privName} onChange={e=>setPrivName(e.target.value)}/></Field>
+      <Field label="File" required>
+        <input id="private-camera" type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{const f=e.target.files&&e.target.files[0];e.target.value="";if(f){setPrivFile(f);if(!privName.trim())setPrivName(f.name.replace(/\.[^./\\]+$/,""));}}}/>
+        <input id="private-file" type="file" accept={[...DOC_UPLOAD_EXTS.map(x=>"."+x),"image/*"].join(",")} style={{display:"none"}} onChange={e=>{const f=e.target.files&&e.target.files[0];e.target.value="";if(f){setPrivFile(f);if(!privName.trim())setPrivName(f.name.replace(/\.[^./\\]+$/,""));}}}/>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <button type="button" onClick={()=>document.getElementById("private-camera").click()} style={{flex:"1 1 140px",minHeight:46,borderRadius:10,border:"none",background:B.navy,color:B.white,fontSize:13.5,fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>📷 Take a photo</button>
+          <button type="button" onClick={()=>document.getElementById("private-file").click()} style={{flex:"1 1 140px",minHeight:46,borderRadius:10,border:`1.5px solid ${B.navy}`,background:B.white,color:B.navy,fontSize:13.5,fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>📄 Choose file</button>
+        </div>
+        {privFile&&<div style={{fontSize:12.5,color:B.navy,marginTop:8}}>✓ {privFile.name} · {(privFile.size/1024/1024).toFixed(2)} MB</div>}
+      </Field>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <Btn variant="ghost" onClick={()=>setModal(null)} disabled={privBusy}>Cancel</Btn>
+        <Btn onClick={uploadPrivate} disabled={privBusy||!privFile||!privName.trim()||!myId}>{privBusy?"Saving…":"Save privately"}</Btn>
       </div>
     </Modal>}
 
@@ -11332,7 +11388,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
       {activeTab==="documents"&&<div style={{height:"calc(100vh - 200px)"}}>
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:20}}>CHRIS</div>
         <DocumentsView familyId={family.id} canUpload={true} canDelete={false} canScan={false} toast={toast||(()=>{})} reload={reload}
-          attachIntent={propAttachIntent} onAttachHandled={()=>setPropAttachIntent(null)}/>
+          attachIntent={propAttachIntent} onAttachHandled={()=>setPropAttachIntent(null)} privateFolder={true}/>
       </div>}
 
       {/* BILLING */}
