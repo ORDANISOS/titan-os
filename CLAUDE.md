@@ -80,9 +80,10 @@ The OpenArc intelligence brief and any litigation/competitor content must never 
   the portal (no /hub route) or to the email portal. Its back end lives here: `supabase/functions/hub-command` and
   `public.audit_log` (migration `20261014130000_hub_audit_log`), both live on production since 2026-10-14.
 - MILO (Marketing Intelligence, Leads & Outreach), the marketing team's console, is ELIOT's sibling in a WHITE theme:
-  `~/Documents/GitHub/ordanis-milo` (local repo, no remote yet). Back end here: `supabase/functions/milo-command`, `milo-social`
-  (OAuth callback, verify_jwt off), `milo-speak`, migration `20261019120000_milo_marketing` (tables `milo_*`). Live on DEMO only
-  (2026-10-19); production steps and Instagram/LinkedIn setup are in `docs/RUNBOOK-MILO.md`. MILO never sees households.
+  `~/Documents/GitHub/ordanis-milo` (repo ORDANISOS/ordanis-milo -> Vercel `ordanis-milo` -> milo.ordanisos.com; a push to its main
+  deploys production). Back end here: `supabase/functions/milo-command`, `milo-social` (OAuth callback, verify_jwt off), `milo-speak`,
+  migrations `20261019120000_milo_marketing` + `20261020120000_signup_attribution`. Live on demo and production (back end 2026-10-20,
+  app 2026-10-21); status and Instagram/LinkedIn setup in `docs/RUNBOOK-MILO.md`. MILO never sees households.
 
 ## Open items (as of 2026-10-14)
 1. DONE 2026-10-15: assistant-name rules fully live on production (trigger in place and verified, migration 20261012110000 recorded).

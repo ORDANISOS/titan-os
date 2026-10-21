@@ -12,10 +12,10 @@ Back end (this repo): `supabase/functions/milo-command`, `milo-social`, `milo-sp
 | milo-command / milo-social / milo-speak | deployed (milo-social verify_jwt off) | deployed 2026-10-20, gates checked |
 | Marketing pages (`milo_pages`) | 4 live pages loaded | 4 pages loaded 2026-10-20 (hash-checked) |
 | Cron `milo-hourly` (minute 7) | scheduled, test run returned 200 | job 9, scheduled 2026-10-20, test run returned 200 |
-| `MILO_APP_ORIGINS` | default | Will to set to `https://milo.ordanisos.com` |
+| `MILO_APP_ORIGINS` | default | set to `https://milo.ordanisos.com` 2026-10-20 |
+| Front end | local dev (port 5177) | GitHub ORDANISOS/ordanis-milo (private); Vercel `ordanis-milo` (prj_QN0XBu01eAzWxN8Q2vVE4OfFaulA) live 2026-10-21 at ordanis-milo.vercel.app; milo.ordanisos.com added, waiting on GoDaddy CNAME |
 | Instagram / LinkedIn app keys | not set (Connect shows "waiting on keys") | not set |
 | ElevenLabs voice | not set on demo (device voice) | shares ELEVENLABS_API_KEY with ELIOT |
-| Front end hosting | local only | Vercel project + milo.ordanisos.com not created |
 
 ## Function secrets MILO reads (names only; Will sets values, never in chat)
 - Shared, already present: `ANTHROPIC_API_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `ELEVENLABS_API_KEY` (production).
