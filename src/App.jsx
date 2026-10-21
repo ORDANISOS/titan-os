@@ -1368,6 +1368,55 @@ function BrandMark({reversed=false,size=40}){
     </svg>
   );
 }
+// Opening a private household (phase 3): staff named on it enter a fresh two-step code first, and the
+// opening is logged (private_household_open checks the code is under 5 minutes old). The household stays
+// open while it is on screen and asks again next time. Ordinary households pass straight through.
+// The database rule (phase 1) is what keeps everyone else out; this is the extra gate for those allowed in.
+function PrivateGate({familyId,onBack,children}){
+  const[state,setState]=useState("checking"); // checking | open | locked
+  const[code,setCode]=useState("");
+  const[err,setErr]=useState("");
+  const[busy,setBusy]=useState(false);
+  useEffect(()=>{
+    let stop=false;setState("checking");setCode("");setErr("");
+    sb.rpc("private_household_check",{p_family_id:familyId}).then(({data,error})=>{
+      if(stop)return;
+      // Missing function (not on this database yet) or not private: nothing to gate.
+      setState(!error&&data===true?"locked":"open");
+    });
+    return()=>{stop=true;};
+  },[familyId]);
+  const unlock=async e=>{
+    e?.preventDefault?.();
+    if(code.length!==6)return;
+    setBusy(true);setErr("");
+    try{
+      const st=await mfaStatus();
+      const f=st.verified[0];
+      if(!f){setErr("Set up two-step sign-in first (Security), then try again.");return;}
+      const{error:v}=await sb.auth.mfa.challengeAndVerify({factorId:f.id,code});
+      if(v){setErr(mfaCodeMessage(v));setCode("");return;}
+      const{error:o}=await sb.rpc("private_household_open",{p_family_id:familyId});
+      if(o){setErr(o.message);setCode("");return;}
+      setState("open");
+    }catch(x){setErr(x?.message||"Something went wrong. Please try again.");}
+    finally{setBusy(false);}
+  };
+  if(state==="open")return children;
+  if(state==="checking")return <div style={{padding:40}}><Spinner/></div>;
+  return <div style={{display:"flex",justifyContent:"center",padding:"48px 16px"}}>
+    <form onSubmit={unlock} style={{...MFA_CARD,textAlign:"left"}}>
+      <div style={{fontSize:30,marginBottom:6}}>🔒</div>
+      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:6}}>Private household</div>
+      <div style={{fontSize:13,color:B.textSoft,marginBottom:16,lineHeight:1.5}}>Enter the 6-digit code from your authenticator app to open it. Each opening is logged.</div>
+      {err&&<div style={MFA_ERR}>{err}</div>}
+      <MfaCodeInput value={code} onChange={setCode} autoFocus/>
+      <Btn onClick={unlock} disabled={busy||code.length!==6}>{busy?"Checking…":"Open household"}</Btn>
+      {onBack&&<button type="button" onClick={onBack} style={{display:"block",margin:"14px auto 0",background:"none",border:"none",color:B.textSoft,fontSize:12,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>Back</button>}
+    </form>
+  </div>;
+}
+
 // Private household (2026-10-21): only the household itself and the staff named here can see it; the
 // database enforces that on every household table and on its files (migration private_households).
 // Admins only. Once private, only someone on the list can change it -- another admin cannot see it at all.
@@ -1402,6 +1451,8 @@ function PrivateHouseholdPanel({familyId,familyName,toast,isMobile}){
     toast&&toast(makePrivate?"Private household saved":"No longer private");
   };
   const roleWord=r=>r==="advisor"?"ORDANIS Expert":r==="analyst"?"Analyst":"Admin";
+  const[log,setLog]=useState(null);
+  const loadLog=async()=>{const{data,error}=await sb.rpc("private_household_access_log",{p_family_id:familyId,p_limit:30});setLog(error?[]:(data||[]));};
   if(st==="unavailable")return null;
   const box={background:B.bgCard,borderRadius:12,padding:isMobile?"18px 16px":"20px 22px",border:`1px solid ${st&&st.is_private?"#c9b37a":B.borderLight}`,boxShadow:B.shadow,marginBottom:16};
   return <div style={box}>
@@ -1431,7 +1482,14 @@ function PrivateHouseholdPanel({familyId,familyName,toast,isMobile}){
         {!editing&&st.is_private&&<Btn small variant="ghost" disabled={busy} onClick={()=>save(false)}>Make ordinary again</Btn>}
         {editing&&<Btn small disabled={busy} onClick={()=>save(true)}>{busy?"Saving…":st.is_private?"Save":"Make private"}</Btn>}
         {editing&&<Btn small variant="ghost" disabled={busy} onClick={()=>{setEditing(false);setPicked((st.viewers||[]).map(v=>v.id));}}>Cancel</Btn>}
+        {!editing&&st.is_private&&<Btn small variant="ghost" onClick={()=>log?setLog(null):loadLog()}>{log?"Hide access log":"Access log"}</Btn>}
       </div>
+      {log&&<div style={{marginTop:12,borderTop:`1px solid ${B.borderLight}`,paddingTop:10,maxHeight:240,overflowY:"auto"}}>
+        {log.length===0?<div style={{fontSize:12,color:B.textMute}}>No entries yet.</div>:log.map((r,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",gap:10,fontSize:12,padding:"5px 0",borderBottom:`1px solid ${B.borderLight}`}}>
+          <span style={{color:B.text}}><strong>{r.who}</strong> · {r.action}</span>
+          <span style={{color:B.textMute,whiteSpace:"nowrap"}}>{new Date(r.at).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</span>
+        </div>)}
+      </div>}
     </>}
   </div>;
 }
@@ -3690,6 +3748,9 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
         {/* OVERVIEW TAB */}
         {activeTab==="overview"&&<div style={{padding:isMobile?"16px 14px":"24px 28px"}}>
           {userProfile?.role==="admin"&&<FirmMembershipCard familyRow={familyRow} toast={toast} reload={reload}/>}
+          {/* Private household: on the household's own page too, since top clients are usually team-onboarded
+              and never appear on the Signups page. Admins only; the panel hides where the migration isn't applied. */}
+          {userProfile?.role==="admin"&&<PrivateHouseholdPanel familyId={familyRow.id} familyName={familyRow.name} toast={toast} isMobile={isMobile}/>}
           {familyRow.enterprise_id&&(userProfile?.role==="admin"||userProfile?.role==="advisor"||userProfile?.role==="analyst")&&<PayerCard familyRow={familyRow} userProfile={userProfile} toast={toast} reload={reload}/>}
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(140px,100%),1fr))",gap:14,marginBottom:24}}>
             <StatBox label="Net Worth Est." value={fmtMoney(netWorth)} accent={B.navy}/>
@@ -5853,7 +5914,7 @@ function FamiliesView({data,reload,toast,userProfile,navIntent,onNavConsumed}){
 
   // If a family is selected, show its dashboard
   if(selected) return <ViewErrorBoundary label="the family dashboard" onBack={()=>setSelected(null)}>
-    <FamilyDashboard family={selected} data={data} reload={reload} toast={toast} onBack={()=>{setSelected(null);setIntentTab(null);}} userProfile={userProfile} initialTab={intentTab}/>
+    <PrivateGate familyId={selected.id} onBack={()=>{setSelected(null);setIntentTab(null);}}><FamilyDashboard family={selected} data={data} reload={reload} toast={toast} onBack={()=>{setSelected(null);setIntentTab(null);}} userProfile={userProfile} initialTab={intentTab}/></PrivateGate>
   </ViewErrorBoundary>;
 
   const getStats=f=>({
@@ -8278,7 +8339,7 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
     const signInPct=u.lastSignIn?Math.max(6,100-Math.min(100,((Date.now()-new Date(u.lastSignIn).getTime())/86400000/90)*100)):0;
     const ob=onboardingStatusFor(family);
     const respondedDays=family.onboarding_contacted_at?Math.max(0,Math.floor((new Date(family.onboarding_contacted_at)-new Date(family.createdAt))/86400000)):null;
-    return <div style={{overflowY:"auto",height:"100%",padding:isMobile?"18px 14px 32px":"26px 30px 48px"}}>
+    return <PrivateGate familyId={family.id} onBack={()=>setDrill(null)}><div style={{overflowY:"auto",height:"100%",padding:isMobile?"18px 14px 32px":"26px 30px 48px"}}>
       <button onClick={()=>setDrill({type:"plan",plan:family.plan})} style={backBtnStyle}>← Back to {labelOf(family.plan)} Households</button>
       <div style={{marginBottom:isMobile?16:24}}>
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?22:28,color:B.navy,fontWeight:600,marginBottom:4}}>{family.name}{family.customer_number!=null&&<span style={{fontFamily:"'DM Sans',sans-serif",fontSize:isMobile?14:16,color:B.textSoft,marginLeft:10,fontWeight:600}}>#{family.customer_number}</span>}</div>
@@ -8418,7 +8479,7 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
         {dangerMsg&&<div style={{marginTop:12,fontSize:12.5,fontWeight:600,padding:"8px 12px",borderRadius:8,color:dangerMsg.type==="error"?"#8b1a1a":"#0d5c2b",background:dangerMsg.type==="error"?"#fde8e8":"#e0f5e9"}}>{dangerMsg.text}</div>}
       </div>
 
-    </div>;
+    </div></PrivateGate>;
   }
 
   // ── Platform Utilization drill-down: every area, all households, gaps sorted to the top ─────
@@ -11591,7 +11652,7 @@ function FirmDashboard({userProfile,logout,toast}){
       <Header/>
       <div style={{flex:1,minHeight:0}}>
         <ViewErrorBoundary label="the household" onBack={back}>
-          <FamilyDashboard family={selected} data={fdata} reload={reload} toast={toast} onBack={back} userProfile={userProfile}/>
+          <PrivateGate familyId={selected.id} onBack={back}><FamilyDashboard family={selected} data={fdata} reload={reload} toast={toast} onBack={back} userProfile={userProfile}/></PrivateGate>
         </ViewErrorBoundary>
       </div>
     </div>;
@@ -11685,7 +11746,7 @@ function PartnerDashboard({data,userProfile,logout,toast,reload}){
       </HeaderBar>
       <div style={{flex:1,minHeight:0}}>
         <ViewErrorBoundary label="the family dashboard" onBack={()=>setSelectedId(null)}>
-          <FamilyDashboard family={selected} data={data} reload={reload} toast={toast} onBack={()=>setSelectedId(null)} userProfile={userProfile}/>
+          <PrivateGate familyId={selected.id} onBack={()=>setSelectedId(null)}><FamilyDashboard family={selected} data={data} reload={reload} toast={toast} onBack={()=>setSelectedId(null)} userProfile={userProfile}/></PrivateGate>
         </ViewErrorBoundary>
       </div>
     </div>;
