@@ -122,27 +122,58 @@
       beams.appendChild(l);
       return l;
     };
-    // A beam is one gold dash that runs along its line once per cycle. Each records when its head
-    // reaches the edge of the app it points at, so that app can pulse right then.
-    const NODE_R = 14; // half the node width (28% of the stage, in the 0-100 viewBox)
-    const arrivals = apps.map(() => []);
+    // Beams run as a relay, all on one cycle: a gold dash travels the outer ring from one app to the
+    // next; when it enters that app the app glows, and a dash leaves it for the middle; when that dash
+    // reaches the middle, the middle glows. Positions are in the 0-100 viewBox.
+    const NODE_R = 14;   // half an app's width (28% of the stage)
+    const CORE_R = 15;   // half the middle's width (30% of the stage)
+    const PERIOD = 4800; // one full cycle; the six relays are spread evenly across it
+    const SPEED = 0.009; // viewBox units per millisecond
+    const nodeGlows = apps.map(() => []);
+    const coreGlows = [];
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const beam = (a, b, cls, dash, period, delay, target) => {
+    // Run one dash from a to b, starting with its head at `from` units along the line, beginning at
+    // `start` ms into the cycle. Returns when (ms into the cycle) the head reaches `to` units along.
+    const beam = (a, b, cls, dash, start, from, to) => {
       const l = line(a, b, cls);
       const len = Math.hypot(b.x - a.x, b.y - a.y);
       l.style.strokeDasharray = dash + " " + (len + dash);
-      if (still) return;
-      l.animate([{ strokeDashoffset: dash }, { strokeDashoffset: -len }], { duration: period, delay, iterations: Infinity });
-      arrivals[target].push({ period, at: delay + period * (len - NODE_R) / (len + dash) });
+      l.style.strokeDashoffset = String(dash - from);
+      if (still) return 0;
+      const run = (dash - from + len) / SPEED; // until the tail has left the line
+      l.animate([
+        { strokeDashoffset: dash - from, offset: 0 },
+        { strokeDashoffset: -len, offset: Math.min(1, run / PERIOD) },
+        { strokeDashoffset: -len, offset: 1 },
+      ], { duration: PERIOD, delay: start, iterations: Infinity });
+      return start + (to - from) / SPEED;
     };
     const center = { x: 50, y: 50 };
     pts.forEach((p, i) => {
       const n = (i + 1) % pts.length;
       line(p, pts[n], "rail");
-      beam(p, pts[n], "pulse", 9, 3200, i * 600, n);
-      line(center, p, "rail");
-      beam(center, p, "pulse spoke", 4, 2400, i * 450, i);
+      line(center, pts[n], "rail");
+      const ringLen = Math.hypot(pts[n].x - p.x, pts[n].y - p.y);
+      const reached = beam(p, pts[n], "pulse", 9, (i * PERIOD) / pts.length, NODE_R, ringLen - NODE_R);
+      nodeGlows[n].push(reached);
+      const spokeLen = Math.hypot(pts[n].x - center.x, pts[n].y - center.y);
+      coreGlows.push(beam(pts[n], center, "pulse spoke", 4, reached, NODE_R, spokeLen - CORE_R));
     });
+    // Soft glow: up fast, then fade over about a second, once per cycle.
+    const glow = (target, at) => {
+      if (still) return;
+      const g = el("span", { class: "ping", "aria-hidden": "true" });
+      target.prepend(g);
+      g.animate([
+        { opacity: 0, easing: "ease-out" },
+        { opacity: 1, offset: 150 / PERIOD, easing: "ease-in-out" },
+        { opacity: 0, offset: 1200 / PERIOD },
+        { opacity: 0 },
+      ], { duration: PERIOD, delay: at, iterations: Infinity });
+    };
+    const core = stage.querySelector(".core");
+    core.querySelectorAll(".ping").forEach((g) => g.remove());
+    coreGlows.forEach((at) => glow(core, at));
 
     apps.forEach((app, i) => {
       const live = /^https:\/\//.test(app.url || "");
@@ -158,16 +189,7 @@
       }
       node.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[app.icon] || "") + "</svg>";
       node.append(el("span", { class: "name" }, app.name), el("span", { class: "badge" }, live ? app.role : "COMING SOON"));
-      for (const { period, at } of arrivals[i]) {
-        const ping = el("span", { class: "ping", "aria-hidden": "true" });
-        node.prepend(ping);
-        ping.animate([
-          { opacity: 0 },
-          { opacity: 1, offset: 0.06 },
-          { opacity: 0, offset: 0.4 },
-          { opacity: 0 },
-        ], { duration: period, delay: at, iterations: Infinity, easing: "ease-in-out" });
-      }
+      nodeGlows[i].forEach((at) => glow(node, at));
       stage.appendChild(node);
     });
 
