@@ -953,6 +953,11 @@ const fewNames = (xs: string[], n = 3) => { const u = [...new Set(xs.filter(Bool
 const daysAgo = (t: string | null | undefined) => (t ? Math.floor((Date.now() - Date.parse(t)) / 86_400_000) : 0);
 
 async function attentionScan(db: SupabaseClient, emailCtx: EmailCtx, since: string | null, opts: { service?: boolean; userId?: string } = {}) {
+  // Private households (2026-10-21): an interactive scan runs as the admin, so row policies already hide the
+  // private households they are not named on. The scheduled briefing runs as the service role, so it drops
+  // them explicitly, for the admin the briefing is for.
+  const hidden = opts.service && opts.userId ? await hiddenFamiliesFor(db, opts.userId) : [];
+  const notHidden = <T,>(q: T, col: string): T => (hidden.length ? (q as any).not(col, "in", `(${hidden.join(",")})`) : q);
   const items: Finding[] = [];
   const errors: string[] = [];
   const today = isoDate(new Date());
@@ -961,8 +966,8 @@ async function attentionScan(db: SupabaseClient, emailCtx: EmailCtx, since: stri
 
   await Promise.all([
     check("billing", async () => {
-      const { data, error } = await db.from("families").select("name,subscription_state,past_due_since")
-        .is("archived_at", null).in("subscription_state", ["past_due", "final_notice"]).limit(200);
+      const { data, error } = await notHidden(db.from("families").select("name,subscription_state,past_due_since")
+        .is("archived_at", null).in("subscription_state", ["past_due", "final_notice"]), "id").limit(200);
       if (error) throw error;
       const fin = (data ?? []).filter((f) => f.subscription_state === "final_notice");
       const due = (data ?? []).filter((f) => f.subscription_state === "past_due");
@@ -970,7 +975,7 @@ async function attentionScan(db: SupabaseClient, emailCtx: EmailCtx, since: stri
       if (due.length) items.push({ key: `billing-pastdue:${due.length}`, source: "production", severity: 3, title: `${plural(due.length, "household")} past due`, detail: fewNames(due.map((f) => f.name)) });
     }),
     check("obligations", async () => {
-      const { data, error } = await db.from("obligations").select("family_id,name,amount,due_date").eq("active", true).lte("due_date", soon).limit(500);
+      const { data, error } = await notHidden(db.from("obligations").select("family_id,name,amount,due_date").eq("active", true).lte("due_date", soon), "family_id").limit(500);
       if (error) throw error;
       const names = await familyNames(db, (data ?? []).map((o) => o.family_id));
       const label = (o: Record<string, unknown>) => `${o.name}${names[String(o.family_id)] ? ` (${names[String(o.family_id)]})` : ""}`;
@@ -980,7 +985,7 @@ async function attentionScan(db: SupabaseClient, emailCtx: EmailCtx, since: stri
       if (upcoming.length) items.push({ key: `obl-soon:${upcoming.length}:${today}`, source: "production", severity: 2, title: `${plural(upcoming.length, "obligation")} due in the next 3 days`, detail: fewNames(upcoming.map(label)) });
     }),
     check("tasks", async () => {
-      const { data, error } = await db.from("tasks").select("family_id,title,due_date").eq("done", false).lt("due_date", today).limit(500);
+      const { data, error } = await notHidden(db.from("tasks").select("family_id,title,due_date").eq("done", false).lt("due_date", today), "family_id").limit(500);
       if (error) throw error;
       if (data?.length) {
         const names = await familyNames(db, data.map((t) => t.family_id));
@@ -990,7 +995,7 @@ async function attentionScan(db: SupabaseClient, emailCtx: EmailCtx, since: stri
     check("team tasks", async () => {
       if (!opts.userId) return;
       const todayEt = etParts().date;
-      const { data, error } = await db.from("eliot_team_tasks").select("title,due_date,family_id").eq("done", false).eq("owner_id", opts.userId).lte("due_date", todayEt).limit(300);
+      const { data, error } = await notHidden(db.from("eliot_team_tasks").select("title,due_date,family_id").eq("done", false).eq("owner_id", opts.userId).lte("due_date", todayEt), "family_id").limit(300);
       if (error) throw error;
       const names = await familyNames(db, (data ?? []).map((t) => t.family_id).filter(Boolean));
       const label = (t: Record<string, unknown>) => `${t.title}${names[String(t.family_id)] ? ` (${names[String(t.family_id)]})` : ""}`;
@@ -1000,7 +1005,7 @@ async function attentionScan(db: SupabaseClient, emailCtx: EmailCtx, since: stri
       if (today.length) items.push({ key: `team-today:${today.length}:${todayEt}`, source: "production", severity: 2, title: `${plural(today.length, "team task")} due today`, detail: fewNames(today.map(label)) });
     }),
     check("plan requests", async () => {
-      const { data, error } = await db.from("plan_change_requests").select("family_id,from_plan,to_plan,created_at").eq("status", "pending").limit(100);
+      const { data, error } = await notHidden(db.from("plan_change_requests").select("family_id,from_plan,to_plan,created_at").eq("status", "pending"), "family_id").limit(100);
       if (error) throw error;
       if (data?.length) {
         const names = await familyNames(db, data.map((r) => r.family_id));
@@ -1009,7 +1014,7 @@ async function attentionScan(db: SupabaseClient, emailCtx: EmailCtx, since: stri
       }
     }),
     check("onboarding", async () => {
-      const { data, error } = await db.from("families").select("name,created_at").is("archived_at", null).is("onboarding_contacted_at", null)
+      const { data, error } = await notHidden(db.from("families").select("name,created_at").is("archived_at", null).is("onboarding_contacted_at", null), "id")
         .lte("created_at", addDays(-2).toISOString()).gte("created_at", addDays(-60).toISOString()).limit(200);
       if (error) throw error;
       if (data?.length) items.push({ key: `onboarding:${data.length}`, source: "production", severity: 2, title: `${plural(data.length, "new household")} not yet contacted for onboarding`, detail: fewNames(data.map((f) => f.name)) });
@@ -1034,7 +1039,7 @@ async function attentionScan(db: SupabaseClient, emailCtx: EmailCtx, since: stri
       if (data?.length) items.push({ key: `prompts-failed:${data.length}`, source: "production", severity: 2, title: `${plural(data.length, "scheduled prompt")} failed this week`, detail: fewNames(data.map((p) => p.name)) });
     }),
     check("workflows", async () => {
-      const { data, error } = await db.from("workflow_instances").select("*").limit(2000);
+      const { data, error } = await notHidden(db.from("workflow_instances").select("*"), "family_id").limit(2000);
       if (error) throw error;
       const rows = (data ?? []) as Array<Record<string, unknown>>;
       const overdue = rows.filter((w) => !w.completed_at && w.due_date && String(w.due_date) < today && !/^(done|completed|cancel)/i.test(String(w.status ?? "")));
@@ -1045,7 +1050,7 @@ async function attentionScan(db: SupabaseClient, emailCtx: EmailCtx, since: stri
     }),
     check("sign-ups", async () => {
       const from = since ?? addDays(-1).toISOString();
-      const { data, error } = await db.from("families").select("name,plan").gte("created_at", from).limit(100);
+      const { data, error } = await notHidden(db.from("families").select("name,plan").gte("created_at", from), "id").limit(100);
       if (error) throw error;
       if (data?.length) items.push({ key: `signups:${data.length}:${from.slice(0, 13)}`, source: "production", severity: 1, title: `${plural(data.length, "new sign-up")} since ${since ? "your last briefing" : "yesterday"}`, detail: fewNames(data.map((f) => `${f.name}${f.plan ? ` (${f.plan})` : ""}`)) });
     }),
@@ -1258,7 +1263,7 @@ async function validateTask(admin: SupabaseClient, input: TaskInput, userId: str
   if (input.family_id) {
     if (!UUID_RE.test(String(input.family_id))) return { error: "Unknown household." };
     const { data: fam } = await admin.from("families").select("id").eq("id", input.family_id).is("archived_at", null).maybeSingle();
-    if (!fam) return { error: "That household isn't available." };
+    if (!fam || (await hiddenFamiliesFor(admin, userId)).includes(String(fam.id))) return { error: "That household isn't available." };
     family_id = String(fam.id);
   }
   let owner_id = userId;
@@ -1272,6 +1277,14 @@ async function validateTask(admin: SupabaseClient, input: TaskInput, userId: str
   return { row: { title, notes, priority, due_date: due, family_id, owner_id, remind_at: r.remind_at, reminder_sent_at: null, updated_at: new Date().toISOString() } };
 }
 
+// Private households the given admin is not named on (empty when none). For the service-role paths only;
+// anything that runs as the admin is already filtered by the row policies.
+async function hiddenFamiliesFor(admin: SupabaseClient, userId: string): Promise<string[]> {
+  const { data, error } = await admin.rpc("hidden_family_ids_for", { p_user: userId });
+  if (error) { console.error("hidden_family_ids_for failed"); return []; }
+  return (data ?? []).map((r: unknown) => String(typeof r === "string" ? r : (r as Record<string, unknown>).hidden_family_ids_for ?? r)).filter((x: string) => UUID_RE.test(x));
+}
+
 // The model's propose_task: resolves the household and owner by name and returns a draft. Saves nothing.
 async function draftTask(admin: SupabaseClient, input: Record<string, unknown>, userId: string): Promise<{ draft?: Record<string, unknown>; message: string }> {
   const title = clean(input.title, 300);
@@ -1279,7 +1292,10 @@ async function draftTask(admin: SupabaseClient, input: Record<string, unknown>, 
   let family: { id: string; name: string } | null = null;
   const spoken = clean(input.household, 80);
   if (spoken) {
-    const { data } = await admin.from("families").select("id,name").is("archived_at", null).ilike("name", `%${spoken.replace(/[%_]/g, "")}%`).order("name").limit(6);
+    const hiddenD = await hiddenFamiliesFor(admin, userId);
+    let qd = admin.from("families").select("id,name").is("archived_at", null).ilike("name", `%${spoken.replace(/[%_]/g, "")}%`);
+    if (hiddenD.length) qd = qd.not("id", "in", `(${hiddenD.join(",")})`);
+    const { data } = await qd.order("name").limit(6);
     if (!data?.length) return { message: `No active household matches "${spoken}". Ask the administrator to say the household name again, or offer to add the task without one.` };
     if (data.length > 1) return { message: `Several households match "${spoken}": ${data.map((f) => f.name).join("; ")}. Ask which one, then call propose_task again with that name.` };
     family = { id: String(data[0].id), name: String(data[0].name) };
@@ -1553,7 +1569,8 @@ Deno.serve(async (req) => {
       if (action === "team") {
         const fid = String(payload.family_id ?? "");
         if (!UUID_RE.test(fid)) return json({ team: [] });
-        const { data, error } = await admin.rpc("household_team", { p_family_id: fid });
+        // As the admin (db), not the service role, so private households they are not named on stay hidden.
+        const { data, error } = await db.rpc("household_team", { p_family_id: fid });
         if (error) return json({ team: [], request_id: requestId });
         return json({ team: (data ?? []).map((m: Record<string, unknown>) => ({ role: m.member_role === "analyst" ? "analyst" : "expert",
           name: String(m.full_name || "").trim() || null, point: m.is_point_person === true })), request_id: requestId });
@@ -1561,7 +1578,7 @@ Deno.serve(async (req) => {
       if (action === "families") {
         const q = clean(payload.q, 60).replace(/[%_]/g, "");
         if (q.length < 2) return json({ families: [] });
-        const { data } = await admin.from("families").select("id,name").is("archived_at", null).ilike("name", `%${q}%`).order("name").limit(8);
+        const { data } = await db.from("families").select("id,name").is("archived_at", null).ilike("name", `%${q}%`).order("name").limit(8);
         return json({ families: data ?? [], request_id: requestId });
       }
       if (action === "save") {
