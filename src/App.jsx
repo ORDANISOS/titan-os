@@ -811,12 +811,12 @@ const pctChange=(s,c)=>{const sv=Number(s)||0;const cv=Number(c)||0;if(!sv)retur
 
 const toClient=obj=>{
   if(!obj)return obj;
-  const m={family_id:"familyId",contact_id:"contactId",account_id:"accountId",account_period:"accountPeriod",as_of:"asOf",balance_as_of:"balanceAsOf",source_document_id:"sourceDocumentId",balance_source_document_id:"balanceSourceDocumentId",entered_by:"enteredBy",close_date:"closeDate",due_date:"dueDate",created_at:"createdAt",uploaded_at:"uploadedAt",advisor_name:"advisorName",advisor_email:"advisorEmail",owner_name:"ownerName",property_type:"propertyType",property_id:"propertyId",purchase_price:"purchasePrice",purchase_date:"purchaseDate",current_value:"currentValue",loan_balance:"loanBalance",interest_rate:"interestRate",loan_payment:"loanPayment",loan_maturity_date:"loanMaturityDate",loan_type:"loanType",rental_income:"rentalIncome",property_taxes:"propertyTaxes",flood_insurance:"floodInsurance",insurance_company:"insuranceCompany",insurance_premium:"insurancePremium",flood_insurance_company:"floodInsuranceCompany",flood_insurance_premium:"floodInsurancePremium",insurance_expiration:"insuranceExpiration",policy_number:"policyNumber",coverage_amount:"coverageAmount",valuable_id:"valuableId",private_owner_id:"privateOwnerId",flood_insurance_expiration:"floodInsuranceExpiration",account_type:"accountType",starting_balance:"startingBalance",current_balance:"currentBalance",banker_name:"bankerName",account_advisor_name:"accountAdvisorName",account_advisor_phone:"accountAdvisorPhone",account_advisor_email:"accountAdvisorEmail",make_model:"makeModel",estimated_value:"estimatedValue",file_type:"fileType",extracted_text:"extractedText",reminder_days:"reminderDays",reminder_sent:"reminderSent",full_name:"fullName",file_path:"filePath",file_size:"fileSize",uploaded_by:"uploadedBy",event_type:"eventType",start_date:"startDate",end_date:"endDate",tax_treatment:"taxTreatment",filing_status:"filingStatus",state_tax_rate:"stateTaxRate",base_income:"baseIncome",cash_flow_settings:"cashFlowSettings",hoa_fee:"hoaFee",property_management_fee_pct:"propertyManagementFeePct",include_mortgage_in_cashflow:"includeMortgageInCashflow",sort_order:"sortOrder",note_id:"noteId",recurrence_interval:"recurrenceInterval",recurrence_unit:"recurrenceUnit",completed_at:"completedAt",completed_by:"completedBy",item_key:"itemKey",item_label:"itemLabel",item_type:"itemType",occurrence_date:"occurrenceDate",second_mortgage_balance:"secondMortgageBalance",second_mortgage_payment:"secondMortgagePayment",assistant_name:"assistantName",is_advisor:"isAdvisor",is_primary:"isPrimary",updated_at:"updatedAt",is_secondary:"isSecondary",pcm_responsible:"pcmResponsible",invited_at:"invitedAt",partner_kind:"partnerKind",business_partner_seats_stripe_item_id:"businessPartnerSeatsStripeItemId",user_id:"userId",paid_at:"paidAt",paid_by:"paidBy",vendor_family_contact_id:"vendorFamilyContactId",vendor_property_contact_id:"vendorPropertyContactId",event_id:"eventId",document_id:"documentId",downloaded_by:"downloadedBy",downloaded_at:"downloadedAt",owner_user_id:"ownerUserId",owner_email:"ownerEmail",owner_role:"ownerRole",prompt_type:"promptType",template_key:"templateKey",custom_prompt:"customPrompt",schedule_preset:"schedulePreset",schedule_dow:"scheduleDow",schedule_hour_utc:"scheduleHourUtc",last_run_at:"lastRunAt",last_run_status:"lastRunStatus",last_run_error:"lastRunError",data_source:"dataSource",can_run_scheduled_prompts:"canRunScheduledPrompts",property_section:"propertySection",expiry_date:"expiryDate",doc_type:"docType",mime_type:"mimeType"};
+  const m={family_id:"familyId",contact_id:"contactId",account_id:"accountId",account_period:"accountPeriod",as_of:"asOf",balance_as_of:"balanceAsOf",source_document_id:"sourceDocumentId",balance_source_document_id:"balanceSourceDocumentId",entered_by:"enteredBy",close_date:"closeDate",due_date:"dueDate",created_at:"createdAt",uploaded_at:"uploadedAt",advisor_name:"advisorName",advisor_email:"advisorEmail",owner_name:"ownerName",property_type:"propertyType",property_id:"propertyId",purchase_price:"purchasePrice",purchase_date:"purchaseDate",current_value:"currentValue",loan_balance:"loanBalance",interest_rate:"interestRate",loan_payment:"loanPayment",loan_maturity_date:"loanMaturityDate",loan_type:"loanType",rental_income:"rentalIncome",property_taxes:"propertyTaxes",flood_insurance:"floodInsurance",insurance_company:"insuranceCompany",insurance_premium:"insurancePremium",flood_insurance_company:"floodInsuranceCompany",flood_insurance_premium:"floodInsurancePremium",insurance_expiration:"insuranceExpiration",policy_number:"policyNumber",coverage_amount:"coverageAmount",valuable_id:"valuableId",private_owner_id:"privateOwnerId",loan_id:"loanId",credit_limit:"creditLimit",original_amount:"originalAmount",rate_type:"rateType",payment_amount:"paymentAmount",payment_frequency:"paymentFrequency",origination_date:"originationDate",maturity_date:"maturityDate",flood_insurance_expiration:"floodInsuranceExpiration",account_type:"accountType",starting_balance:"startingBalance",current_balance:"currentBalance",banker_name:"bankerName",account_advisor_name:"accountAdvisorName",account_advisor_phone:"accountAdvisorPhone",account_advisor_email:"accountAdvisorEmail",make_model:"makeModel",estimated_value:"estimatedValue",file_type:"fileType",extracted_text:"extractedText",reminder_days:"reminderDays",reminder_sent:"reminderSent",full_name:"fullName",file_path:"filePath",file_size:"fileSize",uploaded_by:"uploadedBy",event_type:"eventType",start_date:"startDate",end_date:"endDate",tax_treatment:"taxTreatment",filing_status:"filingStatus",state_tax_rate:"stateTaxRate",base_income:"baseIncome",cash_flow_settings:"cashFlowSettings",hoa_fee:"hoaFee",property_management_fee_pct:"propertyManagementFeePct",include_mortgage_in_cashflow:"includeMortgageInCashflow",sort_order:"sortOrder",note_id:"noteId",recurrence_interval:"recurrenceInterval",recurrence_unit:"recurrenceUnit",completed_at:"completedAt",completed_by:"completedBy",item_key:"itemKey",item_label:"itemLabel",item_type:"itemType",occurrence_date:"occurrenceDate",second_mortgage_balance:"secondMortgageBalance",second_mortgage_payment:"secondMortgagePayment",assistant_name:"assistantName",is_advisor:"isAdvisor",is_primary:"isPrimary",updated_at:"updatedAt",is_secondary:"isSecondary",pcm_responsible:"pcmResponsible",invited_at:"invitedAt",partner_kind:"partnerKind",business_partner_seats_stripe_item_id:"businessPartnerSeatsStripeItemId",user_id:"userId",paid_at:"paidAt",paid_by:"paidBy",vendor_family_contact_id:"vendorFamilyContactId",vendor_property_contact_id:"vendorPropertyContactId",event_id:"eventId",document_id:"documentId",downloaded_by:"downloadedBy",downloaded_at:"downloadedAt",owner_user_id:"ownerUserId",owner_email:"ownerEmail",owner_role:"ownerRole",prompt_type:"promptType",template_key:"templateKey",custom_prompt:"customPrompt",schedule_preset:"schedulePreset",schedule_dow:"scheduleDow",schedule_hour_utc:"scheduleHourUtc",last_run_at:"lastRunAt",last_run_status:"lastRunStatus",last_run_error:"lastRunError",data_source:"dataSource",can_run_scheduled_prompts:"canRunScheduledPrompts",property_section:"propertySection",expiry_date:"expiryDate",doc_type:"docType",mime_type:"mimeType"};
   return Object.fromEntries(Object.entries(obj).map(([k,v])=>[m[k]||k,v]));
 };
 
-const TABLES=["families","contacts","properties","deals","notes","tasks","portfolio_accounts","account_balances","valuables","documents","cash_flow_events","cash_flow_payment_log","note_attachments","deadline_acks","family_contacts","property_contacts","family_partners"];
-const FAMILY_SCOPED=["contacts","properties","deals","notes","tasks","portfolio_accounts","account_balances","valuables","documents","cash_flow_events","cash_flow_payment_log","deadline_acks","family_contacts","property_contacts","family_partners"];
+const TABLES=["families","contacts","properties","deals","notes","tasks","portfolio_accounts","account_balances","valuables","loans","documents","cash_flow_events","cash_flow_payment_log","note_attachments","deadline_acks","family_contacts","property_contacts","family_partners"];
+const FAMILY_SCOPED=["contacts","properties","deals","notes","tasks","portfolio_accounts","account_balances","valuables","loans","documents","cash_flow_events","cash_flow_payment_log","deadline_acks","family_contacts","property_contacts","family_partners"];
 // Display label of the signed-in user, set at login; used to stamp task completions.
 let CURRENT_USER_LABEL="";
 let CURRENT_USER_ROLE="";
@@ -1987,8 +1987,9 @@ function FamilyReport({family,data,onClose}){
   const notes=data.notes.filter(n=>n.familyId===family.id);
   const accounts=(data.portfolio_accounts||[]).filter(a=>a.familyId===family.id);
   const valuables=(data.valuables||[]).filter(v=>v.familyId===family.id);
+  const loans=(data.loans||[]).filter(l=>l.familyId===family.id);
   const totalPortfolio=properties.reduce((s,p)=>s+(Number(p.currentValue)||Number(p.purchasePrice)||0),0);
-  const totalDebt=properties.reduce((s,p)=>s+(Number(p.loanBalance)||0)+(Number(p.secondMortgageBalance)||0),0)+accounts.filter(a=>a.accountType==="Line of Credit").reduce((s,a)=>s+(Number(a.currentBalance)||0),0);
+  const totalDebt=properties.reduce((s,p)=>s+(Number(p.loanBalance)||0)+(Number(p.secondMortgageBalance)||0),0)+accounts.filter(a=>a.accountType==="Line of Credit").reduce((s,a)=>s+(Number(a.currentBalance)||0),0)+loansDebt(loans);
   const totalAccounts=accounts.filter(a=>a.accountType!=="Line of Credit").reduce((s,a)=>s+(Number(a.currentBalance)||0),0);
   const totalValuables=valuables.reduce((s,v)=>s+(Number(v.estimatedValue)||0),0);
 
@@ -2047,6 +2048,10 @@ function FamilyReport({family,data,onClose}){
     <h2>Portfolio Accounts</h2>
     <table><thead><tr><th>Institution</th><th>Type</th><th>Banker</th><th>Starting</th><th>Current</th><th>Change</th></tr></thead><tbody>
     ${accounts.map(a=>{const pct=pctChange(a.startingBalance,a.currentBalance);return`<tr><td>${escHtml(a.institution)}</td><td>${escHtml(a.accountType)}</td><td>${escHtml(a.bankerName||"—")}</td><td>${fmtMoney(a.startingBalance)}</td><td>${fmtMoney(a.currentBalance)}</td><td style="color:${Number(pct)>=0?"#18a850":"#d43030"};font-weight:700">${pct!==null?(Number(pct)>=0?"+":"")+pct+"%":"—"}</td></tr>`;}).join("")||"<tr><td colspan='6' style='color:#8fa0b2'>No accounts</td></tr>"}
+    </tbody></table>
+    <h2>Loans & Lines of Credit</h2>
+    <table><thead><tr><th>Loan</th><th>Type</th><th>Lender</th><th>Balance</th><th>Limit</th><th>Rate</th><th>Payment</th><th>Matures</th></tr></thead><tbody>
+    ${loans.map(l=>`<tr><td>${escHtml(loanTitle(l))}</td><td>${escHtml(l.loanType)}</td><td>${escHtml(l.lender||"—")}</td><td>${fmtMoney(l.currentBalance)}</td><td>${l.creditLimit!=null&&l.creditLimit!==""?fmtMoney(l.creditLimit):"—"}</td><td>${fmtPct(l.interestRate)}</td><td>${l.paymentAmount!=null&&l.paymentAmount!==""?`${fmtMoney(l.paymentAmount)} ${escHtml((l.paymentFrequency||"").toLowerCase())}`:"—"}</td><td>${fmt(l.maturityDate)}</td></tr>`).join("")||"<tr><td colspan='8' style='color:#8fa0b2'>No loans or lines on file</td></tr>"}
     </tbody></table>
     <h2>Valuables</h2>
     <table><thead><tr><th>Category</th><th>Description</th><th>Year</th><th>Est. Value</th><th>Insured</th></tr></thead><tbody>
@@ -2270,6 +2275,19 @@ function buildFamilySnapshot(family,data){
     institution:a.institution||null, type:a.accountType||null, banker:a.bankerName||null,
     startingBalance:num(a.startingBalance), currentBalance:num(a.currentBalance),
     gainSinceInception:num(a.currentBalance)-num(a.startingBalance),
+  }));
+
+  // Loans & Lines: debt that isn't a mortgage on a listed property.
+  const loans=(data.loans||[]).filter(l=>l.familyId===fid).map(l=>({
+    type:l.loanType||null, name:(l.name||"").trim()||null, lender:l.lender||null,
+    balance:num(l.currentBalance), balanceAsOf:l.balanceAsOf||null,
+    creditLimit:(l.creditLimit===""||l.creditLimit==null)?null:num(l.creditLimit),
+    originalAmount:(l.originalAmount===""||l.originalAmount==null)?null:num(l.originalAmount),
+    interestRatePct:(l.interestRate===""||l.interestRate==null)?null:num(l.interestRate), rateType:l.rateType||null,
+    payment:(l.paymentAmount===""||l.paymentAmount==null)?null:num(l.paymentAmount), paymentFrequency:l.paymentFrequency||null,
+    maturityDate:l.maturityDate||null, daysUntilMaturity:daysFromNow(l.maturityDate),
+    securedByProperty:l.propertyId?((data.properties||[]).find(p=>p.id===l.propertyId)||{}).address||null:null,
+    securedByValuable:l.valuableId?((data.valuables||[]).find(v=>v.id===l.valuableId)||{}).description||null:null,
   }));
 
   const valuables=(data.valuables||[]).filter(v=>v.familyId===fid).map(v=>({
@@ -2590,7 +2608,8 @@ function buildFamilySnapshot(family,data){
 
   const totalRE=properties.reduce((s,p)=>s+(p.currentValue||p.purchasePrice||0),0);
   const totalDebt=properties.reduce((s,p)=>s+p.loanBalance+p.secondMortgageBalance,0)
-    +portfolioAccounts.filter(a=>a.type==="Line of Credit").reduce((s,a)=>s+a.currentBalance,0);
+    +portfolioAccounts.filter(a=>a.type==="Line of Credit").reduce((s,a)=>s+a.currentBalance,0)
+    +loans.reduce((s,l)=>s+l.balance,0);
   const totalPortfolio=portfolioAccounts.filter(a=>a.type!=="Line of Credit").reduce((s,a)=>s+a.currentBalance,0);
   const totalValuables=valuables.reduce((s,v)=>s+v.estimatedValue,0);
   const netWorth=totalRE-totalDebt+totalPortfolio+totalValuables;
@@ -2719,10 +2738,10 @@ function buildFamilySnapshot(family,data){
     family:{ name:family.name||null, servicePlan:planLabel(plan),
              firmPaysBills:billPay, runsWorkflows:planAllows(plan,"workflows") },
     totals:{ netWorth, realEstate:totalRE, totalDebt, portfolio:totalPortfolio, valuables:totalValuables },
-    counts:{ properties:properties.length, portfolioAccounts:portfolioAccounts.length, valuables:valuables.length, openTasks:tasks.length, documents:documents.length,
+    counts:{ properties:properties.length, portfolioAccounts:portfolioAccounts.length, loans:loans.length, valuables:valuables.length, openTasks:tasks.length, documents:documents.length,
              familyMembers:familyMembers.length, serviceProviders:serviceProviders.length,
              notes:(data.notes||[]).filter(n=>n.familyId===fid).length },
-    properties, portfolioAccounts, valuables, tasks, cashFlowEvents, documents,
+    properties, portfolioAccounts, loans, valuables, tasks, cashFlowEvents, documents,
     familyMembers, serviceProviders,
     // The Notes tab: what was discussed, decided and agreed, newest first.
     notes,
@@ -3336,9 +3355,10 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   const pendingTasks=famTasks.filter(t=>!t.done);
   const accounts=(data.portfolio_accounts||[]).filter(a=>a.familyId===family.id);
   const valuables=(data.valuables||[]).filter(v=>v.familyId===family.id);
+  const loans=(data.loans||[]).filter(l=>l.familyId===family.id);
 
   const totalRE=properties.reduce((s,p)=>s+(Number(p.currentValue)||Number(p.purchasePrice)||0),0);
-  const totalDebt=properties.reduce((s,p)=>s+(Number(p.loanBalance)||0)+(Number(p.secondMortgageBalance)||0),0)+accounts.filter(a=>a.accountType==="Line of Credit").reduce((s,a)=>s+(Number(a.currentBalance)||0),0);
+  const totalDebt=properties.reduce((s,p)=>s+(Number(p.loanBalance)||0)+(Number(p.secondMortgageBalance)||0),0)+accounts.filter(a=>a.accountType==="Line of Credit").reduce((s,a)=>s+(Number(a.currentBalance)||0),0)+loansDebt(loans);
   const totalAccounts=accounts.filter(a=>a.accountType!=="Line of Credit").reduce((s,a)=>s+(Number(a.currentBalance)||0),0);
   const totalValuables=valuables.reduce((s,v)=>s+(Number(v.estimatedValue)||0),0);
   const netWorth=totalRE-totalDebt+totalAccounts+totalValuables;
@@ -3371,7 +3391,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   //
   // Obligations is absent entirely on Core rather than shown disabled. A locked door on every
   // visit is worse than no door, and the tab row is already the tightest thing on this screen.
-  const TABS=["Overview","Properties","Portfolio","Cash Flow",...(hasWorkflows?["Obligations"]:[]),"Valuables",...(userProfile?.role==="enterprise_admin"?[]:["Deals"]),"Notes","Tasks","CHRIS",...(canSeePrompts?["Prompts"]:[]),...(userProfile?.role==="enterprise_admin"?[]:["Ask ORDANIS"])];
+  const TABS=["Overview","Properties","Portfolio","Loans & Lines","Cash Flow",...(hasWorkflows?["Obligations"]:[]),"Valuables",...(userProfile?.role==="enterprise_admin"?[]:["Deals"]),"Notes","Tasks","CHRIS",...(canSeePrompts?["Prompts"]:[]),...(userProfile?.role==="enterprise_admin"?[]:["Ask ORDANIS"])];
   const assistantName=(familyRow.assistantName||"").trim()||"ORDANIS";
   const[showWelcome,setShowWelcome]=useState(false);
   // Carries "attach a document to this property section" from the Properties tab
@@ -3627,6 +3647,19 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   const delValuable=async(id)=>{if(!confirm("Delete this valuable? This can't be undone."))return;
     const{error}=await sb.from("valuables").delete().eq("id",id);
     if(error)toast(error.message,"error");else reload("valuables");
+  };
+  // Loans & Lines: same form and columns as the client side (loanRowFromForm).
+  const[loanModal,setLoanModal]=useState(null); // {loan?}
+  const saveLoan=async(m,f)=>{
+    const row=loanRowFromForm(f);
+    const{error}=m.loan?await sb.from("loans").update(row).eq("id",m.loan.id).eq("family_id",family.id)
+      :await sb.from("loans").insert({family_id:family.id,...row});
+    if(error){toast(error.message,"error");return false;}
+    toast(m.loan?"Loan updated. All saved.":"Loan added.");reload("loans");
+  };
+  const delLoan=async l=>{if(!confirm(`Remove ${loanTitle(l)}? Its statements stay in CHRIS. This can't be undone.`))return;
+    const{error}=await sb.from("loans").delete().eq("id",l.id).eq("family_id",family.id);
+    if(error)toast(error.message,"error");else{toast("Loan removed");reload("loans");}
   };
 
   // Add deal
@@ -4069,6 +4102,20 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
             offer Obligations, but activeTab would still hold the string. */}
         {activeTab==="obligations"&&hasWorkflows&&<div style={{padding:isMobile?"16px 14px":"24px 28px"}}>
           <ObligationsSection family={family} data={data} toast={toast} canEdit={canEdit} userProfile={userProfile}/>
+        </div>}
+
+        {/* LOANS & LINES TAB */}
+        {activeTab==="loans&lines"&&<div style={{padding:isMobile?"16px 14px":"24px 28px"}}>
+          <LoansPanel loans={loans} properties={properties} valuables={valuables} documents={(data.documents||[]).filter(d=>d.familyId===family.id)}
+            locAccounts={accounts.filter(a=>a.accountType==="Line of Credit")} toast={toast}
+            onAdd={canEdit?()=>setLoanModal({}):null} onEdit={canEdit?l=>setLoanModal({loan:l}):null} onDelete={canEdit?delLoan:null}
+            onAttach={canEdit?l=>{setAttachIntent({loanId:l.id,section:"loan_statement"});setActiveTab("vault");}:null}/>
+          {loanModal&&canEdit&&<Modal title={loanModal.loan?"Edit loan or line":"Add a loan or line"} onClose={()=>setLoanModal(null)}>
+            <LoanForm initial={loanModal.loan} properties={properties} valuables={valuables}
+              statement={loanModal.loan?{familyId:family.id,loanId:loanModal.loan.id,toast,onUploaded:()=>reload("documents"),
+                doc:(data.documents||[]).find(d=>d.loanId===loanModal.loan.id&&d.propertySection==="loan_statement")||null}:null}
+              onSave={f=>saveLoan(loanModal,f)} onClose={()=>setLoanModal(null)}/>
+          </Modal>}
         </div>}
 
         {/* VALUABLES TAB */}
@@ -4708,6 +4755,214 @@ function ValuableForm({initial,onSave,onClose,policy=null}){
     {showReq&&<ReqHint/>}
     {err&&<div style={{fontSize:12,color:"#8b1a1a",background:"#fff5f5",border:"1px solid #f3c2c2",borderRadius:8,padding:"8px 10px",marginTop:8}}>{err}</div>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save"}</Btn></div>
+  </div>;
+}
+
+// ── LOANS & LINES ─────────────────────────────────────────────────────────────
+// Every loan or line a household carries that isn't a mortgage on one of its properties (those stay on the
+// property): auto, personal, student, business, HELOC, securities-backed lines, credit cards, private loans.
+// Shared by the staff and client sides. Balances count toward Total Debt; maturity dates feed Upcoming
+// Deadlines; a statement can be pinned to each loan in CHRIS (documents.loan_id, section "loan_statement").
+const DEBT_KINDS=["Auto Loan","Personal Loan","Student Loan","Business Loan","Line of Credit","HELOC","Securities-Backed Line",
+  "Credit Card","Mortgage","Boat / RV / Aircraft Loan","Private / Family Loan","Other"];
+// Revolving kinds: they have a credit limit (and so an amount still available) instead of an original amount.
+const DEBT_LINE_KINDS=new Set(["Line of Credit","HELOC","Securities-Backed Line","Credit Card"]);
+const LOAN_FREQUENCIES=["Monthly","Quarterly","Semi-annually","Annually","Other"];
+const LOAN_FREQ_PER_MONTH={Monthly:1,Quarterly:1/3,"Semi-annually":1/6,Annually:1/12};
+const loansDebt=loans=>(loans||[]).reduce((s,l)=>s+(Number(l.currentBalance)||0),0);
+// Monthly equivalent of a payment; "Other" schedules can't be spread, so they are left out of the total.
+const loanMonthly=l=>(Number(l.paymentAmount)||0)*(LOAN_FREQ_PER_MONTH[l.paymentFrequency||"Monthly"]||0);
+const loanTitle=l=>(l.name||"").trim()||[l.lender,l.loanType].filter(Boolean).join(" · ")||l.loanType||"Loan";
+
+// The columns a loan form writes. Fields that don't apply to the kind (a credit limit on an auto loan, an
+// original amount on a credit card) are cleared rather than left behind.
+function loanRowFromForm(f){
+  const line=DEBT_LINE_KINDS.has(f.loanType);
+  const sec=String(f.securedBy||"");
+  const txt=(v,n)=>String(v||"").trim().slice(0,n)||null;
+  return{loan_type:f.loanType,name:txt(f.name,120),lender:txt(f.lender,120),
+    current_balance:numOrNull(f.currentBalance),balance_as_of:f.balanceAsOf||null,
+    credit_limit:line?numOrNull(f.creditLimit):null,original_amount:line?null:numOrNull(f.originalAmount),
+    interest_rate:numOrNull(f.interestRate),rate_type:f.rateType||null,
+    payment_amount:numOrNull(f.paymentAmount),payment_frequency:f.paymentFrequency||null,
+    origination_date:f.originationDate||null,maturity_date:f.maturityDate||null,
+    property_id:sec.startsWith("p:")?sec.slice(2):null,valuable_id:sec.startsWith("v:")?sec.slice(2):null,
+    notes:txt(f.notes,4000)};
+}
+
+// statement (optional, editing an existing loan only): {familyId, loanId, doc, toast, onUploaded}. Snap or pick the
+// latest statement: CHRIS reads it for a name and summary, files it, and links it to this loan.
+function LoanForm({initial,onSave,onClose,properties=[],valuables=[],statement=null}){
+  const[f,setF]=useState(()=>initial
+    ?{...initial,securedBy:initial.propertyId?`p:${initial.propertyId}`:initial.valuableId?`v:${initial.valuableId}`:""}
+    :{loanType:"Auto Loan",name:"",lender:"",currentBalance:"",balanceAsOf:"",creditLimit:"",originalAmount:"",interestRate:"",
+      rateType:"",paymentAmount:"",paymentFrequency:"Monthly",originationDate:"",maturityDate:"",securedBy:"",notes:""});
+  const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+  const line=DEBT_LINE_KINDS.has(f.loanType);
+  const[saving,setSaving]=useState(false);
+  const[err,setErr]=useState("");
+  const[stmtDoc,setStmtDoc]=useState(statement?statement.doc||null:null);
+  const[stmtBusy,setStmtBusy]=useState("");
+  const camRef=useRef(null),fileRef=useRef(null);
+  const attachStatement=async file=>{
+    if(!file||!statement)return;
+    const problem=docFileProblem(file);
+    if(problem){statement.toast(problem,"error");return;}
+    try{
+      const text=await readDocumentForFiling(file,ph=>setStmtBusy(ph));
+      let sug=null;
+      if(text&&text.length>80){setStmtBusy("Reading the statement…");try{sug=await suggestFolder(text,file.name,DOC_CATEGORIES);}catch(_e){}}
+      setStmtBusy("Filing in CHRIS…");
+      const name=(sug&&sug.suggestedName)||`${loanTitle(f)} statement`;
+      const e=await fileChrisDocument({familyId:statement.familyId,file,name,category:"General",description:sug&&sug.summary,extractedText:text,
+        link:{kind:"loan",id:statement.loanId,section:"loan_statement"}});
+      if(e){statement.toast(e,"error");return;}
+      setStmtDoc({name});
+      statement.toast("Statement filed in CHRIS and linked to this loan");
+      if(statement.onUploaded)statement.onUploaded();
+    }finally{setStmtBusy("");}
+  };
+  const save=async()=>{
+    if(!String(f.lender||"").trim()&&!String(f.name||"").trim()){setErr("Add a lender or a name so you can tell this one apart.");return;}
+    const r=f.interestRate;
+    if(r!==""&&r!=null&&(isNaN(Number(r))||Number(r)<0||Number(r)>100)){setErr("Interest rate must be a percentage between 0 and 100.");return;}
+    if(f.originationDate&&f.maturityDate&&f.maturityDate<f.originationDate){setErr("The end date can't be before the start date.");return;}
+    setErr("");setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();
+  };
+  const propLabel=p=>p.name||p.address||"Property";
+  return <div>
+    <Grid2>
+      <Field label="Type"><Sel value={f.loanType} onChange={set("loanType")}>{DEBT_KINDS.map(k=><option key={k}>{k}</option>)}</Sel></Field>
+      <Field label="Lender"><Inp maxLength={120} placeholder="Chase, Schwab, Toyota Financial…" value={f.lender||""} onChange={set("lender")}/></Field>
+    </Grid2>
+    <Field label="Name" optional><Inp maxLength={120} placeholder={line?"Schwab pledged asset line":"2024 Range Rover loan"} value={f.name||""} onChange={set("name")}/></Field>
+    <Grid2>
+      <Field label={line?"Balance owed today":"Balance owed"} optional><MoneyInput value={f.currentBalance??""} onChange={set("currentBalance")}/></Field>
+      <Field label="Balance as of" optional><Inp type="date" value={f.balanceAsOf||""} onChange={set("balanceAsOf")}/></Field>
+    </Grid2>
+    <Grid2>
+      {line
+        ?<Field label="Credit limit" optional><MoneyInput value={f.creditLimit??""} onChange={set("creditLimit")}/></Field>
+        :<Field label="Original amount" optional><MoneyInput value={f.originalAmount??""} onChange={set("originalAmount")}/></Field>}
+      <Field label="Interest rate (%)" optional><Inp type="number" min="0" max="100" step="0.01" value={f.interestRate??""} onChange={set("interestRate")}/></Field>
+    </Grid2>
+    <Grid2>
+      <Field label="Rate" optional><Sel value={f.rateType||""} onChange={set("rateType")}><option value="">—</option><option>Fixed</option><option>Variable</option></Sel></Field>
+      <Field label="Payment" optional><MoneyInput value={f.paymentAmount??""} onChange={set("paymentAmount")}/></Field>
+    </Grid2>
+    <Grid2>
+      <Field label="How often" optional><Sel value={f.paymentFrequency||""} onChange={set("paymentFrequency")}><option value="">—</option>{LOAN_FREQUENCIES.map(x=><option key={x}>{x}</option>)}</Sel></Field>
+      <Field label="Secured by" optional>
+        <Sel value={f.securedBy||""} onChange={set("securedBy")}>
+          <option value="">Nothing / not sure</option>
+          {properties.length>0&&<optgroup label="Properties">{properties.map(p=><option key={p.id} value={`p:${p.id}`}>{propLabel(p)}</option>)}</optgroup>}
+          {valuables.length>0&&<optgroup label="Valuables">{valuables.map(v=><option key={v.id} value={`v:${v.id}`}>{v.description||v.category||"Valuable"}</option>)}</optgroup>}
+        </Sel>
+      </Field>
+    </Grid2>
+    <Grid2>
+      <Field label="Start date" optional><Inp type="date" value={f.originationDate||""} onChange={set("originationDate")}/></Field>
+      <Field label={line?"Draw period ends / renews":"Paid off by (maturity)"} optional><Inp type="date" value={f.maturityDate||""} onChange={set("maturityDate")}/></Field>
+    </Grid2>
+    {f.loanType==="Mortgage"&&<div style={{fontSize:11.5,color:"#8a5c00",marginBottom:12,lineHeight:1.5}}>A mortgage on a property you've added belongs on that property (Properties → Edit), so it isn't counted twice. Use this for one that isn't on a listed property.</div>}
+    {statement&&<div style={{marginBottom:14,padding:"12px 14px",border:`1px solid ${B.borderLight}`,borderRadius:10,background:B.bg}}>
+      <div style={{fontSize:12,fontWeight:700,color:B.navy,marginBottom:4}}>Latest statement</div>
+      <div style={{fontSize:12,color:B.textSoft,marginBottom:10,lineHeight:1.5}}>
+        {stmtDoc?<>📄 <strong style={{color:B.navy}}>{stmtDoc.name}</strong> is in CHRIS, linked to this loan. Add a newer one to replace it; the old one stays in CHRIS.</>
+          :"Snap or upload a statement. CHRIS files it and links it to this loan."}
+      </div>
+      {stmtBusy?<div style={{fontSize:12.5,color:B.gold,fontWeight:600}}>{stmtBusy}</div>
+        :<div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <button type="button" onClick={()=>camRef.current&&camRef.current.click()} style={{flex:"1 1 140px",minHeight:44,borderRadius:10,border:"none",background:B.navy,color:B.white,fontSize:13.5,fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>📷 Take a photo</button>
+          <button type="button" onClick={()=>fileRef.current&&fileRef.current.click()} style={{flex:"1 1 140px",minHeight:44,borderRadius:10,border:`1.5px solid ${B.navy}`,background:B.white,color:B.navy,fontSize:13.5,fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>📄 Choose file</button>
+        </div>}
+      <input ref={camRef} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{const x=e.target.files&&e.target.files[0];e.target.value="";attachStatement(x);}}/>
+      <input ref={fileRef} type="file" accept={[...DOC_UPLOAD_EXTS.map(x=>"."+x),"image/*"].join(",")} style={{display:"none"}} onChange={e=>{const x=e.target.files&&e.target.files[0];e.target.value="";attachStatement(x);}}/>
+    </div>}
+    <Field label="Notes" optional><Tex value={f.notes||""} onChange={set("notes")}/></Field>
+    {err&&<div style={{fontSize:12,color:"#8b1a1a",background:"#fff5f5",border:"1px solid #f3c2c2",borderRadius:8,padding:"8px 10px",marginTop:8}}>{err}</div>}
+    <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save"}</Btn></div>
+  </div>;
+}
+
+// The Loans & Lines list with its totals. onAdd/onEdit/onDelete/onAttach are null for read-only viewers.
+function LoansPanel({loans,properties=[],valuables=[],documents=[],locAccounts=[],toast,onAdd=null,onEdit=null,onDelete=null,onAttach=null}){
+  const lines=loans.filter(l=>DEBT_LINE_KINDS.has(l.loanType)),terms=loans.filter(l=>!DEBT_LINE_KINDS.has(l.loanType));
+  const owed=loansDebt(loans);
+  const available=lines.reduce((s,l)=>s+(l.creditLimit!=null&&l.creditLimit!==""?Math.max(0,Number(l.creditLimit)-(Number(l.currentBalance)||0)):0),0);
+  const monthly=loans.reduce((s,l)=>s+loanMonthly(l),0);
+  const locTotal=locAccounts.reduce((s,a)=>s+(Number(a.currentBalance)||0),0);
+  const today=new Date();today.setHours(0,0,0,0);
+  const securedLabel=l=>{
+    if(l.propertyId){const p=properties.find(x=>x.id===l.propertyId);return p?`Secured by ${p.name||p.address||"a property"}`:null;}
+    if(l.valuableId){const v=valuables.find(x=>x.id===l.valuableId);return v?`Secured by ${v.description||v.category||"a valuable"}`:null;}
+    return null;
+  };
+  const card=l=>{
+    const line=DEBT_LINE_KINDS.has(l.loanType);
+    const limit=line&&l.creditLimit!=null&&l.creditLimit!==""?Number(l.creditLimit):null;
+    const bal=Number(l.currentBalance)||0;
+    const used=limit>0?Math.min(100,Math.round(bal/limit*100)):null;
+    let due=null;
+    if(l.maturityDate){
+      const d=parseLocalDate(l.maturityDate);const days=Math.round((d-today)/86400000);
+      const when=d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+      const verb=line?"Renews / ends":"Matures";
+      due=days<0?{t:`${verb} ${when} (past)`,c:"#8b1a1a"}:days<=90?{t:`${verb} in ${days} day${days===1?"":"s"} (${when})`,c:"#8a5c00"}:{t:`${verb} ${when}`,c:B.textSoft};
+    }
+    const facts=[l.interestRate!=null&&l.interestRate!==""&&`${fmtPct(l.interestRate)}${l.rateType?` ${l.rateType.toLowerCase()}`:""}`,
+      l.paymentAmount!=null&&l.paymentAmount!==""&&`${fmtMoney(l.paymentAmount)} ${(l.paymentFrequency||"monthly").toLowerCase()}`,
+      !line&&l.originalAmount!=null&&l.originalAmount!==""&&`Originally ${fmtMoney(l.originalAmount)}`].filter(Boolean);
+    const doc=documents.find(d=>d.loanId===l.id&&d.propertySection==="loan_statement");
+    const sec=securedLabel(l);
+    return <div key={l.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid ${line?"#0e7490":"#b4551f"}`,borderRadius:10,padding:"16px 20px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:14,boxShadow:B.shadow,flexWrap:"wrap"}}>
+      <div style={{minWidth:0,flex:"1 1 220px"}}>
+        <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{loanTitle(l)}</div>
+        <div style={{fontSize:12,color:B.textSoft}}>{[l.loanType,(l.name||"").trim()?l.lender:null].filter(Boolean).join(" · ")}</div>
+        {facts.length>0&&<div style={{fontSize:11.5,color:B.textSoft,marginTop:4}}>{facts.join(" · ")}</div>}
+        {sec&&<div style={{fontSize:11.5,color:B.textSoft,marginTop:2}}>{sec}</div>}
+        {due&&<div style={{fontSize:11.5,color:due.c,fontWeight:due.c===B.textSoft?400:700,marginTop:2}}>{due.t}</div>}
+        <div style={{fontSize:11.5,marginTop:4}}>
+          {doc?<DocLink doc={doc} toast={toast} label="📄 latest statement"/>
+            :onAttach?<button onClick={()=>onAttach(l)} style={{background:"none",border:"none",color:B.navyMid,fontSize:11.5,cursor:"pointer",fontFamily:"inherit",fontWeight:600,padding:0}}>📎 Attach a statement</button>:null}
+        </div>
+      </div>
+      <div style={{textAlign:"right",flexShrink:0}}>
+        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:B.navy,fontWeight:600}}>{fmtMoney(bal)}</div>
+        {l.balanceAsOf&&<div style={{fontSize:10.5,color:B.textMute}}>as of {fmt(l.balanceAsOf)}</div>}
+        {limit!=null&&<div style={{marginTop:4,minWidth:150}}>
+          <div style={{fontSize:11,color:B.textSoft}}>{fmtMoney(Math.max(0,limit-bal))} available of {fmtMoney(limit)}</div>
+          {used!=null&&<div style={{height:5,background:B.borderLight,borderRadius:3,marginTop:4,overflow:"hidden"}}><div style={{width:`${used}%`,height:"100%",background:used>=80?"#b4551f":"#0e7490"}}/></div>}
+        </div>}
+        {(onEdit||onDelete)&&<div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:6}}>
+          {onEdit&&<button onClick={()=>onEdit(l)} style={{background:"none",border:"none",color:B.navyMid,fontSize:12,cursor:"pointer",fontFamily:"inherit",fontWeight:600,padding:0}}>Edit</button>}
+          {onDelete&&<button onClick={()=>onDelete(l)} style={{background:"none",border:"none",color:B.textMute,fontSize:12,cursor:"pointer",fontFamily:"inherit",padding:0}}>Remove</button>}
+        </div>}
+      </div>
+    </div>;
+  };
+  const group=(title,list)=>list.length>0&&<div style={{marginBottom:20}}>
+    <div style={{fontSize:12,fontWeight:800,color:B.textMute,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10}}>{title}</div>
+    {list.map(card)}
+  </div>;
+  return <div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,flexWrap:"wrap",gap:10}}>
+      <div>
+        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600}}>Loans & Lines of Credit</div>
+        <div style={{fontSize:14,color:B.textSoft,marginTop:4}}>
+          Owed: <strong style={{color:B.navy}}>{fmtMoney(owed)}</strong>
+          {lines.length>0&&<> · Available on lines: <strong style={{color:B.navy}}>{fmtMoney(available)}</strong></>}
+          {monthly>0&&<> · Payments: about <strong style={{color:B.navy}}>{fmtMoney(Math.round(monthly))}</strong>/mo</>}
+        </div>
+      </div>
+      {onAdd&&<Btn small onClick={onAdd}>+ Add Loan or Line</Btn>}
+    </div>
+    {loans.length===0?<Empty text="No loans or lines of credit on file yet."/>:<>{group("Loans",terms)}{group("Lines of credit & cards",lines)}</>}
+    <div style={{fontSize:11.5,color:B.textMute,lineHeight:1.6,marginTop:8}}>
+      Mortgages and second mortgages entered on a property are counted with that property, so they aren't listed here.
+      {locAccounts.length>0&&<> {locAccounts.length===1?"One “Line of Credit” account":`${locAccounts.length} “Line of Credit” accounts`} in Portfolio ({fmtMoney(locTotal)}) also count toward Total Debt.</>}
+      {" "}Everything here counts toward Total Debt.
+    </div>
   </div>;
 }
 
@@ -6950,7 +7205,7 @@ function NoteBody({body,size=13,clampChars=280,color}){
 }
 
 const DEADLINE_TAG={task:"Task",loan:"Loan maturity",insurance:"Insurance",flood:"Flood insurance",deal:"Deal close",birthday:"Birthday",anniversary:"Anniversary"};
-function collectDeadlines({tasks=[],properties=[],deals=[],contacts=[],families=[],acks=[],windowDays=60}){
+function collectDeadlines({tasks=[],properties=[],loans=[],deals=[],contacts=[],families=[],acks=[],windowDays=60}){
   const today=new Date(); today.setHours(0,0,0,0);
   const famName=id=>{const f=families.find(x=>x.id===id);return f?f.name:null;};
   const toISO=dt=>`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
@@ -6989,6 +7244,7 @@ function collectDeadlines({tasks=[],properties=[],deals=[],contacts=[],families=
     pushOnce(p.insuranceExpiration,`Insurance renews — ${addr}`,"insurance",p.familyId,p.id);
     pushOnce(p.floodInsuranceExpiration,`Flood insurance renews — ${addr}`,"flood",p.familyId,p.id);
   });
+  (loans||[]).forEach(l=>pushOnce(l.maturityDate,`${DEBT_LINE_KINDS.has(l.loanType)?"Line renews / ends":"Loan matures"} — ${loanTitle(l)}`,"loan",l.familyId,l.id));
   (deals||[]).filter(d=>d.stage!=="Closed Won"&&d.stage!=="Closed Lost").forEach(d=>pushOnce(d.closeDate,`Deal close — ${d.title||"deal"}`,"deal",d.familyId,d.id));
   (contacts||[]).forEach(c=>{
     pushAnnual(c.dob,`${c.name||"Client"} — birthday`,"birthday",c.familyId,c.id);
@@ -7107,7 +7363,7 @@ function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
   const openDeals=deals.filter(d=>d.stage!=="Closed Lost"&&d.stage!=="Closed Won");
   const pipeline=openDeals.reduce((s,d)=>s+(Number(d.value)||0),0);
   const totalRE=properties.reduce((s,p)=>s+(Number(p.currentValue)||Number(p.purchasePrice)||0),0);
-  const totalDebt=properties.reduce((s,p)=>s+(Number(p.loanBalance)||0)+(Number(p.secondMortgageBalance)||0),0)+portfolio_accounts.filter(a=>a.accountType==="Line of Credit").reduce((s,a)=>s+(Number(a.currentBalance)||0),0);
+  const totalDebt=properties.reduce((s,p)=>s+(Number(p.loanBalance)||0)+(Number(p.secondMortgageBalance)||0),0)+portfolio_accounts.filter(a=>a.accountType==="Line of Credit").reduce((s,a)=>s+(Number(a.currentBalance)||0),0)+loansDebt(scope?(data.loans||[]).filter(l=>_famIds.has(l.familyId)):(data.loans||[]));
   const totalPortfolio=portfolio_accounts.filter(a=>a.accountType!=="Line of Credit").reduce((s,a)=>s+(Number(a.currentBalance)||0),0);
   const pending=tasks.filter(t=>!t.done);
   const overdue=pending.filter(t=>t.dueDate&&dueEnd(t.dueDate)<new Date());
@@ -7115,7 +7371,7 @@ function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
   const _famIdSet=new Set(families.map(f=>f.id));
   const deadlineContacts=(_contacts||[]).filter(c=>!scope||_famIdSet.has(c.familyId)||(c.advisorEmail||"").toLowerCase()===scope);
   const _acks=data.deadline_acks||[];
-  const deadlines=collectDeadlines({tasks,properties,deals,contacts:deadlineContacts,families,acks:_acks,windowDays:60});
+  const deadlines=collectDeadlines({tasks,properties,loans:(data.loans||[]).filter(l=>_famIdSet.has(l.familyId)),deals,contacts:deadlineContacts,families,acks:_acks,windowDays:60});
   const bills=collectBills({events:(data.cash_flow_events||[]).filter(e=>!scope||_famIdSet.has(e.familyId)),families,paymentLog:data.cash_flow_payment_log||[],windowDays:45});
   const billsTotal=bills.reduce((s,b)=>s+b.amount,0);
   const userLabel=(userProfile&&(userProfile.fullName||userProfile.email))||"";
@@ -8664,6 +8920,8 @@ const DOC_SECTIONS=[
   {key:"valuables_schedule",label:"Valuables Schedule",       scope:"family",   suggestCategory:"Insurance"},
   // One specific valuable's policy (documents.valuable_id), e.g. the rider for a watch or a boat policy.
   {key:"valuable_policy",   label:"Valuable Insurance Policy",scope:"valuable", suggestCategory:"Insurance"},
+  // One loan or line's latest statement (documents.loan_id), shown on its Loans & Lines card.
+  {key:"loan_statement",    label:"Loan / Line Statement",    scope:"loan",     suggestCategory:"General"},
 ];
 const sectionLabel=k=>DOC_SECTIONS.find(s=>s.key===k)?.label||k;
 
@@ -8943,15 +9201,16 @@ async function fileChrisDocument({familyId,file,name,category,description,extrac
   // A link pins the document to one record's section. Whatever held that spot before is unlinked, never
   // deleted (same rule as the upload form): last year's policy still belongs in CHRIS.
   const propertyId=link&&link.kind==="property"?link.id:null,valuableId=link&&link.kind==="valuable"?link.id:null;
+  const loanId=link&&link.kind==="loan"?link.id:null;
   const section=link?link.section:null;
   if(section){
     let q=sb.from("documents").update({property_section:null}).eq("family_id",familyId).eq("property_section",section);
-    q=propertyId?q.eq("property_id",propertyId):valuableId?q.eq("valuable_id",valuableId):q;
+    q=propertyId?q.eq("property_id",propertyId):valuableId?q.eq("valuable_id",valuableId):loanId?q.eq("loan_id",loanId):q;
     await q;
   }
   const{error:dbErr}=await sb.from("documents").insert({family_id:familyId,name:name.trim(),description:description||null,
     category,file_path:path,file_size:file.size,file_type:file.type||ext,extracted_text:extractedText||null,uploaded_by:CURRENT_USER_LABEL||null,
-    property_id:propertyId,valuable_id:valuableId,property_section:section});
+    property_id:propertyId,valuable_id:valuableId,loan_id:loanId,property_section:section});
   if(dbErr){await sb.storage.from("documents").remove([path]).catch(()=>{});return dbErr.message;}
   return null;
 }
@@ -9329,6 +9588,8 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
   // Optional link to a property section / valuables schedule.
   const[linkPropertyId,setLinkPropertyId]=useState("");
   const[linkValuableId,setLinkValuableId]=useState("");
+  const[linkLoanId,setLinkLoanId]=useState("");
+  const[loansList,setLoansList]=useState([]);
   const[linkSection,setLinkSection]=useState("");
   const[properties,setProperties]=useState([]);
   const[valuablesList,setValuablesList]=useState([]);
@@ -9379,6 +9640,8 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
       .then(({data})=>setProperties((data||[]).map(toClient)));
     sb.from("valuables").select("id,description,category").eq("family_id",familyId).order("description")
       .then(({data})=>setValuablesList((data||[]).map(toClient)));
+    sb.from("loans").select("id,name,lender,loan_type").eq("family_id",familyId).order("created_at")
+      .then(({data})=>setLoansList((data||[]).map(toClient)));
   },[familyId]);
 
   // Arriving from the paperclip on a property section: open the upload form with
@@ -9389,6 +9652,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     setLinkSection(attachIntent.section||"");
     setLinkPropertyId(sec&&sec.scope==="property"?(attachIntent.propertyId||""):"");
     setLinkValuableId(sec&&sec.scope==="valuable"?(attachIntent.valuableId||""):"");
+    setLinkLoanId(sec&&sec.scope==="loan"?(attachIntent.loanId||""):"");
     if(sec&&sec.suggestCategory)setCategory(sec.suggestCategory);
     setOpenFolder(null);
     setModal("upload");
@@ -9397,20 +9661,21 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
 
   const propLabel=p=>p.name||[p.address,p.city].filter(Boolean).join(", ")||"Property";
   // The document currently occupying a given section, ignoring the one being edited.
-  const occupantOf=(section,propertyId,exceptId,valuableId)=>docs.find(d=>
+  const occupantOf=(section,propertyId,exceptId,valuableId,loanId)=>docs.find(d=>
     d.propertySection===section&&
-    (section==="valuables_schedule"?true:section==="valuable_policy"?d.valuableId===valuableId:d.propertyId===propertyId)&&
+    (section==="valuables_schedule"?true:section==="valuable_policy"?d.valuableId===valuableId:section==="loan_statement"?d.loanId===loanId:d.propertyId===propertyId)&&
     d.id!==exceptId);
   const valuableLabel=v=>v.description||v.category||"Valuable";
   // The record a section links to: a property, a valuable, or (family scope) neither.
   const linkTargets=section=>{
     const sc=DOC_SECTIONS.find(x=>x.key===section)?.scope;
-    return{propId:sc==="property"?(linkPropertyId||null):null,valId:sc==="valuable"?(linkValuableId||null):null};
+    return{propId:sc==="property"?(linkPropertyId||null):null,valId:sc==="valuable"?(linkValuableId||null):null,loanId:sc==="loan"?(linkLoanId||null):null};
   };
   const linkProblem=()=>{
     const sc=DOC_SECTIONS.find(x=>x.key===linkSection)?.scope;
     if(sc==="property"&&!linkPropertyId)return "Choose a property to complete the link, or set Section back to \"Not linked\".";
     if(sc==="valuable"&&!linkValuableId)return "Choose a valuable to complete the link, or set Section back to \"Not linked\".";
+    if(sc==="loan"&&!linkLoanId)return "Choose a loan to complete the link, or set Section back to \"Not linked\".";
     return null;
   };
   // Selecting a section implies a CHRIS folder; only pre-fill it if the user
@@ -9421,10 +9686,11 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     if(s&&s.suggestCategory&&!touchedCategory)setCategory(s.suggestCategory);
     if(s&&s.scope!=="property")setLinkPropertyId("");
     if(s&&s.scope!=="valuable")setLinkValuableId("");
+    if(s&&s.scope!=="loan")setLinkLoanId("");
   };
   const resetForm=()=>{
     setName("");setDescription("");setCategory("General");setFile(null);autoNameRef.current="";autoDescRef.current="";
-    setLinkPropertyId("");setLinkValuableId("");setLinkSection("");setConflictDoc(null);
+    setLinkPropertyId("");setLinkValuableId("");setLinkLoanId("");setLinkSection("");setConflictDoc(null);
     setSuggestion(null);setExtractedText(null);setExtracting(false);setCreatingSuggested(false);setSuggestedLink(null);
     setTypedCategory(null);setTypedCategoryErr("");
   };
@@ -9575,16 +9841,16 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
       // Prior-year tax bills and expired policies still have real value, so they
       // stay in CHRIS — they just stop being the one shown on the card.
       const section=linkSection||null;
-      const{propId,valId}=section?linkTargets(section):{propId:null,valId:null};
+      const{propId,valId,loanId}=section?linkTargets(section):{propId:null,valId:null,loanId:null};
       let displaced=null;
       if(section){
-        const occ=occupantOf(section,propId,undefined,valId);
+        const occ=occupantOf(section,propId,undefined,valId,loanId);
         if(occ){
           await sb.from("documents").update({property_section:null}).eq("id",occ.id);
           displaced=occ.name;
         }
       }
-      const{error:dbError}=await sb.from("documents").insert({family_id:familyId||null,name,description:description||null,category,file_path:path,file_size:file.size,file_type:file.type||ext,extracted_text:extractedText,uploaded_by:CURRENT_USER_LABEL||null,property_id:propId,valuable_id:valId,property_section:section});
+      const{error:dbError}=await sb.from("documents").insert({family_id:familyId||null,name,description:description||null,category,file_path:path,file_size:file.size,file_type:file.type||ext,extracted_text:extractedText,uploaded_by:CURRENT_USER_LABEL||null,property_id:propId,valuable_id:valId,loan_id:loanId,property_section:section});
       if(dbError)throw new Error(dbError.message);
       toast(displaced
         ?`Uploaded and linked. "${displaced}" is still in CHRIS, no longer linked.`
@@ -9632,24 +9898,24 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     if(reload)reload("documents");
   };
 
-  const openEdit=doc=>{setName(doc.name||"");setDescription(doc.description||"");setCategory(doc.category||"General");setLinkSection(doc.propertySection||"");setLinkPropertyId(doc.propertyId||"");setLinkValuableId(doc.valuableId||"");setConflictDoc(null);setSuggestion(null);setExtractedText(null);setModal({edit:doc});};
+  const openEdit=doc=>{setName(doc.name||"");setDescription(doc.description||"");setCategory(doc.category||"General");setLinkSection(doc.propertySection||"");setLinkPropertyId(doc.propertyId||"");setLinkValuableId(doc.valuableId||"");setLinkLoanId(doc.loanId||"");setConflictDoc(null);setSuggestion(null);setExtractedText(null);setModal({edit:doc});};
   const saveEdit=async()=>{
     const doc=modal?.edit;if(!doc||!name.trim())return;
     {const lp=linkProblem();if(lp){toast(lp,"error");return;}}
     setUploading(true);
     const section=linkSection||null;
-    const{propId,valId}=section?linkTargets(section):{propId:null,valId:null};
+    const{propId,valId,loanId}=section?linkTargets(section):{propId:null,valId:null,loanId:null};
     // Same rule as upload: the document being displaced is unlinked, never
     // deleted, so history stays in CHRIS.
     let displaced=null;
     if(section){
-      const occ=occupantOf(section,propId,doc.id,valId);
+      const occ=occupantOf(section,propId,doc.id,valId,loanId);
       if(occ){
         await sb.from("documents").update({property_section:null}).eq("id",occ.id);
         displaced=occ.name;
       }
     }
-    const{error}=await sb.from("documents").update({name:name.trim(),description:description||null,category,property_id:propId,valuable_id:valId,property_section:section}).eq("id",doc.id);
+    const{error}=await sb.from("documents").update({name:name.trim(),description:description||null,category,property_id:propId,valuable_id:valId,loan_id:loanId,property_section:section}).eq("id",doc.id);
     if(error){toast(error.message,"error");setUploading(false);return;}
     toast(displaced?`Saved. "${displaced}" is still in CHRIS, no longer linked.`:"Document updated");
     setModal(null);resetForm();
@@ -9665,8 +9931,9 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
     const sec=DOC_SECTIONS.find(s=>s.key===linkSection);
     const needsProperty=sec&&sec.scope==="property";
     const needsValuable=sec&&sec.scope==="valuable";
-    const occ=linkSection&&(!needsProperty||linkPropertyId)&&(!needsValuable||linkValuableId)
-      ?occupantOf(linkSection,needsProperty?linkPropertyId:null,exceptId,needsValuable?linkValuableId:null):null;
+    const needsLoan=sec&&sec.scope==="loan";
+    const occ=linkSection&&(!needsProperty||linkPropertyId)&&(!needsValuable||linkValuableId)&&(!needsLoan||linkLoanId)
+      ?occupantOf(linkSection,needsProperty?linkPropertyId:null,exceptId,needsValuable?linkValuableId:null,needsLoan?linkLoanId:null):null;
     return <>
       <SectionLabel>Link to a record (optional)</SectionLabel>
       <Grid2>
@@ -9688,7 +9955,15 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
             {valuablesList.map(v=><option key={v.id} value={v.id}>{valuableLabel(v)}</option>)}
           </Sel>
         </Field>}
+        {needsLoan&&<Field label="Loan or line">
+          <Sel value={linkLoanId} onChange={e=>setLinkLoanId(e.target.value)}>
+            <option value="">Select a loan…</option>
+            {loansList.map(l=><option key={l.id} value={l.id}>{loanTitle(l)}</option>)}
+          </Sel>
+        </Field>}
       </Grid2>
+      {needsLoan&&linkSection&&!linkLoanId&&
+        <div style={{fontSize:11.5,color:"#8b1a1a",marginTop:-6,marginBottom:12}}>{loansList.length?"Choose a loan to complete the link.":"Add the loan in Loans & Lines first, then link its statement."}</div>}
       {needsValuable&&linkSection&&!linkValuableId&&
         <div style={{fontSize:11.5,color:"#8b1a1a",marginTop:-6,marginBottom:12}}>Choose a valuable to complete the link.</div>}
       {needsProperty&&linkSection&&!linkPropertyId&&
@@ -10010,6 +10285,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
           <button type="button" onClick={()=>{setLinkSection(suggestedLink.section);
               if(suggestedLink.kind==="property"){setLinkPropertyId(suggestedLink.id);setLinkValuableId("");}
               else{setLinkValuableId(suggestedLink.id);setLinkPropertyId("");}
+              setLinkLoanId("");
               setSuggestedLink(null);}}
             style={{background:"none",border:"none",color:B.navyMid,cursor:"pointer",fontSize:12.5,fontFamily:"inherit",fontWeight:700,padding:0,textDecoration:"underline"}}>Link it</button>
           <button type="button" onClick={()=>setSuggestedLink(null)}
@@ -10797,6 +11073,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const properties=(data.properties||[]).filter(p=>p.familyId===family.id);
   const accounts=(data.portfolio_accounts||[]).filter(a=>a.familyId===family.id);
   const valuables=(data.valuables||[]).filter(v=>v.familyId===family.id);
+  const loans=(data.loans||[]).filter(l=>l.familyId===family.id);
   const members=(data.contacts||[]).filter(c=>c.familyId===family.id);
   const professionals=(data.family_contacts||[]).filter(p=>p.familyId===family.id);
   const businessPartners=(data.family_partners||[]).filter(p=>p.familyId===family.id&&p.source==="household");
@@ -10834,6 +11111,20 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     const{error}=await sb.from("valuables").update(valuableRowFromForm(f)).eq("id",id).eq("family_id",family.id);
     if(error){toast(error.message,"error");return false;}
     toast("Valuable updated. All saved.");await reload("valuables");
+  };
+  // Loans & Lines, self-serve: add, edit, remove, attach a statement. Same columns as the staff side.
+  const[loanModal,setLoanModal]=useState(null); // {loan?}
+  const saveClientLoan=async(m,f)=>{
+    const row=loanRowFromForm(f);
+    const{error}=m.loan?await sb.from("loans").update(row).eq("id",m.loan.id).eq("family_id",family.id)
+      :await sb.from("loans").insert({family_id:family.id,...row});
+    if(error){toast(error.message,"error");return false;}
+    toast(m.loan?"Loan updated. All saved.":"Loan added. Your record is looking more complete.");await reload("loans");
+  };
+  const delClientLoan=async l=>{
+    if(!confirm(`Remove ${loanTitle(l)}? Its statements stay in CHRIS. This can't be undone.`))return;
+    const{error}=await sb.from("loans").delete().eq("id",l.id).eq("family_id",family.id);
+    if(error)toast(error.message,"error");else{toast("Loan removed");await reload("loans");}
   };
   const delClientValuable=async v=>{
     if(!confirm(`Remove ${v.description||"this valuable"}? Its documents stay in CHRIS. This can't be undone.`))return;
@@ -10939,7 +11230,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     setWizardOpen(false);
   };
   const totalRE=properties.reduce((s,p)=>s+(Number(p.currentValue)||Number(p.purchasePrice)||0),0);
-  const totalDebt=properties.reduce((s,p)=>s+(Number(p.loanBalance)||0)+(Number(p.secondMortgageBalance)||0),0)+accounts.filter(a=>a.accountType==="Line of Credit").reduce((s,a)=>s+(Number(a.currentBalance)||0),0);
+  const totalDebt=properties.reduce((s,p)=>s+(Number(p.loanBalance)||0)+(Number(p.secondMortgageBalance)||0),0)+accounts.filter(a=>a.accountType==="Line of Credit").reduce((s,a)=>s+(Number(a.currentBalance)||0),0)+loansDebt(loans);
   const totalAccounts=accounts.filter(a=>a.accountType!=="Line of Credit").reduce((s,a)=>s+(Number(a.currentBalance)||0),0);
   const totalValuables=valuables.reduce((s,v)=>s+(Number(v.estimatedValue)||0),0);
   const netWorth=totalRE-totalDebt+totalAccounts+totalValuables;
@@ -10950,6 +11241,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     {id:"summary",   label:"Summary",    icon:"◈"},
     ...(clientSelfServe||clientPlan==="premier"?[{id:"household",label:"Household",icon:"◎"}]:[]),
     {id:"portfolio", label:"Portfolio",  icon:"◇"},
+    {id:"loans",     label:"Loans & Lines",icon:"≡"},
     {id:"properties",label:"Properties", icon:"⌂"},
     {id:"cashflow",  label:"Cash Flow",  icon:"$"},
     ...(clientHasWorkflows?[{id:"workflows",label:"Workflows",icon:"▦"}]:[]),
@@ -11173,6 +11465,20 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           <div style={{fontSize:14,color:B.textSoft,fontWeight:600}}>Total Portfolio Value</div>
           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:28,color:B.navy,fontWeight:600}}>{fmtMoney(totalAccounts)}</div>
         </div>
+      </div>}
+
+      {/* LOANS & LINES -- self-serve households keep their own; Premier households see what their Expert keeps. */}
+      {activeTab==="loans"&&<div>
+        <LoansPanel loans={loans} properties={properties} valuables={valuables} documents={(data.documents||[]).filter(d=>d.familyId===family.id)}
+          locAccounts={accounts.filter(a=>a.accountType==="Line of Credit")} toast={toast}
+          onAdd={clientSelfServe?()=>setLoanModal({}):null} onEdit={clientSelfServe?l=>setLoanModal({loan:l}):null} onDelete={clientSelfServe?delClientLoan:null}
+          onAttach={clientSelfServe?l=>{setPropAttachIntent({loanId:l.id,section:"loan_statement"});setActiveTab("documents");}:null}/>
+        {loanModal&&clientSelfServe&&<Modal title={loanModal.loan?"Edit loan or line":"Add a loan or line"} onClose={()=>setLoanModal(null)}>
+          <LoanForm initial={loanModal.loan} properties={properties} valuables={valuables}
+            statement={loanModal.loan?{familyId:family.id,loanId:loanModal.loan.id,toast,onUploaded:()=>reload("documents"),
+              doc:(data.documents||[]).find(d=>d.loanId===loanModal.loan.id&&d.propertySection==="loan_statement")||null}:null}
+            onSave={f=>saveClientLoan(loanModal,f)} onClose={()=>setLoanModal(null)}/>
+        </Modal>}
       </div>}
 
       {/* PROPERTIES */}
@@ -11614,7 +11920,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
 // so no extra client-side filtering is needed here — same trust model as the
 // client and advisor branches above.
 const FIRM_LOG_TEXT={open_household:"Opened household",open_document:"Opened a document",download_document:"Downloaded a document"};
-const FIRM_TABLES=["contacts","properties","notes","tasks","portfolio_accounts","account_balances","valuables","documents","cash_flow_events","cash_flow_payment_log","deadline_acks","family_contacts","property_contacts","family_partners"];
+const FIRM_TABLES=["contacts","properties","notes","tasks","portfolio_accounts","account_balances","valuables","loans","documents","cash_flow_events","cash_flow_payment_log","deadline_acks","family_contacts","property_contacts","family_partners"];
 // A firm's administrator: the firm's households, view only. What they can read is limited by the database to
 // their own firm's households (see 20261010100300_firm_access.sql), and every household they open is recorded
 // before any of its data is loaded.
@@ -14981,9 +15287,10 @@ const ENT_EVENT={joined:"Joined",moved:"Moved",removed:"Removed",code_rotated:"C
 const entDay=v=>v?asDate(v).toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"}):"—";
 const entCodeLink=code=>`${window.location.origin}/signup?code=${encodeURIComponent(code)}`;
 // Same formula the household's own dashboard uses.
-function entNetWorth(props,accts,vals){
+function entNetWorth(props,accts,vals,loans=[]){
   const re=props.reduce((s,p)=>s+(Number(p.current_value)||Number(p.purchase_price)||0),0);
-  const debt=props.reduce((s,p)=>s+(Number(p.loan_balance)||0)+(Number(p.second_mortgage_balance)||0),0)+accts.filter(a=>a.account_type==="Line of Credit").reduce((s,a)=>s+(Number(a.current_balance)||0),0);
+  const debt=props.reduce((s,p)=>s+(Number(p.loan_balance)||0)+(Number(p.second_mortgage_balance)||0),0)+accts.filter(a=>a.account_type==="Line of Credit").reduce((s,a)=>s+(Number(a.current_balance)||0),0)
+    +loans.reduce((s,l)=>s+(Number(l.current_balance)||0),0);
   const pf=accts.filter(a=>a.account_type!=="Line of Credit").reduce((s,a)=>s+(Number(a.current_balance)||0),0);
   const va=vals.reduce((s,v)=>s+(Number(v.estimated_value)||0),0);
   return re-debt+pf+va;
@@ -15272,12 +15579,13 @@ function EntSignups({row,data}){
       sb.from("billing_ledger").select("family_id,amount,line_type").eq("period_month",data.month).in("family_id",ids),
       sb.from("enterprise_membership_events").select("family_id,event_type,how,detail,created_at").in("family_id",ids).in("event_type",["joined","moved"]).order("created_at",{ascending:false}),
       sb.from("signup_disclosures").select("id,version").eq("kind","firm_data_sharing"),
-    ]).then(([p,a,v,l,ev,dc])=>{
+      sb.from("loans").select("family_id,current_balance").in("family_id",ids),
+    ]).then(([p,a,v,l,ev,dc,ln])=>{
       if(stop)return;
       const by=(arr,id)=>(arr.data||[]).filter(q=>q.family_id===id);
       const nw={},usage={},notice={};
       ids.forEach(id=>{
-        nw[id]=entNetWorth(by(p,id),by(a,id),by(v,id));
+        nw[id]=entNetWorth(by(p,id),by(a,id),by(v,id),by(ln,id));
         usage[id]=by(l,id).reduce((s,q)=>s+(Number(q.amount)||0),0);
         const e=(ev.data||[]).find(q=>q.family_id===id);
         if(e){const d=(dc.data||[]).find(q=>q.id===(e.detail&&e.detail.notice_id));notice[id]=d?`Notice v${d.version}`:(e.how==="admin_move"?"Recorded by admin":"—");}
@@ -15366,19 +15674,26 @@ function EntPeople({row,data,toast,onChanged}){
     <div style={entCard}>
       <div style={entLab}>Enroll a new client in {row.name}</div>
       <div style={{fontSize:12,color:B.textSoft,lineHeight:1.55,marginBottom:12}}>Creates the household and the owner's login, emails the owner an invite to set a password, places the household in {row.name}, and makes {row.name} pay for the plan at list price with no discount. It goes on the firm's monthly invoice, prorated from the start date. Only with the client's agreement.</div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(220px,100%),1fr))",gap:12,maxWidth:760}}>
+      {/* Two even rows of three (one column on a phone): who, then the terms. Short labels so every box lines up. */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(240px,100%),1fr))",gap:"0 16px",maxWidth:900,alignItems:"end"}}>
         <Field label="Household name"><Inp value={en.hh} onChange={e=>setEn({...en,hh:e.target.value})} placeholder="e.g. The Smith Family"/></Field>
-        <Field label="Owner's full name"><Inp value={en.owner} onChange={e=>setEn({...en,owner:e.target.value})}/></Field>
-        <Field label="Owner's email"><Inp type="email" autoComplete="off" value={en.email} onChange={e=>setEn({...en,email:e.target.value})}/></Field>
+        <Field label="Owner's full name"><Inp value={en.owner} onChange={e=>setEn({...en,owner:e.target.value})} placeholder="e.g. Jordan Smith"/></Field>
+        <Field label="Owner's email"><Inp type="email" autoComplete="off" value={en.email} onChange={e=>setEn({...en,email:e.target.value})} placeholder="name@example.com"/></Field>
         <Field label="Plan"><Sel value={en.plan} onChange={e=>setEn({...en,plan:e.target.value})}>
           <option value="">Choose a plan…</option>
           {data.plans.map(p=><option key={p.plan} value={p.plan}>{p.label} - {money2(p.monthly_price)}/mo</option>)}
         </Sel></Field>
-        <Field label="Start date (first month is prorated from here)"><Inp type="date" value={en.start} onChange={e=>setEn({...en,start:e.target.value})}/></Field>
+        <Field label="Start date"><Inp type="date" value={en.start} onChange={e=>setEn({...en,start:e.target.value})}/></Field>
+        <Field label="How the client agreed"><Sel value={en.how} onChange={e=>setEn({...en,how:e.target.value})}>
+          <option value="">Choose…</option>
+          {AGREEMENT_METHODS.map(m=><option key={m} value={m}>{m}</option>)}
+        </Sel></Field>
       </div>
-      <label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:12.5,color:B.text,cursor:"pointer"}}><input type="checkbox" checked={en.agreed} onChange={e=>setEn({...en,agreed:e.target.checked})} style={{marginTop:2}}/>The client has agreed to share this household's information with {row.name}.</label>
-      {agreementSelect(en.how,v=>setEn({...en,how:v}))}
-      <div style={{marginTop:10}}><Btn small disabled={enBusy||!enValid} onClick={enroll}>{enBusy?"Enrolling…":"Enroll client"}</Btn></div>
+      <div style={{fontSize:11.5,color:B.textMute,margin:"-4px 0 12px"}}>The first month is prorated from the start date.</div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",maxWidth:900}}>
+        <label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:12.5,color:B.text,cursor:"pointer",flex:"1 1 320px"}}><input type="checkbox" checked={en.agreed} onChange={e=>setEn({...en,agreed:e.target.checked})} style={{marginTop:2}}/>The client has agreed to share this household's information with {row.name}.</label>
+        <Btn small disabled={enBusy||!enValid} onClick={enroll}>{enBusy?"Enrolling…":"Enroll client"}</Btn>
+      </div>
     </div>
     <div style={entCard}>
       <div style={entLab}>Move a household into {row.name}</div>
