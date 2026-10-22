@@ -47,6 +47,32 @@ async function safeRedirect(raw: unknown): Promise<string> {
   return new URL(fallback).origin;
 }
 
+// The look of the sign-in emails Supabase sends this person (invite, reset password). The templates read these
+// from the login's user_metadata: a firm household gets its firm's skin (logo, name, colours), everyone else the
+// platform's active skin, so a firm client's invite carries the firm's logo.
+async function brandFor(familyId: string): Promise<Record<string, string>> {
+  // deno-lint-ignore no-explicit-any
+  let bp: any = null;
+  const { data: f } = await admin.from("families").select("enterprise_id").eq("id", familyId).maybeSingle();
+  if (f?.enterprise_id) {
+    const { data: e } = await admin.from("enterprises").select("brand_profile_id").eq("id", f.enterprise_id).maybeSingle();
+    if (e?.brand_profile_id) {
+      const { data } = await admin.from("brand_profiles").select("brand_name, logo_url, color_primary, color_accent").eq("id", e.brand_profile_id).maybeSingle();
+      bp = data;
+    }
+  }
+  if (!bp?.logo_url) {
+    const { data } = await admin.from("brand_profiles").select("brand_name, logo_url, color_primary, color_accent").eq("is_active", true).maybeSingle();
+    bp = data;
+  }
+  return {
+    brand_name: String(bp?.brand_name || "ORDANIS"),
+    brand_logo_url: String(bp?.logo_url || "https://portal.ordanisos.com/ordanis-logo.png"),
+    brand_color: String(bp?.color_primary || "#0A2540"),
+    brand_accent: String(bp?.color_accent || "#C9A961"),
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -100,9 +126,12 @@ Deno.serve(async (req) => {
       if (!target || target.active === false) return json({ error: "That login isn't an active client of this household." }, 404);
       const st = await statusOf(target.id);
       const redirectTo = await safeRedirect(body.redirect_to);
+      const brand = await brandFor(fam.id);
+      const { data: cur } = await admin.auth.admin.getUserById(target.id);
+      await admin.auth.admin.updateUserById(target.id, { user_metadata: { ...(cur?.user?.user_metadata ?? {}), ...brand } });
       let sentKind = "invite";
       if (!st.opened_at) {
-        const { error: e1 } = await admin.auth.admin.inviteUserByEmail(String(target.email), { redirectTo, data: { full_name: target.full_name } });
+        const { error: e1 } = await admin.auth.admin.inviteUserByEmail(String(target.email), { redirectTo, data: { full_name: target.full_name, ...brand } });
         if (e1) sentKind = "reset"; // already registered: fall back to a set-password email
       } else sentKind = "reset";
       if (sentKind === "reset") {
@@ -123,7 +152,7 @@ Deno.serve(async (req) => {
 
     // 1. The login. An address that already has one is refused before anything else changes.
     const redirectTo = await safeRedirect(body.redirect_to);
-    const { data: inv, error: invErr } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo, data: { full_name: fullName } });
+    const { data: inv, error: invErr } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo, data: { full_name: fullName, ...(await brandFor(fam.id)) } });
     if (invErr || !inv?.user) {
       const m = invErr?.message ?? "";
       if (/already|registered|exists/i.test(m)) return json({ error: "That email address already has a login. Use a different address." }, 409);

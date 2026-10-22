@@ -258,7 +258,7 @@ Deno.serve(async (req) => {
 
       const { data: pf } = await admin.from("plan_features").select("plan, label, monthly_price").eq("plan", plan).maybeSingle();
       if (!pf) return json({ error: "Choose a plan." }, 400);
-      const { data: ent } = await admin.from("enterprises").select("id, name, active, domain").eq("id", body.enterprise_id).maybeSingle();
+      const { data: ent } = await admin.from("enterprises").select("id, name, active, domain, brand_profile_id").eq("id", body.enterprise_id).maybeSingle();
       if (!ent || !ent.active) return json({ error: DB_ERRORS.firm_not_available.message, code: "firm_not_available" }, 404);
       if (!(await currentNotice())) return json({ error: DB_ERRORS.notice_not_published.message, code: "notice_not_published" }, 409);
 
@@ -272,7 +272,20 @@ Deno.serve(async (req) => {
       if (!redirectTo) redirectTo = ent.domain ? `https://${ent.domain}` : (await resolveSender()).appUrl;
 
       // 1. The owner's login. An address that already has a login is refused here, before anything else is created.
-      const { data: inv, error: invErr } = await admin.auth.admin.inviteUserByEmail(ownerEmail, { redirectTo, data: { full_name: ownerName } });
+      // The invite email shows the firm's own logo and colours (the template reads these from user_metadata).
+      // deno-lint-ignore no-explicit-any
+      let skin: any = null;
+      if (ent.brand_profile_id) {
+        const { data } = await admin.from("brand_profiles").select("brand_name, logo_url, color_primary, color_accent").eq("id", ent.brand_profile_id).maybeSingle();
+        skin = data;
+      }
+      const brand = {
+        brand_name: String(skin?.brand_name || ent.name || "ORDANIS"),
+        brand_logo_url: String(skin?.logo_url || "https://portal.ordanisos.com/ordanis-logo.png"),
+        brand_color: String(skin?.color_primary || "#0A2540"),
+        brand_accent: String(skin?.color_accent || "#C9A961"),
+      };
+      const { data: inv, error: invErr } = await admin.auth.admin.inviteUserByEmail(ownerEmail, { redirectTo, data: { full_name: ownerName, ...brand } });
       if (invErr || !inv?.user) {
         const m = invErr?.message ?? "";
         if (/already|registered|exists/i.test(m)) {
