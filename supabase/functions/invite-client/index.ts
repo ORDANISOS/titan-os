@@ -4,7 +4,10 @@
 // client's portal then asks them to add a card (create-checkout-session), and stripe-webhook links the
 // subscription to the household and clears the request.
 //
-// POST { family_id, full_name, email, pays_by_card: boolean, redirect_to? }
+// POST { family_id, full_name, email, pays_by_card: boolean, redirect_to? }      send a new invite
+// POST { action: "list", family_id }                                               the household's client logins + status
+// POST { action: "resend", family_id, user_id, redirect_to? }                      never opened: a fresh invite;
+//                                                                                   opened: a set-a-new-password email
 // Allowed: an ORDANIS admin, or the household's own Expert. Firm-paid households are refused here (firm enroll
 // covers them). An address that already has a login is refused before anything is created. Logged to audit_log.
 //
@@ -60,15 +63,17 @@ Deno.serve(async (req) => {
       return json({ error: "Only an ORDANIS admin or the household's Expert can invite a client." }, 403);
     }
 
-    let body: { family_id?: string; full_name?: string; email?: string; pays_by_card?: boolean; redirect_to?: string };
+    let body: { action?: string; family_id?: string; user_id?: string; full_name?: string; email?: string; pays_by_card?: boolean; redirect_to?: string };
     try { body = await req.json(); } catch { return json({ error: "Invalid JSON body" }, 400); }
+    const action = clean(body.action) || "invite";
     const familyId = clean(body.family_id);
     const fullName = clean(body.full_name).slice(0, 120);
     const email = clean(body.email).toLowerCase();
     const paysByCard = body.pays_by_card === true;
     if (!familyId) return json({ error: "Choose a household." }, 400);
-    if (fullName.length < 2) return json({ error: "Enter the client's name." }, 400);
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: "Enter a valid email address." }, 400);
+    if (!["invite", "list", "resend"].includes(action)) return json({ error: "Unknown action." }, 400);
+    if (action === "invite" && fullName.length < 2) return json({ error: "Enter the client's name." }, 400);
+    if (action === "invite" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: "Enter a valid email address." }, 400);
 
     // Read through the caller's own access first: a private household they aren't named on, or a household
     // outside an Expert's book, is simply not found.
@@ -80,6 +85,38 @@ Deno.serve(async (req) => {
     if (me.role === "advisor" && String(fam.advisor_email ?? "").toLowerCase() !== String(me.email ?? "").toLowerCase()) {
       return json({ error: "Only the household's own Expert or an admin can invite its client." }, 403);
     }
+    if (action === "list" || action === "resend") {
+      const { data: profs } = await admin.from("user_profiles").select("id, full_name, email, active").eq("family_id", fam.id).eq("role", "client");
+      const statusOf = async (id: string) => {
+        const { data } = await admin.auth.admin.getUserById(id);
+        const u = data?.user;
+        return { invited_at: u?.invited_at ?? null, opened_at: u?.email_confirmed_at ?? null, last_sign_in_at: u?.last_sign_in_at ?? null };
+      };
+      if (action === "list") {
+        const logins = await Promise.all((profs ?? []).map(async (p) => ({ ...p, ...(await statusOf(p.id)) })));
+        return json({ success: true, logins });
+      }
+      const target = (profs ?? []).find((p) => p.id === clean(body.user_id));
+      if (!target || target.active === false) return json({ error: "That login isn't an active client of this household." }, 404);
+      const st = await statusOf(target.id);
+      const redirectTo = await safeRedirect(body.redirect_to);
+      let sentKind = "invite";
+      if (!st.opened_at) {
+        const { error: e1 } = await admin.auth.admin.inviteUserByEmail(String(target.email), { redirectTo, data: { full_name: target.full_name } });
+        if (e1) sentKind = "reset"; // already registered: fall back to a set-password email
+      } else sentKind = "reset";
+      if (sentKind === "reset") {
+        const { error: e2 } = await admin.auth.resetPasswordForEmail(String(target.email), { redirectTo });
+        if (e2) return json({ error: `The email could not be sent: ${e2.message}` }, 500);
+      }
+      await admin.from("audit_log").insert({
+        request_id: crypto.randomUUID(), user_id: user.id, user_email: me.email, user_role: me.role, source: "portal", module: "invite-client",
+        command: sentKind === "invite" ? "resend invite" : "send set-password email", tool_calls: [{ family_id: fam.id, user_id: target.id }],
+        result_summary: `${sentKind === "invite" ? "Invite resent" : "Set-password email sent"} for ${fam.name}`, status: "ok",
+      }).then(({ error }) => { if (error) console.error("invite-client audit_log insert failed:", error.message); });
+      return json({ success: true, sent: sentKind, email: target.email });
+    }
+
     if (paysByCard && fam.paid_by === "enterprise") {
       return json({ error: "This household is paid for by its firm, so it can't also pay by card. Send the invite without card payment." }, 409);
     }

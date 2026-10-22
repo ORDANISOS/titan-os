@@ -1429,6 +1429,67 @@ function PrivateGate({familyId,onBack,children}){
 // Invite the client of a household the team set up (invite-client): an email invite to set their own password,
 // instead of an admin choosing one. Optionally the household pays by card; the client is then asked for a card in
 // their portal. Admins and the household's own Expert. Firm-paid households can be invited without card payment.
+// Onboarding Specialist (migration 20261022140000): an admin names an Expert or Analyst who may open and edit this
+// household for 30 days to help set it up. Day 30: the admin who named them and the specialist are emailed
+// (onboarding-notices); an admin can extend 30 days or end it here. A specialist sees only their own line.
+function OnboardingSpecialistPanel({familyRow,userProfile,toast}){
+  const isAdmin=userProfile?.role==="admin";
+  const[rows,setRows]=useState(null);
+  const[staff,setStaff]=useState([]);
+  const[pick,setPick]=useState("");
+  const[busy,setBusy]=useState("");
+  const load=useCallback(async()=>{
+    const{data,error}=await sb.rpc("onboarding_specialist_list",{p_family_id:familyRow.id});
+    if(error&&(error.code==="PGRST202"||/could not find the function|does not exist/i.test(error.message||""))){setRows("unavailable");return;}
+    setRows(error?[]:(data||[]));
+  },[familyRow.id]);
+  useEffect(()=>{load();},[load]);
+  useEffect(()=>{
+    if(!isAdmin)return;
+    sb.from("user_profiles").select("id,full_name,email,role,active").in("role",["advisor","analyst"]).order("full_name")
+      .then(({data})=>setStaff((data||[]).filter(u=>u.active!==false)));
+  },[isAdmin]);
+  const call=async(key,fn,args,ok)=>{
+    setBusy(key);
+    const{error}=await sb.rpc(fn,args);
+    setBusy("");
+    if(error){toast(error.message,"error");return;}
+    toast(ok);setPick("");load();
+  };
+  if(rows==="unavailable"||rows===null)return null;
+  const live=rows.filter(r=>r.live);
+  const lapsed=rows.filter(r=>!r.live&&!r.ended_at);
+  if(!isAdmin&&!live.length)return null;
+  const day=v=>new Date(v).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+  const daysLeft=v=>Math.max(0,Math.ceil((new Date(v)-new Date())/86400000));
+  const liveIds=new Set(live.map(r=>r.staff_id));
+  return <div style={{background:B.white,borderRadius:12,padding:20,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,marginBottom:20}}>
+    <div style={{fontSize:10,fontWeight:800,color:B.textMute,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:10}}>Onboarding Specialist</div>
+    {!isAdmin&&live.map(r=><div key={r.id} style={{fontSize:13,color:B.navy,lineHeight:1.55}}>You're helping set up this household until <strong>{day(r.expires_at)}</strong> ({daysLeft(r.expires_at)} day{daysLeft(r.expires_at)===1?"":"s"} left). Ask an admin if you need more time.</div>)}
+    {isAdmin&&<>
+      {live.length===0&&lapsed.length===0&&<div style={{fontSize:12.5,color:B.textSoft,marginBottom:10}}>No one is helping set up this household. Name an Expert or Analyst to give them 30 days to add vendors, properties and the rest, without making them its Expert.</div>}
+      {[...live,...lapsed].map(r=><div key={r.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",padding:"8px 0",borderBottom:`1px solid ${B.borderLight}`}}>
+        <div style={{fontSize:13,color:B.navy,minWidth:0}}><strong>{r.staff_name}</strong> <span style={{color:B.textSoft}}>· {r.staff_role==="analyst"?"Analyst":"Expert"}</span>
+          <div style={{fontSize:11.5,color:r.live?(daysLeft(r.expires_at)<=5?"#8a5c00":B.textMute):"#8b1a1a"}}>
+            {r.live?`Until ${day(r.expires_at)} · ${daysLeft(r.expires_at)} day${daysLeft(r.expires_at)===1?"":"s"} left`:`Access ended ${day(r.expires_at)}`}
+            {r.extended_count>0?` · extended ${r.extended_count}×`:""}{r.assigned_by_name?` · named by ${r.assigned_by_name}`:""}</div></div>
+        <div style={{display:"flex",gap:8}}>
+          <Btn small disabled={!!busy} onClick={()=>call("x"+r.id,"onboarding_specialist_extend",{p_id:r.id},"Extended 30 days")}>{busy==="x"+r.id?"Extending…":"Extend 30 days"}</Btn>
+          <Btn small variant="ghost" disabled={!!busy} onClick={()=>{if(confirm(`End ${r.staff_name}'s onboarding access to ${familyRow.name}?`))call("e"+r.id,"onboarding_specialist_end",{p_id:r.id},"Onboarding access ended");}}>End</Btn>
+        </div>
+      </div>)}
+      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:12}}>
+        <Sel value={pick} onChange={e=>setPick(e.target.value)} style={{flex:"1 1 220px"}}>
+          <option value="">Name an Onboarding Specialist…</option>
+          {staff.filter(u=>!liveIds.has(u.id)).map(u=><option key={u.id} value={u.id}>{u.full_name||u.email} ({u.role==="analyst"?"Analyst":"Expert"})</option>)}
+        </Sel>
+        <Btn small disabled={!pick||!!busy} onClick={()=>call("a","onboarding_specialist_assign",{p_family_id:familyRow.id,p_staff_id:pick},"Onboarding Specialist named for 30 days")}>{busy==="a"?"Saving…":"Give 30 days"}</Btn>
+      </div>
+      <div style={{fontSize:11,color:B.textMute,marginTop:8,lineHeight:1.5}}>On day 30 you and the specialist get an email. Access ends by itself unless you extend it. Everything is recorded in the access log.</div>
+    </>}
+  </div>;
+}
+
 function InviteClientCard({familyRow,toast,isMobile}){
   const[logins,setLogins]=useState(null);
   const[open,setOpen]=useState(false);
@@ -1436,10 +1497,28 @@ function InviteClientCard({familyRow,toast,isMobile}){
   const[busy,setBusy]=useState(false);
   const firmPaid=familyRow.paidBy==="enterprise"||familyRow.paid_by==="enterprise";
   const hasSub=!!familyRow.stripe_subscription_id;
+  const[resending,setResending]=useState("");
   const load=useCallback(async()=>{
+    // From the server so each login's status (invited, opened, last signed in) is known; falls back to the profiles.
+    const{data:resp}=await sb.functions.invoke("invite-client",{body:{action:"list",family_id:familyRow.id}});
+    if(resp?.success){setLogins(resp.logins||[]);return;}
     const{data}=await sb.from("user_profiles").select("id,full_name,email,active").eq("family_id",familyRow.id).eq("role","client");
     setLogins(data||[]);
   },[familyRow.id]);
+  const resend=async u=>{
+    setResending(u.id);
+    const{data:resp,error}=await sb.functions.invoke("invite-client",{body:{action:"resend",family_id:familyRow.id,user_id:u.id,redirect_to:window.location.origin}});
+    setResending("");
+    if(error||!resp?.success){
+      let msg=resp?.error||error?.message||"The email could not be sent";
+      try{const b=await error?.context?.json?.();if(b?.error)msg=b.error;}catch(_e){}
+      toast(msg,"error");return;
+    }
+    toast(resp.sent==="invite"?`Invite resent to ${resp.email}`:`Email sent to ${resp.email} to set a new password`);
+  };
+  const shortDate=v=>v?new Date(v).toLocaleDateString("en-US",{month:"short",day:"numeric"}):"";
+  const statusText=u=>u.active===false?"deactivated":u.last_sign_in_at?`last signed in ${shortDate(u.last_sign_in_at)}`
+    :u.opened_at?"opened the invite":u.invited_at?`invited ${shortDate(u.invited_at)}, not opened yet`:"";
   useEffect(()=>{load();},[load]);
   const valid=f.name.trim().length>1&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim());
   const send=async()=>{
@@ -1463,9 +1542,11 @@ function InviteClientCard({familyRow,toast,isMobile}){
     </div>
     {logins===null?<div style={{fontSize:12.5,color:B.textMute}}>Loading…</div>
       :logins.length===0?<div style={{fontSize:12.5,color:B.textSoft}}>No client login yet. Invite the client so they can sign in and see their household.</div>
-      :<div style={{display:"flex",flexDirection:"column",gap:6}}>{logins.map(u=><div key={u.id} style={{fontSize:13,color:B.navy,display:"flex",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
-        <span><strong>{u.full_name||u.email}</strong>{u.full_name?<span style={{color:B.textSoft}}> · {u.email}</span>:null}</span>
-        {u.active===false&&<span style={{fontSize:11,color:B.textMute}}>deactivated</span>}
+      :<div style={{display:"flex",flexDirection:"column",gap:8}}>{logins.map(u=><div key={u.id} style={{fontSize:13,color:B.navy,display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+        <span style={{minWidth:0}}><strong>{u.full_name||u.email}</strong>{u.full_name?<span style={{color:B.textSoft}}> · {u.email}</span>:null}
+          {statusText(u)&&<span style={{display:"block",fontSize:11.5,color:u.opened_at||u.last_sign_in_at?B.textMute:"#8a5c00"}}>{statusText(u)}</span>}</span>
+        {u.active!==false&&<button onClick={()=>resend(u)} disabled={resending===u.id} style={{background:"none",border:`1px solid ${B.border}`,color:B.navy,borderRadius:6,padding:"4px 10px",fontSize:11.5,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+          {resending===u.id?"Sending…":(u.opened_at||u.last_sign_in_at)?"Send password reset":"Resend invite"}</button>}
       </div>)}</div>}
     {familyRow.billing_setup_required&&!hasSub&&<div style={{fontSize:12,color:"#8a5c00",marginTop:8}}>Waiting for the client to add a card.</div>}
     {open&&<div style={{marginTop:14,paddingTop:14,borderTop:`1px solid ${B.borderLight}`}}>
@@ -3854,6 +3935,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
               and never appear on the Signups page. Admins only; the panel hides where the migration isn't applied. */}
           {userProfile?.role==="admin"&&<PrivateHouseholdPanel familyId={familyRow.id} familyName={familyRow.name} toast={toast} isMobile={isMobile}/>}
           {(userProfile?.role==="admin"||(userProfile?.role==="advisor"&&String(familyRow.advisorEmail||"").toLowerCase()===String(userProfile?.email||"").toLowerCase()))&&<InviteClientCard familyRow={familyRow} toast={toast} isMobile={isMobile}/>}
+          {["admin","advisor","analyst"].includes(userProfile?.role)&&<OnboardingSpecialistPanel familyRow={familyRow} userProfile={userProfile} toast={toast}/>}
           {familyRow.enterprise_id&&(userProfile?.role==="admin"||userProfile?.role==="advisor"||userProfile?.role==="analyst")&&<PayerCard familyRow={familyRow} userProfile={userProfile} toast={toast} reload={reload}/>}
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(140px,100%),1fr))",gap:14,marginBottom:24}}>
             <StatBox label="Net Worth Est." value={fmtMoney(netWorth)} accent={B.navy}/>
@@ -16264,7 +16346,8 @@ export default function App(){
         // An Expert sees the households they lead. An Analyst sees every household of the Experts they
         // support; the database rules (current_user_allowed_family_ids) return exactly those, so no
         // extra filter here.
-        if(prof.role==="advisor")q=q.eq("advisor_email",prof.email);
+        // (No advisor_email filter any more: the database returns the Expert's own households plus any they are
+        // the Onboarding Specialist for, migration 20261022140000.)
       } else if(FAMILY_SCOPED.includes(table)){
         const ids=allowedFamilyIdsRef.current||[];
         const idList=ids.length?ids.join(","):"00000000-0000-0000-0000-000000000000";

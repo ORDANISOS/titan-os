@@ -36,3 +36,6 @@ verify_jwt = false
 # the connection (see milo_oauth_states), not by a JWT.
 [functions.milo-social]
 verify_jwt = false
+
+[functions.onboarding-notices]
+verify_jwt = false
