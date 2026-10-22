@@ -15367,6 +15367,26 @@ function EnterprisesView({toast,userProfile,onOpenBranding}){
   const[data,setData]=useState(null);
   const[err,setErr]=useState("");
   const[openKey,setOpenKey]=useState(null);
+  // New firm: created switched off with its signup code off, like Accurate was. Contract, fees, default
+  // Expert and the code itself are then set on the firm's own page. Admins only (enterprises_admin_all).
+  const[newFirm,setNewFirm]=useState(null); // {name, slug, skin, domain}
+  const[newFirmBusy,setNewFirmBusy]=useState(false);
+  const slugify=v=>String(v||"").toLowerCase().replace(/&/g," and ").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,40);
+  const createFirm=async()=>{
+    const name=newFirm.name.trim(),slug=slugify(newFirm.slug||newFirm.name),domain=newFirm.domain.trim().toLowerCase().replace(/^https?:\/\//,"").replace(/\/.*$/,"");
+    if(name.length<2){toast("Enter the firm's name","error");return;}
+    if(!slug){toast("Enter a short id using letters and numbers","error");return;}
+    if(domain&&!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)){toast("The web domain should look like portal.example.com","error");return;}
+    if((data.ents||[]).some(e=>(e.slug||"")===slug||(e.name||"").toLowerCase()===name.toLowerCase())){toast("A firm with that name or id already exists","error");return;}
+    const code=Array.from(crypto.getRandomValues(new Uint8Array(5))).map(b=>b.toString(16).padStart(2,"0")).join("").toUpperCase();
+    setNewFirmBusy(true);
+    const{data:row,error}=await sb.from("enterprises").insert({name,slug,active:false,brand_profile_id:newFirm.skin||null,domain:domain||null,
+      signup_code:code,signup_code_active:false,contract_notes:`Created ${new Date().toISOString().slice(0,10)}, inactive until go-live. Contract dates and fees not yet entered.`}).select("id").single();
+    setNewFirmBusy(false);
+    if(error){toast(error.message,"error");return;}
+    toast(`${name} created. It stays off until you switch it on.`);
+    setNewFirm(null);await load();setOpenKey(row.id);
+  };
   const load=useCallback(async()=>{
     const month=monthStartISO(0);
     const[ents,rev,nw,plat,fams,users,plans,skins]=await Promise.all([
@@ -15428,7 +15448,26 @@ function EnterprisesView({toast,userProfile,onOpenBranding}){
 
   const plat=data.plat;
   return <div style={{height:"100%",overflowY:"auto"}}><div style={{maxWidth:1180,padding:"24px 28px"}}>
-    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,color:B.navy,fontWeight:600,marginBottom:4}}>Enterprises</div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap",marginBottom:4}}>
+      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,color:B.navy,fontWeight:600}}>Enterprises</div>
+      <Btn small onClick={()=>setNewFirm({name:"",slug:"",skin:"",domain:""})}>+ New firm</Btn>
+    </div>
+    {newFirm&&<Modal title="New firm" onClose={()=>!newFirmBusy&&setNewFirm(null)}>
+      <div style={{fontSize:12.5,color:B.textSoft,lineHeight:1.55,marginBottom:14}}>The firm is created switched off, with its signup code off. Open it afterwards to add the contract, default Expert and billing, and switch it on when it goes live.</div>
+      <Field label="Firm name" required><Inp value={newFirm.name} onChange={e=>setNewFirm({...newFirm,name:e.target.value})} placeholder="e.g. Smith Wealth Partners"/></Field>
+      <Grid2>
+        <Field label="Short id" optional><Inp value={newFirm.slug} onChange={e=>setNewFirm({...newFirm,slug:e.target.value})} placeholder={slugify(newFirm.name)||"smith-wealth"}/></Field>
+        <Field label="Skin" optional><Sel value={newFirm.skin} onChange={e=>setNewFirm({...newFirm,skin:e.target.value})}>
+          <option value="">ORDANIS (no firm skin)</option>
+          {(data.skins||[]).map(s=><option key={s.id} value={s.id}>{s.brand_name}</option>)}
+        </Sel></Field>
+      </Grid2>
+      <Field label="Web domain" optional><Inp value={newFirm.domain} onChange={e=>setNewFirm({...newFirm,domain:e.target.value})} placeholder="portal.examplefirm.com (only once its DNS points here)"/></Field>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
+        <Btn variant="ghost" onClick={()=>setNewFirm(null)} disabled={newFirmBusy}>Cancel</Btn>
+        <Btn onClick={createFirm} disabled={newFirmBusy||newFirm.name.trim().length<2}>{newFirmBusy?"Creating…":"Create firm"}</Btn>
+      </div>
+    </Modal>}
     <p style={{fontSize:13,color:B.textSoft,margin:"0 0 16px",maxWidth:720,lineHeight:1.6}}>
       Each advisory firm on the platform, with ORDANIS direct as the last row, so the rows add up to the whole platform. Open a firm to see its households, revenue, net worth and contract.
     </p>
