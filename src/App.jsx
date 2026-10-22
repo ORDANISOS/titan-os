@@ -3903,7 +3903,10 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
           The bar sits on the page background so the inactive tabs read as recessed behind
           the active one. The 1px overlap on the active tab is what covers the container's
           bottom border, which is what makes the join look continuous rather than butted. */}
-      <div style={{borderBottom:`1px solid ${B.border}`,background:B.bg,padding:isMobile?"6px 8px 0":"8px 28px 0",display:"flex",gap:2,alignItems:"flex-end",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+      {/* The baseline is an inset shadow, not a border: the row scrolls sideways (overflow-x), and a scrolling
+          box clips anything outside its padding, so the active tab could never overlap a real border and a line
+          showed under it. An inset shadow is painted beneath the tabs, so the active tab's white bottom covers it. */}
+      <div style={{boxShadow:`inset 0 -1px 0 ${B.border}`,background:B.bg,padding:isMobile?"6px 8px 0":"8px 28px 0",display:"flex",gap:2,alignItems:"flex-end",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
         {TABS.map(t=>{
           const id=t==="CHRIS"?"vault":t.toLowerCase().replace(/\s+/g,"");
           const on=activeTab===id;
@@ -3925,9 +3928,8 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
               fontWeight:on?600:400,
               padding:isMobile?(on?"11px 12px 10px":"9px 12px 9px"):(on?"11px 16px 10px":"9px 15px 9px"),
               cursor:"pointer",
-              // Covers the container's bottom border, which is what turns a butted edge into
-              // a continuous surface. Without it the tab looks stuck on rather than attached.
-              marginBottom:-1,
+              // The active tab's white bottom edge sits over the row's inset baseline, so the tab
+              // joins the page below as one surface.
               whiteSpace:"nowrap",
               flexShrink:0,
               // A small gap sets the assistant apart from the ledger tabs without a divider,
@@ -11571,7 +11573,8 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     {/* Top Tabs (desktop only) — folder tabs, matching the advisor view.
         The active tab's bottom border is the page colour, so it merges into the content
         below rather than sitting on a line above it. */}
-    {!isMobile&&<div style={{borderBottom:`1px solid ${B.border}`,background:B.bg,padding:"8px 32px 0",display:"flex",gap:2,alignItems:"flex-end",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+    {/* Inset-shadow baseline for the same reason as the staff tab row: the active tab covers it. */}
+    {!isMobile&&<div style={{boxShadow:`inset 0 -1px 0 ${B.border}`,background:B.bg,padding:"8px 32px 0",display:"flex",gap:2,alignItems:"flex-end",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
       {TABS.map(t=>{
         const on=activeTab===t.id;
         return <button key={t.id} className="pcm-tab" onClick={()=>setActiveTab(t.id)} aria-current={on?"page":undefined}
@@ -11585,8 +11588,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
             fontFamily:"inherit", fontSize:13, fontWeight:on?600:400,
             padding:on?"11px 17px 10px":"9px 16px 9px",
             cursor:"pointer",
-            // Covers the container's bottom border, which is what makes the join continuous.
-            marginBottom:-1,
+            // The active tab's white bottom edge sits over the row's inset baseline.
             whiteSpace:"nowrap", flexShrink:0,
             marginLeft:t.assistant?10:0,
             transition:"background 120ms ease, color 120ms ease",
