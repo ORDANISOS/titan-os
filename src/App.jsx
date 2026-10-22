@@ -8426,12 +8426,35 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
   // Counted toward MRR: still paying (active), or Stripe is actively trying to collect (past_due).
   // final_notice / archived / cancelled households are not generating revenue right now.
   const BILLING_STATES=new Set(["active","past_due"]);
-  const mrrOf=list=>list.filter(f=>BILLING_STATES.has(f.subscription_state)).reduce((s,f)=>s+priceOf(f.plan),0);
+  // Promotion codes (copied from Stripe by stripe-webhook): a percent or dollar amount off the plan, until
+  // promo_ends_at (none = until Stripe removes it). Every MRR figure on this page is NET of them, so a comped
+  // household counts $0; listMrrOf is the list-price figure the promotions are measured against.
+  const promoActive=f=>(f.promo_percent_off!=null||f.promo_amount_off!=null)&&(!f.promo_ends_at||new Date(f.promo_ends_at)>new Date());
+  const promoOff=f=>{
+    if(!promoActive(f))return 0;
+    const list=priceOf(f.plan),pct=Number(f.promo_percent_off)||0,amt=Number(f.promo_amount_off)||0;
+    return Math.min(list,pct?list*pct/100:amt);
+  };
+  const netPriceOf=f=>priceOf(f.plan)-promoOff(f);
+  const mrrOf=list=>list.filter(f=>BILLING_STATES.has(f.subscription_state)).reduce((s,f)=>s+netPriceOf(f),0);
+  const listMrrOf=list=>list.filter(f=>BILLING_STATES.has(f.subscription_state)).reduce((s,f)=>s+priceOf(f.plan),0);
+  const promoHouseholds=families.filter(f=>BILLING_STATES.has(f.subscription_state)&&promoActive(f));
+  const promoText=f=>{
+    const pct=Number(f.promo_percent_off)||0;
+    const off=pct?`${pct%1?pct.toFixed(2):pct}% off`:`${fmtMoney(f.promo_amount_off)} off`;
+    const until=f.promo_ends_at?`until ${fmtDate(f.promo_ends_at)}`:f.promo_duration==="forever"?"forever":f.promo_duration==="once"?"first bill":"";
+    return [off,until].filter(Boolean).join(" ");
+  };
+  const promoByCode=Object.values(promoHouseholds.reduce((m,f)=>{
+    const k=f.promo_code||f.promo_coupon||"(no code)";
+    (m[k]=m[k]||{code:k,count:0,lost:0}).count++;m[k].lost+=promoOff(f);return m;},{})).sort((a,b)=>b.lost-a.lost);
 
   const totalSelfServe=selfServe.length;
   const selfServeMRR=mrrOf(selfServe);
   const teamOnboardedMRR=mrrOf(teamOnboarded);
   const platformMRR=mrrOf(families); // selfServeMRR + teamOnboardedMRR, by construction
+  const platformListMRR=listMrrOf(families);
+  const promoLostMRR=platformListMRR-platformMRR;
 
   // Onboarding follow-up: has anyone internally actually reached out to this self-serve household
   // yet? families.onboarding_contacted_at/_by (set only by the "Mark as Contacted" button below)
@@ -8629,6 +8652,7 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
             ["Customer #",family.customer_number??"—"],
             ["Plan",labelOf(family.plan)],
             ["Monthly Price",fmtMoney(priceOf(family.plan))],
+            ...(promoActive(family)?[["Promotion",`${family.promo_code||family.promo_coupon||"Code"}: ${promoText(family)}`],["Pays Monthly",fmtMoney(netPriceOf(family))]]:[]),
             ["Status",(family.subscription_state||"—").replace("_"," ")],
             ["Signed Up",fmtDate(family.createdAt)],
             ...(family.pending_plan?[["Scheduled Change",`→ ${labelOf(family.pending_plan)} on ${fmtDate(family.pending_plan_effective_at)}`]]:[]),
@@ -8828,6 +8852,35 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
       <div aria-hidden="true" style={{flex:"none",fontSize:20,fontWeight:700,color:B.textMute}}>=</div>
       <div style={{flex:"1 1 180px",minWidth:0}}><StatBox label="Total Platform MRR" value={fmtMoney(platformMRR)} accent={B.navyMid}/></div>
     </div>
+
+    {/* Promotion codes: what list price would bring in, what the codes give away, and what is left. The
+        MRR tiles above are already net of promotions; this row shows the gap. */}
+    <div style={{display:"flex",flexWrap:"wrap",alignItems:"center",gap:10,marginBottom:promoHouseholds.length?12:18}}>
+      <div style={{flex:"1 1 180px",minWidth:0}}><StatBox label="MRR at List Price" value={fmtMoney(platformListMRR)} accent={B.textMute}/></div>
+      <div aria-hidden="true" style={{flex:"none",fontSize:20,fontWeight:700,color:B.textMute}}>−</div>
+      <div style={{flex:"1 1 180px",minWidth:0}}><StatBox label={`Promo Discounts (${promoHouseholds.length} household${promoHouseholds.length===1?"":"s"})`} value={fmtMoney(promoLostMRR)} accent="#b4551f"/></div>
+      <div aria-hidden="true" style={{flex:"none",fontSize:20,fontWeight:700,color:B.textMute}}>=</div>
+      <div style={{flex:"1 1 180px",minWidth:0}}><StatBox label="Net Platform MRR" value={fmtMoney(platformMRR)} accent={B.navyMid}/></div>
+    </div>
+    {promoHouseholds.length>0&&<div style={{background:B.bgCard,borderRadius:12,padding:"16px 20px",border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,marginBottom:18}}>
+      <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>Promotion codes in use</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:12}}>
+        {promoByCode.map(c=><span key={c.code} style={{fontSize:12,background:B.bg,border:`1px solid ${B.borderLight}`,borderRadius:16,padding:"5px 12px",color:B.navy}}>
+          <strong>{c.code}</strong> · {c.count} household{c.count===1?"":"s"} · −{fmtMoney(c.lost)}/mo</span>)}
+      </div>
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5,minWidth:520}}>
+        <thead><tr>{["Household","Plan","Code","Discount","List","Pays"].map(h=><th key={h} style={{textAlign:h==="List"||h==="Pays"?"right":"left",fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",padding:"6px 8px",borderBottom:`1px solid ${B.border}`}}>{h}</th>)}</tr></thead>
+        <tbody>{[...promoHouseholds].sort((a,b)=>promoOff(b)-promoOff(a)).map(f=><tr key={f.id}>
+          <td style={{padding:"7px 8px",borderBottom:`1px solid ${B.borderLight}`,color:B.navy,fontWeight:600}}>{f.name}</td>
+          <td style={{padding:"7px 8px",borderBottom:`1px solid ${B.borderLight}`}}>{labelOf(f.plan)}</td>
+          <td style={{padding:"7px 8px",borderBottom:`1px solid ${B.borderLight}`}}>{f.promo_code||f.promo_coupon||"—"}</td>
+          <td style={{padding:"7px 8px",borderBottom:`1px solid ${B.borderLight}`}}>{promoText(f)}</td>
+          <td style={{padding:"7px 8px",borderBottom:`1px solid ${B.borderLight}`,textAlign:"right"}}>{fmtMoney(priceOf(f.plan))}</td>
+          <td style={{padding:"7px 8px",borderBottom:`1px solid ${B.borderLight}`,textAlign:"right",fontWeight:700}}>{fmtMoney(netPriceOf(f))}</td>
+        </tr>)}</tbody>
+      </table></div>
+      <div style={{fontSize:11,color:B.textMute,marginTop:8,lineHeight:1.5}}>Amounts are per month. When a code's time runs out (for example 3 Months Free), the household drops off this list and counts at full price.</div>
+    </div>}
 
     {/* Operational stats -- household count and onboarding follow-up -- kept in their own row
         below the two MRR sections above rather than mixed into the per-plan grid, so the revenue

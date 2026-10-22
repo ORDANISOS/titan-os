@@ -187,6 +187,37 @@ async function tagSubscriptionWithFamily(subId: string, familyId: string) {
   }
 }
 
+// The subscription's current promotion (Stripe coupon + the code typed at checkout), as household columns for
+// the admin Signups & Revenue page: list price minus this is what the household actually pays. Reads the legacy
+// single `discount` field, which this client's pinned API version still returns. No discount clears them.
+// deno-lint-ignore no-explicit-any
+function promoColumns(sub: any): Record<string, unknown> {
+  const d = sub?.discount ?? null;
+  const c = d?.coupon ?? null;
+  const pc = d?.promotion_code;
+  return {
+    promo_code: c ? (pc && typeof pc === "object" ? String(pc.code ?? "") || null : null) : null,
+    promo_coupon: c ? (String(c.name ?? "") || String(c.id ?? "") || null) : null,
+    promo_percent_off: c && c.percent_off != null ? Number(c.percent_off) : null,
+    promo_amount_off: c && c.amount_off != null ? Number(c.amount_off) / 100 : null,
+    promo_duration: c ? (c.duration ?? null) : null,
+    promo_ends_at: c && d.end ? new Date(Number(d.end) * 1000).toISOString() : null,
+    promo_synced_at: new Date().toISOString(),
+  };
+}
+
+// Used where a household has just been created from a checkout: the subscription events may have arrived
+// before the household existed. Logged, not thrown: a missing promo note must never retry a paid household.
+async function recordPromo(subscriptionId: string, familyId: string) {
+  try {
+    const full = await stripe.subscriptions.retrieve(subscriptionId, { expand: ["discount.promotion_code"] });
+    const { error } = await admin.from("families").update(promoColumns(full)).eq("id", familyId);
+    if (error) console.error(`promo not recorded for family ${familyId}:`, error.message);
+  } catch (e) {
+    console.error(`promo lookup failed for family ${familyId}:`, e instanceof Error ? e.message : e);
+  }
+}
+
 async function syncFamilyFromSubscription(sub: Stripe.Subscription) {
   const familyId = await familyIdForSubscription(sub);
   if (!familyId) return; // not one of ours, or created outside this flow
@@ -197,7 +228,8 @@ async function syncFamilyFromSubscription(sub: Stripe.Subscription) {
   // Re-read on this client's pinned API version: on the endpoint's newer version the period end lives on
   // the subscription items, not the subscription. A read failure leaves the column alone.
   try {
-    const full = await stripe.subscriptions.retrieve(sub.id);
+    const full = await stripe.subscriptions.retrieve(sub.id, { expand: ["discount.promotion_code"] });
+    Object.assign(patch, promoColumns(full));
     patch.cancel_at = full.cancel_at_period_end && full.current_period_end
       ? new Date(full.current_period_end * 1000).toISOString() : null;
     if (!full.cancel_at_period_end) { patch.cancel_requested_at = null; patch.cancel_requested_by = null; }
@@ -312,6 +344,7 @@ async function createFamilyFromSignup(session: Stripe.Checkout.Session, authUser
   if (profileErr) throw new Error(`user_profiles upsert failed for ${authUserId}: ${profileErr.message}`);
 
   await tagSubscriptionWithFamily(sub.id, family.id);
+  await recordPromo(sub.id, family.id);
   // Payment has created the household: the login made at sign-up may now sign in.
   await unblockSignupLogin(authUserId);
   await recordFirstInvoice(session, family.id);
@@ -686,6 +719,16 @@ Deno.serve(async (req) => {
       case "customer.subscription.updated":
       case "customer.subscription.created": {
         await syncFamilyFromSubscription(event.data.object as Stripe.Subscription);
+        break;
+      }
+
+      // A promotion added, changed or ended on a subscription (e.g. "3 Months Free" running out). Only arrives
+      // if these events are selected on the webhook endpoint; customer.subscription.updated covers it otherwise.
+      case "customer.discount.created":
+      case "customer.discount.updated":
+      case "customer.discount.deleted": {
+        const subId = (event.data.object as { subscription?: string | null }).subscription;
+        if (subId) await syncFamilyFromSubscription(await stripe.subscriptions.retrieve(String(subId)));
         break;
       }
 
