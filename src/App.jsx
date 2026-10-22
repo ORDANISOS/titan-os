@@ -3425,6 +3425,27 @@ function EmailAdvisorModal({family,userProfile,data,onClose}){
   </Modal>;
 }
 
+// Tab changes on the household pages: the new tab's content fades and rises in (about a fifth of a second) and the
+// view starts at its top, instead of swapping instantly with the old scroll position. The element is not remounted
+// (that would reset forms and open panels); the animation is restarted on it. Off for "reduce motion" devices.
+// Inactive tabs get a soft gold wash on hover (!important: the buttons' own inline colours would otherwise win).
+const TAB_MOTION_CSS=`@keyframes pcmTabIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.pcm-tab-in{animation:pcmTabIn 220ms cubic-bezier(.2,.7,.2,1) both}
+.pcm-tab{transition:background 160ms ease,color 160ms ease,border-color 160ms ease}
+.pcm-tab:not([aria-current]):hover{color:${B.navy}!important;background:rgba(206,182,132,0.12)!important}
+@media (prefers-reduced-motion:reduce){.pcm-tab-in{animation:none}.pcm-tab{transition:none}}`;
+function useTabEntrance(activeTab,{scrollWindow=false}={}){
+  const ref=useRef(null);
+  const first=useRef(true);
+  useEffect(()=>{
+    const el=ref.current;if(!el)return;
+    if(first.current){first.current=false;return;}
+    if(scrollWindow){if(window.scrollY>0)window.scrollTo({top:0});}else el.scrollTop=0;
+    el.classList.remove("pcm-tab-in");void el.offsetWidth;el.classList.add("pcm-tab-in");
+  },[activeTab,scrollWindow]);
+  return ref;
+}
+
 function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab}){
   const isMobile=useIsMobile();
   // Partner role: full read access to everything in this dashboard, but no
@@ -3438,6 +3459,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   const[openProviders,setOpenProviders]=useState(()=>new Set());
   const toggleProviders=id=>setOpenProviders(prev=>{const s=new Set(prev);s.has(id)?s.delete(id):s.add(id);return s;});
   const[activeTab,setActiveTab]=useState(initialTab||"overview");
+  const tabPanelRef=useTabEntrance(activeTab);
   const[reportOpen,setReportOpen]=useState(false);
   const[modal,setModal]=useState(null);
   const[editM,setEditM]=useState(null);
@@ -3887,7 +3909,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
           const on=activeTab===id;
           const isAssistant=t==="Ask ORDANIS";
           const label=isAssistant?("Ask "+assistantName):t;
-          return <button key={t} onClick={()=>setActiveTab(id)} aria-current={on?"page":undefined}
+          return <button key={t} className="pcm-tab" onClick={()=>setActiveTab(id)} aria-current={on?"page":undefined}
             style={{
               background:on?B.white:"transparent",
               // A tab with no fill and no border reads as a label, not a target. Inactive
@@ -3926,7 +3948,8 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
       </div>
 
       {/* Content */}
-      <div style={{flex:1,overflowY:"auto",minHeight:0}}>
+      <style>{TAB_MOTION_CSS}</style>
+      <div ref={tabPanelRef} style={{flex:1,overflowY:"auto",minHeight:0}}>
 
         {/* OVERVIEW TAB */}
         {activeTab==="overview"&&<div style={{padding:isMobile?"16px 14px":"24px 28px"}}>
@@ -11011,6 +11034,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   // identifier would take the whole dashboard down rather than degrade.
   const vendorOptions=buildVendorOptions(data,family.id);
   const[activeTab,setActiveTab]=useState("summary");
+  const tabPanelRef=useTabEntrance(activeTab,{scrollWindow:true});
   const[emailAdvisorOpen,setEmailAdvisorOpen]=useState(false);
   const fam=(data.families||[]).find(x=>x.id===family.id)||family;
   const rawAssistantName=(fam.assistantName||"").trim();
@@ -11550,7 +11574,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     {!isMobile&&<div style={{borderBottom:`1px solid ${B.border}`,background:B.bg,padding:"8px 32px 0",display:"flex",gap:2,alignItems:"flex-end",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
       {TABS.map(t=>{
         const on=activeTab===t.id;
-        return <button key={t.id} onClick={()=>setActiveTab(t.id)} aria-current={on?"page":undefined}
+        return <button key={t.id} className="pcm-tab" onClick={()=>setActiveTab(t.id)} aria-current={on?"page":undefined}
           style={{
             background:on?B.white:"transparent",
             border:on?`1px solid ${B.border}`:"1px solid transparent",
@@ -11597,7 +11621,8 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     </div>}
 
     {/* Content */}
-    <div style={{maxWidth:1100,margin:"0 auto",padding:isMobile?"16px 14px":"28px 24px"}}>
+    <style>{TAB_MOTION_CSS}</style>
+    <div ref={tabPanelRef} style={{maxWidth:1100,margin:"0 auto",padding:isMobile?"16px 14px":"28px 24px"}}>
 
       {/* Invited by the team to pay by card (invite-client): ask for a card until Stripe has a subscription. */}
       {fam.billing_setup_required&&!fam.stripe_subscription_id&&<div style={{background:"rgba(206,182,132,0.14)",border:`1px solid ${B.gold}`,borderRadius:12,padding:"14px 18px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center",gap:14,flexWrap:"wrap"}}>
