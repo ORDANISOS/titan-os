@@ -31,6 +31,11 @@ import { PLANS, PLAN_BLURB, planAllows, planLabel, planIsSelfServe } from "./pla
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://unkirihxtruhdjeldfpm.supabase.co";
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVua2lyaWh4dHJ1aGRqZWxkZnBtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNTA3MjUsImV4cCI6MjA5MTcyNjcyNX0._Ve9Pr3ooja-YdHYFIupebaZRhDjmJDnz2b-vzrhY04";
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+// An email invite (invite-client, firm enroll: inviteUserByEmail) lands with "type=invite" in the URL hash.
+// supabase-js signs the person in and clears the hash, firing SIGNED_IN rather than PASSWORD_RECOVERY, so nothing
+// asked them to choose a password and they could never sign back in. Read here, while the hash is still there,
+// and used once (below) to show "Set your password".
+let ARRIVED_FROM_INVITE=typeof window!=="undefined"&&/(^|[#&?])type=invite(&|$)/.test(window.location.hash||"");
 
 // ── WHITE-LABEL BRAND CONFIG ─────────────────────────────────────────────────
 // ORDANIS is the product. Every deployment — including PCM's own — is a tenant
@@ -16205,7 +16210,8 @@ export default function App(){
     return()=>{stop=true;};
   },[authed,userProfile?.id,userProfile?.role]);
   useEffect(()=>{
-    sb.auth.getSession().then(({data:{session}})=>{if(session?.user){setAuthed(true);loadProfile(session.user.id);}setAuthLoading(false);});
+    const inviteCheck=session=>{if(ARRIVED_FROM_INVITE&&session?.user){ARRIVED_FROM_INVITE=false;setNeedsPasswordSetup(true);}};
+    sb.auth.getSession().then(({data:{session}})=>{if(session?.user){setAuthed(true);loadProfile(session.user.id);}inviteCheck(session);setAuthLoading(false);});
     const{data:{subscription}}=sb.auth.onAuthStateChange((event,session)=>{
       if(session?.user){setAuthed(true);loadProfile(session.user.id);}else{setAuthed(false);setUserProfile(null);}
       // Fired for BOTH a "forgot password" reset link and an invite link (e.g. the Business
@@ -16214,6 +16220,7 @@ export default function App(){
       // signed the person straight into their dashboard with no password ever set, so they could
       // never log back in on their own afterward.
       if(event==="PASSWORD_RECOVERY")setNeedsPasswordSetup(true);
+      inviteCheck(session);
       setAuthLoading(false);
     });
     return()=>subscription.unsubscribe();
