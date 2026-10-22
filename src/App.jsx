@@ -3930,9 +3930,6 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
 
         {/* OVERVIEW TAB */}
         {activeTab==="overview"&&<div style={{padding:isMobile?"16px 14px":"24px 28px"}}>
-          {/* Private household: on the household's own page too, since top clients are usually team-onboarded
-              and never appear on the Signups page. Admins only; the panel hides where the migration isn't applied. */}
-          {userProfile?.role==="admin"&&<PrivateHouseholdPanel familyId={familyRow.id} familyName={familyRow.name} toast={toast} isMobile={isMobile}/>}
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(140px,100%),1fr))",gap:14,marginBottom:24}}>
             <StatBox label="Net Worth Est." value={fmtMoney(netWorth)} accent={B.navy}/>
             <StatBox label="Real Estate" value={fmtMoney(totalRE)} accent={B.gold}/>
@@ -4085,13 +4082,16 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
               {canEdit&&<button onClick={()=>delNote(n.id)} style={{background:"none",border:"none",color:B.textMute,cursor:"pointer",fontSize:14,flexShrink:0}}>✕</button>}
             </div>)}
           </div>
-          {/* Housekeeping, at the bottom of the Overview: the firm (membership and who pays), client logins and
-              the Onboarding Specialist. */}
+          {/* Housekeeping, at the bottom of the Overview: the firm (membership and who pays), client logins,
+              the Onboarding Specialist and private-household settings. */}
           <div style={{marginTop:24}}>
             {userProfile?.role==="admin"&&<FirmMembershipCard familyRow={familyRow} toast={toast} reload={reload}/>}
             {familyRow.enterprise_id&&(userProfile?.role==="admin"||userProfile?.role==="advisor"||userProfile?.role==="analyst")&&<PayerCard familyRow={familyRow} userProfile={userProfile} toast={toast} reload={reload}/>}
             {(userProfile?.role==="admin"||(userProfile?.role==="advisor"&&String(familyRow.advisorEmail||"").toLowerCase()===String(userProfile?.email||"").toLowerCase()))&&<InviteClientCard familyRow={familyRow} toast={toast} isMobile={isMobile}/>}
             {["admin","advisor","analyst"].includes(userProfile?.role)&&<OnboardingSpecialistPanel familyRow={familyRow} userProfile={userProfile} toast={toast}/>}
+            {/* Private household: on the household's own page too, since top clients are usually team-onboarded
+                and never appear on the Signups page. Admins only; the panel hides where the migration isn't applied. */}
+            {userProfile?.role==="admin"&&<PrivateHouseholdPanel familyId={familyRow.id} familyName={familyRow.name} toast={toast} isMobile={isMobile}/>}
           </div>
         </div>}
 
