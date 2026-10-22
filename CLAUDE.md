@@ -46,7 +46,8 @@ Owner: Will Perez (wperez@pcmfamilyoffice.com), PCM Family Office / Ordanis OS L
   applied after 2026-10-30 without grants gives "permission denied" to the app and functions.
 - Plan data lives in `plan_features` (Basic $15/5 GB no workflows; Core $100/15 GB, 10 workflows then $8, advisor seats + white label,
   optional Expert on one workflow $25 one time via `expert_assist_price`; Premier $500, named Expert, bill pay, unlimited workflows).
-  Firm rate card (Core $1,000 / Premier $2,000, fees) is separate and is not for client or OpenArc material.
+  There is NO firm rate card (Will removed it for good, 2026-10-22): a firm-paid household is billed to its firm at the same
+  plan prices above, on the firm's monthly invoice. Never quote or reintroduce separate firm prices.
 
 ## Frontend (src/App.jsx is ~14k lines; src/plans.js holds plan gating)
 - Edit with targeted, asserted string replacements; never retype the file. After editing, syntax-check:
