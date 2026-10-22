@@ -29,6 +29,9 @@ import Stripe from "npm:stripe@17.4.0";
 const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+// Used for one write only (saving a new Stripe customer id), after the caller's own access is proven.
+const svc = createClient(SUPABASE_URL, SERVICE_ROLE);
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -82,6 +85,15 @@ Deno.serve(async (req) => {
   if (familyErr) return json({ error: familyErr.message }, 500);
   if (!family) return json({ error: "Family not found, or you do not have access to it" }, 404);
 
+  // Business Partners and firm administrators can see a household but never start its billing.
+  const { data: { user } } = await sb.auth.getUser();
+  const { data: caller } = user
+    ? await sb.from("user_profiles").select("role").eq("id", user.id).maybeSingle()
+    : { data: null };
+  if (!caller || !["admin", "advisor", "client"].includes(String(caller.role))) {
+    return json({ error: "Only the household's client, its Expert or an admin can start checkout." }, 403);
+  }
+
   const { data: tier, error: tierErr } = await sb
     .from("plan_features")
     .select("plan, label, monthly_price, stripe_product_id")
@@ -133,9 +145,9 @@ Deno.serve(async (req) => {
       });
       customerId = customer.id;
 
-      // Write the new customer id back through the same RLS-scoped client that read the row --
-      // if this caller could not write to this family, this update fails the same as any other.
-      const { error: writeErr } = await sb
+      // Saved with the service role: access to this household was already proven by the RLS-scoped read
+      // above, and a client (who may start checkout for an invited household) cannot update families itself.
+      const { error: writeErr } = await svc
         .from("families")
         .update({ stripe_customer_id: customerId })
         .eq("id", family.id);

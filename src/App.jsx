@@ -1421,6 +1421,68 @@ function PrivateGate({familyId,onBack,children}){
 // database enforces that on every household table and on its files (migration private_households).
 // Admins only. Once private, only someone on the list can change it -- another admin cannot see it at all.
 // Changes need a session that passed two-step sign-in, and each one is written to the audit log.
+// Invite the client of a household the team set up (invite-client): an email invite to set their own password,
+// instead of an admin choosing one. Optionally the household pays by card; the client is then asked for a card in
+// their portal. Admins and the household's own Expert. Firm-paid households can be invited without card payment.
+function InviteClientCard({familyRow,toast,isMobile}){
+  const[logins,setLogins]=useState(null);
+  const[open,setOpen]=useState(false);
+  const[f,setF]=useState({name:"",email:"",card:true});
+  const[busy,setBusy]=useState(false);
+  const firmPaid=familyRow.paidBy==="enterprise"||familyRow.paid_by==="enterprise";
+  const hasSub=!!familyRow.stripe_subscription_id;
+  const load=useCallback(async()=>{
+    const{data}=await sb.from("user_profiles").select("id,full_name,email,active").eq("family_id",familyRow.id).eq("role","client");
+    setLogins(data||[]);
+  },[familyRow.id]);
+  useEffect(()=>{load();},[load]);
+  const valid=f.name.trim().length>1&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim());
+  const send=async()=>{
+    setBusy(true);
+    const{data:resp,error}=await sb.functions.invoke("invite-client",{body:{family_id:familyRow.id,full_name:f.name.trim(),email:f.email.trim(),
+      pays_by_card:!firmPaid&&!hasSub&&f.card,redirect_to:window.location.origin}});
+    setBusy(false);
+    if(error||!resp?.success){
+      let msg=resp?.error||error?.message||"The invite could not be sent";
+      try{const b=await error?.context?.json?.();if(b?.error)msg=b.error;}catch(_e){}
+      toast(msg,"error");return;
+    }
+    toast(`Invite sent to ${resp.invited}${resp.pays_by_card?". They'll be asked to add a card when they sign in.":""}`);
+    if(resp.note)toast(resp.note,"error");
+    setF({name:"",email:"",card:true});setOpen(false);load();
+  };
+  return <div style={{background:B.white,borderRadius:12,padding:20,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,marginBottom:20}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:10}}>
+      <div style={{fontSize:10,fontWeight:800,color:B.textMute,letterSpacing:"0.12em",textTransform:"uppercase"}}>Client logins</div>
+      {!open&&<Btn small onClick={()=>setOpen(true)}>Invite client</Btn>}
+    </div>
+    {logins===null?<div style={{fontSize:12.5,color:B.textMute}}>Loading…</div>
+      :logins.length===0?<div style={{fontSize:12.5,color:B.textSoft}}>No client login yet. Invite the client so they can sign in and see their household.</div>
+      :<div style={{display:"flex",flexDirection:"column",gap:6}}>{logins.map(u=><div key={u.id} style={{fontSize:13,color:B.navy,display:"flex",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+        <span><strong>{u.full_name||u.email}</strong>{u.full_name?<span style={{color:B.textSoft}}> · {u.email}</span>:null}</span>
+        {u.active===false&&<span style={{fontSize:11,color:B.textMute}}>deactivated</span>}
+      </div>)}</div>}
+    {familyRow.billing_setup_required&&!hasSub&&<div style={{fontSize:12,color:"#8a5c00",marginTop:8}}>Waiting for the client to add a card.</div>}
+    {open&&<div style={{marginTop:14,paddingTop:14,borderTop:`1px solid ${B.borderLight}`}}>
+      <div style={{fontSize:12.5,color:B.textSoft,lineHeight:1.55,marginBottom:12}}>The client gets an email invite and sets their own password. Nobody else ever sees it.</div>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:"0 14px"}}>
+        <Field label="Client's name"><Inp value={f.name} onChange={e=>setF({...f,name:e.target.value})} placeholder="Jordan Smith"/></Field>
+        <Field label="Client's email"><Inp type="email" autoComplete="off" value={f.email} onChange={e=>setF({...f,email:e.target.value})} placeholder="jordan@example.com"/></Field>
+      </div>
+      {firmPaid?<div style={{fontSize:12,color:B.textSoft,marginBottom:12}}>This household's plan is paid by its firm, so the client won't be asked for a card.</div>
+        :hasSub?<div style={{fontSize:12,color:B.textSoft,marginBottom:12}}>This household already has a card subscription.</div>
+        :<label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:12.5,color:B.text,cursor:"pointer",marginBottom:12}}>
+          <input type="checkbox" checked={f.card} onChange={e=>setF({...f,card:e.target.checked})} style={{marginTop:2}}/>
+          <span>The client pays by card. They'll be asked to add one when they sign in (promotion codes work there). Untick for a complimentary or staff-run household.</span>
+        </label>}
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <Btn variant="ghost" onClick={()=>setOpen(false)} disabled={busy}>Cancel</Btn>
+        <Btn onClick={send} disabled={busy||!valid}>{busy?"Sending…":"Send invite"}</Btn>
+      </div>
+    </div>}
+  </div>;
+}
+
 function PrivateHouseholdPanel({familyId,familyName,toast,isMobile}){
   const[st,setSt]=useState(null);
   const[err,setErr]=useState("");
@@ -3786,6 +3848,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
           {/* Private household: on the household's own page too, since top clients are usually team-onboarded
               and never appear on the Signups page. Admins only; the panel hides where the migration isn't applied. */}
           {userProfile?.role==="admin"&&<PrivateHouseholdPanel familyId={familyRow.id} familyName={familyRow.name} toast={toast} isMobile={isMobile}/>}
+          {(userProfile?.role==="admin"||(userProfile?.role==="advisor"&&String(familyRow.advisorEmail||"").toLowerCase()===String(userProfile?.email||"").toLowerCase()))&&<InviteClientCard familyRow={familyRow} toast={toast} isMobile={isMobile}/>}
           {familyRow.enterprise_id&&(userProfile?.role==="admin"||userProfile?.role==="advisor"||userProfile?.role==="analyst")&&<PayerCard familyRow={familyRow} userProfile={userProfile} toast={toast} reload={reload}/>}
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(140px,100%),1fr))",gap:14,marginBottom:24}}>
             <StatBox label="Net Worth Est." value={fmtMoney(netWorth)} accent={B.navy}/>
@@ -10869,6 +10932,18 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   // actually managing this household -- the one place where the wrong copy sends a real email
   // to the wrong person.
   const clientPlan=fam.plan;
+  const[cardCheckoutBusy,setCardCheckoutBusy]=useState(false);
+  const startCardCheckout=async()=>{
+    setCardCheckoutBusy(true);
+    const origin=window.location.origin;
+    const{data:resp,error}=await sb.functions.invoke("create-checkout-session",{body:{family_id:fam.id,success_url:`${origin}/?billing=done`,cancel_url:`${origin}/`}});
+    if(error||!resp?.url){
+      let msg=resp?.error||error?.message||"Checkout could not be opened";
+      try{const b=await error?.context?.json?.();if(b?.error)msg=b.error;}catch(_e){}
+      toast(msg,"error");setCardCheckoutBusy(false);return;
+    }
+    window.location.href=resp.url;
+  };
   const clientHasExpert=planAllows(clientPlan,"assignedExpert");
   const clientHasWorkflows=planAllows(clientPlan,"workflows");
   // No assigned Expert (Basic/Core) means nobody else is entering this household's properties,
@@ -11432,6 +11507,16 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
 
     {/* Content */}
     <div style={{maxWidth:1100,margin:"0 auto",padding:isMobile?"16px 14px":"28px 24px"}}>
+
+      {/* Invited by the team to pay by card (invite-client): ask for a card until Stripe has a subscription. */}
+      {fam.billing_setup_required&&!fam.stripe_subscription_id&&<div style={{background:"rgba(206,182,132,0.14)",border:`1px solid ${B.gold}`,borderRadius:12,padding:"14px 18px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+        <div style={{fontSize:13.5,color:B.text,lineHeight:1.55,flex:"1 1 280px"}}>
+          <strong style={{color:B.navy}}>Add a card to start your {planLabel(clientPlan)} plan</strong>
+          {(()=>{const p=billingPlans.find(x=>x.plan===clientPlan);return p?<> ({fmtMoney(p.monthly_price)}/month)</>:null;})()}.
+          {" "}It takes a minute on Stripe's secure page. Have a promotion code? You can enter it there.
+        </div>
+        <Btn disabled={cardCheckoutBusy} onClick={startCardCheckout}>{cardCheckoutBusy?"Opening…":"Add a card"}</Btn>
+      </div>}
 
       {/* SUMMARY */}
       {activeTab==="summary"&&<div>

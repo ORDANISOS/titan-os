@@ -223,7 +223,8 @@ async function syncFamilyFromSubscription(sub: Stripe.Subscription) {
   if (!familyId) return; // not one of ours, or created outside this flow
 
   const mapped = mapStripeStatus(sub.status);
-  const patch: Record<string, unknown> = { stripe_subscription_id: sub.id };
+  // A subscription now exists, so an invited household's "add a card" request (invite-client) is done.
+  const patch: Record<string, unknown> = { stripe_subscription_id: sub.id, billing_setup_required: false };
   // End-of-period cancellation, as Stripe has it (scheduled or undone in the app or the Stripe dashboard).
   // Re-read on this client's pinned API version: on the endpoint's newer version the period end lives on
   // the subscription items, not the subscription. A read failure leaves the column alone.
