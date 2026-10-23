@@ -11490,9 +11490,10 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const[savingQuickAdd,setSavingQuickAdd]=useState(false);
   const runQuickAdd=(fn,close)=>async f=>{setSavingQuickAdd(true);try{const r=await fn(f);if(r!==false)close();return r;}finally{setSavingQuickAdd(false);}};
 
-  // Onboarding wizard: opens once on its own for a brand-new, empty, self-serve household: after
-  // that, "seen" is remembered per-family in localStorage so it doesn't nag on every login. (The
-  // "Getting Started" header button that reopened it on demand was removed from every profile.)
+  // Onboarding wizard: opens once on its own for a brand-new, empty, self-serve household. "Seen" is remembered on
+  // the household (families.onboarding_wizard_seen_at, migration 20261023100000), so it doesn't come back on another
+  // device or browser; localStorage is kept as a fallback for a database without that column. The client can
+  // reopen it any time from the "Setup guide" link on the Summary tab.
   const[wizardOpen,setWizardOpen]=useState(false);
   const wizardSeenKey=`ordanis_onboarding_wizard_seen_${family.id}`;
   useEffect(()=>{
@@ -11501,13 +11502,14 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     // that has been answered or dismissed, so the two never stack on top of each other.
     if(promptPending||showNamePrompt)return;
     if(properties.length||accounts.length||valuables.length||members.length||professionals.length)return;
-    let seen=false;
-    try{seen=localStorage.getItem(wizardSeenKey)==="1";}catch{}
+    let seen=!!fam.onboarding_wizard_seen_at;
+    try{seen=seen||localStorage.getItem(wizardSeenKey)==="1";}catch{}
     if(!seen)setWizardOpen(true);
   },[family.id,clientSelfServe,promptPending,showNamePrompt]);
   const closeWizard=()=>{
     try{localStorage.setItem(wizardSeenKey,"1");}catch{}
     setWizardOpen(false);
+    if(!fam.onboarding_wizard_seen_at)sb.rpc("onboarding_wizard_mark_seen",{p_family_id:family.id}).then(()=>{},()=>{});
   };
   const totalRE=properties.reduce((s,p)=>s+(Number(p.currentValue)||Number(p.purchasePrice)||0),0);
   const totalDebt=properties.reduce((s,p)=>s+(Number(p.loanBalance)||0)+(Number(p.secondMortgageBalance)||0),0)+accounts.filter(a=>a.accountType==="Line of Credit").reduce((s,a)=>s+(Number(a.currentBalance)||0),0)+loansDebt(loans);
@@ -11676,7 +11678,11 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:28,color:B.navy,fontWeight:600,marginBottom:6}}>
           Good {new Date().getHours()<12?"Morning":new Date().getHours()<17?"Afternoon":"Evening"}
         </div>
-        <div style={{color:B.textSoft,fontSize:14,marginBottom:24}}>Here is your financial overview as of {new Date().toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:12,flexWrap:"wrap",marginBottom:24}}>
+          <div style={{color:B.textSoft,fontSize:14}}>Here is your financial overview as of {new Date().toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}</div>
+          {/* Reopens the onboarding wizard on demand (self-directed households, who set up their own records). */}
+          {clientSelfServe&&<button onClick={()=>setWizardOpen(true)} style={{background:"none",border:"none",padding:0,color:B.navyMid,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline",textUnderlineOffset:3}}>Setup guide</button>}
+        </div>
         <HouseholdTeamCard familyId={family.id}/>
 
         {/* Net Worth Hero */}
