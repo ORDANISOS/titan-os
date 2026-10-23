@@ -45,9 +45,10 @@
     },
     {
       "id": "07-close",
-      "visual": "Orbit pulls back to the full ring, beams flowing; ORDANIS wordmark and tagline.",
-      "caption": "One hub. Every part of ORDANIS. Connected.",
-      "voice": "One hub. Every part of ORDANIS. Connected."
+      "visual": "Orbit with beams flowing; ORDANIS wordmark; ONE HUB, SIX PORTALS, CONNECTED appear one at a time with the voice.",
+      "caption": "One Hub. Six Portals. Connected.",
+      "voice": "One hub. <break time=\"0.8s\" /> Six portals. <break time=\"0.8s\" /> Connected.",
+      "speed": 0.85
     }
   ],
   "pronounce": {

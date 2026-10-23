@@ -41,6 +41,11 @@ echo "Voice: $VOICE_NAME"
 
 # Optional: only these scene ids, e.g.  make-voice.sh 01-open 07-close
 ONLY="${*:-}"
+# Optional: TAKES=3 records several versions of each scene into voice/takes/ (the video's files are left alone)
+# so you can listen and pick one. STABILITY (0-1, default 0.5): higher reads more evenly and consistently.
+TAKES="${TAKES:-1}"
+STABILITY="${STABILITY:-0.5}"
+mkdir -p voice/takes
 # Narration text with the "pronounce" respellings applied (captions are never changed).
 python3 -I -c 'import json, re, sys
 d = json.load(open("script.json")); only = sys.argv[1].split()
@@ -49,18 +54,26 @@ for s in d["scenes"]:
     t = s["voice"]
     for word, say in d.get("pronounce", {}).items():
         t = re.sub(r"\b" + re.escape(word) + r"\b", say, t)
-    print(s["id"] + "\t" + t)' "$ONLY" | while IFS=$'\t' read -r ID TEXT; do
-  BODY=$(TEXT="$TEXT" MODEL_ID="$MODEL_ID" python3 -I -c 'import json,os
+    print(s["id"] + "\t" + str(s.get("speed", 1.0)) + "\t" + t)' "$ONLY" | while IFS=$'\t' read -r ID SPEED TEXT; do
+  # A scene's "speed" (0.7-1.2, default 1) slows or quickens just that scene.
+  BODY=$(TEXT="$TEXT" MODEL_ID="$MODEL_ID" STABILITY="$STABILITY" SPEED="$SPEED" python3 -I -c 'import json,os
 print(json.dumps({"text": os.environ["TEXT"], "model_id": os.environ["MODEL_ID"],
-  "voice_settings": {"stability": 0.5, "similarity_boost": 0.8, "style": 0.2, "use_speaker_boost": True}}))')
-  CODE=$(curl -s -o "voice/$ID.mp3" -w '%{http_code}' -X POST \
-    "https://api.elevenlabs.io/v1/text-to-speech/$VOICE_ID?output_format=mp3_44100_128" \
-    -H "xi-api-key: $KEY" -H "Content-Type: application/json" -H "Accept: audio/mpeg" --data "$BODY")
-  if [ "$CODE" != "200" ]; then
-    echo "Scene $ID failed (HTTP $CODE):"; head -c 300 "voice/$ID.mp3"; echo; rm -f "voice/$ID.mp3"; exit 1
-  fi
-  SECS=$(afinfo "voice/$ID.mp3" | awk '/estimated duration/ {print $3}')
-  echo "  $ID  ${SECS}s"
+  "voice_settings": {"stability": float(os.environ["STABILITY"]), "similarity_boost": 0.8, "style": 0.2, "use_speaker_boost": True, "speed": float(os.environ["SPEED"])}}))')
+  for N in $(seq 1 "$TAKES"); do
+    if [ "$TAKES" -gt 1 ]; then OUT="voice/takes/$ID-$N.mp3"; else OUT="voice/$ID.mp3"; fi
+    CODE=$(curl -s -o "$OUT" -w '%{http_code}' -X POST \
+      "https://api.elevenlabs.io/v1/text-to-speech/$VOICE_ID?output_format=mp3_44100_128" \
+      -H "xi-api-key: $KEY" -H "Content-Type: application/json" -H "Accept: audio/mpeg" --data "$BODY")
+    if [ "$CODE" != "200" ]; then
+      echo "Scene $ID failed (HTTP $CODE):"; head -c 300 "$OUT"; echo; rm -f "$OUT"; exit 1
+    fi
+    SECS=$(afinfo "$OUT" | awk '/estimated duration/ {print $3}')
+    echo "  $OUT  ${SECS}s"
+  done
 done
 unset KEY
-echo "Done. Narration is in tools/hub-video/voice/. Tell Claude and it will time the scenes to it."
+if [ "$TAKES" -gt 1 ]; then
+  echo "Done. Listen to the takes (open tools/hub-video/voice/takes), then tell Claude which number to use for each scene."
+else
+  echo "Done. Narration is in tools/hub-video/voice/. Tell Claude and it will time the scenes to it."
+fi

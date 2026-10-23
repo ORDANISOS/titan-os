@@ -445,7 +445,13 @@ async function load() {
   for (const [i, s] of SCRIPT.scenes.entries()) {
     let dur = null;
     try {
-      const r = await fetch(`voice/${s.id}.mp3`);
+      // ?take=2 (all scenes that have takes) or ?take=03-apps:2,07-close:3 uses voice/takes/<id>-<n>.mp3 instead.
+      const tk = new URLSearchParams(location.search).get("take") || "";
+      const pick = tk.includes(":") ? Object.fromEntries(tk.split(",").map((x) => x.split(":"))) [s.id] : tk;
+      let r = pick ? await fetch(`voice/takes/${s.id}-${pick}.mp3`) : null;
+      // An edited scene (e.g. a spliced word) is saved as voice/<id>.m4a and wins over the original .mp3.
+      if (!r || !r.ok) r = await fetch(`voice/${s.id}.m4a`);
+      if (!r || !r.ok) r = await fetch(`voice/${s.id}.mp3`);
       if (r.ok) { const buf = await ac.decodeAudioData(await r.arrayBuffer()); AUDIO[s.id] = buf; dur = buf.duration; }
     } catch (_) { /* no narration yet */ }
     const est = s.voice.split(/\s+/).length / 2.5;
@@ -457,6 +463,25 @@ async function load() {
   }
   TOTAL = t;
   return TIMES.every((x) => x.real);
+}
+
+// When each phrase of the closing line starts (absolute seconds), found from the pauses in the narration.
+let BEATS = null;
+function closeBeats(sc) {
+  if (BEATS) return BEATS;
+  const buf = AUDIO[sc.id];
+  let starts = [];
+  if (buf) {
+    const ch = buf.getChannelData(0), win = Math.round(buf.sampleRate * 0.02);
+    const rms = [];
+    for (let i = 0; i < ch.length; i += win) { let s = 0; for (let j = i; j < Math.min(i + win, ch.length); j++) s += ch[j] * ch[j]; rms.push(Math.sqrt(s / win)); }
+    const thr = Math.max(...rms) * 0.12;
+    let quiet = 99;
+    rms.forEach((v, k) => { if (v > thr) { if (quiet * 0.02 > 0.35) starts.push(k * 0.02); quiet = 0; } else quiet++; });
+  }
+  if (starts.length !== 3) starts = [0, sc.voiceDur * 0.38, sc.voiceDur * 0.72]; // fallback: spread evenly
+  BEATS = starts.map((s) => sc.voice + s);
+  return BEATS;
 }
 
 // Where each app is named inside scene 3, by word count of its sentence.
@@ -539,10 +564,22 @@ function frame(t) {
     caption(scene.caption, capA);
     return;
   }
-  // Close
-  orbit(t, { ...lay, build: 1, beams: 1 });
-  wordmark(W / 2, 850, 0.62, fade(local, 0.8, 1.0), false);
-  text("ONE HUB  ·  EVERY PART OF ORDANIS  ·  CONNECTED", W / 2, 925, { font: `700 22px ${SANS}`, color: C.gold, spacing: 5, alpha: fade(local, 1.4, 1.0) });
+  // Close: ONE HUB · SIX PORTALS · CONNECTED, each phrase landing as the voice says it.
+  const beats = closeBeats(sc);
+  const lit = t >= beats[1] && t < beats[1] + 1.6;
+  orbit(t, { ...lay, build: 1, beams: 1, hi: lit ? new Set([0, 1, 2, 3, 4, 5]) : undefined });
+  wordmark(W / 2, 850, 0.62, fade(local, 0.4, 0.8), false);
+  const words = ["ONE HUB", "SIX PORTALS", "CONNECTED"], f = `700 30px ${SANS}`, sp = 8, gap = 70;
+  ctx.font = f; ctx.letterSpacing = sp + "px";
+  const ws = words.map((w) => ctx.measureText(w).width);
+  ctx.letterSpacing = "0px";
+  let x = W / 2 - (ws.reduce((a, b) => a + b, 0) + gap * 2) / 2;
+  words.forEach((w, i) => {
+    const a = ease(clamp((t - beats[i]) / 0.45));
+    if (i > 0) text("·", x - gap / 2, 940, { font: f, color: C.gold, alpha: a });
+    text(w, x + ws[i] / 2, 940 + (1 - a) * 14, { font: f, color: i === 2 ? C.paper : C.gold, spacing: sp, alpha: a });
+    x += ws[i] + gap;
+  });
   const end = fade(local, len - 1.0, 1.0);
   if (end > 0) { ctx.save(); ctx.globalAlpha = end; ctx.fillStyle = "#020a14"; ctx.fillRect(0, 0, W, H); ctx.restore(); }
 }
@@ -573,24 +610,29 @@ document.getElementById("play").onclick = () => {
 scrub.oninput = () => { playing = false; stopAudio(); document.getElementById("play").textContent = "Play"; show(scrub.value / 1000 * TOTAL); };
 
 // ── Render to MP4 (frame-exact, with the narration) ──────────────────────────
-async function renderMp4() {
+async function renderMp4(opts = {}) {
+  // opts: { width, height, bitrate, audioBitrate, name } for smaller copies (e.g. 1280x720 for email).
+  const OW = opts.width || W, OH = opts.height || H;
+  const out = OW === W ? cv : Object.assign(document.createElement("canvas"), { width: OW, height: OH });
+  const octx = out === cv ? null : out.getContext("2d");
   statusEl.textContent = "Rendering…";
   const haveAudio = TIMES.every((s) => AUDIO[s.id]);
   const SR = 48000;
   const target = new Mp4Muxer.ArrayBufferTarget();
   const muxer = new Mp4Muxer.Muxer({
     target, fastStart: "in-memory",
-    video: { codec: "avc", width: W, height: H, frameRate: FPS },
+    video: { codec: "avc", width: OW, height: OH, frameRate: FPS },
     audio: haveAudio ? { codec: "aac", numberOfChannels: 2, sampleRate: SR } : undefined,
   });
   let vErr = null;
   const ve = new VideoEncoder({ output: (c, m) => muxer.addVideoChunk(c, m), error: (e) => { vErr = e; } });
-  ve.configure({ codec: "avc1.640028", width: W, height: H, bitrate: 12_000_000, framerate: FPS });
+  ve.configure({ codec: "avc1.640028", width: OW, height: OH, bitrate: opts.bitrate || 12_000_000, framerate: FPS });
   const frames = Math.ceil(TOTAL * FPS);
   for (let f = 0; f < frames; f++) {
     if (vErr) throw vErr;
     frame(f / FPS);
-    const vf = new VideoFrame(cv, { timestamp: Math.round(f * 1e6 / FPS), duration: Math.round(1e6 / FPS) });
+    if (octx) { octx.imageSmoothingQuality = "high"; octx.drawImage(cv, 0, 0, OW, OH); }
+    const vf = new VideoFrame(out, { timestamp: Math.round(f * 1e6 / FPS), duration: Math.round(1e6 / FPS) });
     ve.encode(vf, { keyFrame: f % (FPS * 2) === 0 });
     vf.close();
     if (ve.encodeQueueSize > 8) await new Promise((r) => setTimeout(r, 0));
@@ -615,7 +657,7 @@ async function renderMp4() {
     }
     let aErr = null;
     const aeEnc = new AudioEncoder({ output: (c, m) => muxer.addAudioChunk(c, m), error: (e) => { aErr = e; } });
-    aeEnc.configure({ codec: "mp4a.40.2", sampleRate: SR, numberOfChannels: 2, bitrate: 192000 });
+    aeEnc.configure({ codec: "mp4a.40.2", sampleRate: SR, numberOfChannels: 2, bitrate: opts.audioBitrate || 192000 });
     const CH = 4800;
     for (let i = 0; i < n; i += CH) {
       if (aErr) throw aErr;
@@ -627,7 +669,7 @@ async function renderMp4() {
     await aeEnc.flush();
   }
   muxer.finalize();
-  const name = haveAudio ? "ORDANIS-Hub.mp4" : "ORDANIS-Hub-silent-draft.mp4";
+  const name = opts.name || (haveAudio ? "ORDANIS-Hub.mp4" : "ORDANIS-Hub-silent-draft.mp4");
   statusEl.textContent = "Saving…";
   const res = await fetch("/save?name=" + name, { method: "POST", body: target.buffer });
   const info = await res.json();
