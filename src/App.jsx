@@ -1823,7 +1823,9 @@ async function signOutEverywhere(){
   const{error}=await sb.auth.signOut({scope:"global"});
   if(error)await sb.auth.signOut({scope:"local"}); // still leave this browser signed out
 }
-function SecurityModal({onClose,toast,role}){
+// optedOut / onOptOut (clients only): whether this person chose not to use two-step sign-in, and how to record or
+// clear that choice (user_profiles.mfa_opted_out_at via mfa_opt_out_set). Turning two-step off counts as opting out.
+function SecurityModal({onClose,toast,role,optedOut=false,onOptOut=null}){
   const required=MFA_REQUIRED_ROLES.includes(role);
   const[st,setSt]=useState(null);
   const[mode,setMode]=useState("view"); // view | enroll | confirmOff | confirmEverywhere
@@ -1843,6 +1845,7 @@ function SecurityModal({onClose,toast,role}){
       if(st.current!=="aal2"){const{error:v}=await sb.auth.mfa.challengeAndVerify({factorId:f.id,code});if(v)throw v;}
       for(const x of st.verified){const{error:u}=await sb.auth.mfa.unenroll({factorId:x.id});if(u)throw u;}
       toast("Two-step sign-in is off");setMode("view");setCode("");await load();
+      if(onOptOut)await onOptOut(true);
     }catch(err){setError(mfaCodeMessage(err));setCode("");}
     setBusy(false);
   };
@@ -1871,6 +1874,10 @@ function SecurityModal({onClose,toast,role}){
         ?"Each time you sign in, ORDANIS asks for a 6-digit code from the authenticator app on your phone, as well as your password."
         :"Add a second step to signing in: after your password, you type a 6-digit code from an authenticator app on your phone. Even if someone learned your password, they couldn't get in without your phone. Recommended."}</div>
       {!required&&(on?<Btn variant="ghost" onClick={()=>{setMode("confirmOff");setError("");}}>Turn off</Btn>:<Btn onClick={()=>{setMode("enroll");setError("");}}>Turn on two-step sign-in</Btn>)}
+      {!required&&!on&&onOptOut&&(optedOut
+        ?<div style={{fontSize:12,color:B.textMute,marginTop:10,lineHeight:1.5}}>You chose not to use two-step sign-in. You can turn it on any time.{" "}
+          <button onClick={async()=>{await onOptOut(false);toast("We'll remind you about two-step sign-in");}} style={{background:"none",border:"none",padding:0,color:B.navyMid,fontSize:12,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>Remind me again</button></div>
+        :<div style={{marginTop:10}}><button onClick={async()=>{await onOptOut(true);toast("Got it. You can turn it on any time from Security.");onClose();}} style={{background:"none",border:"none",padding:0,color:B.textSoft,fontSize:12.5,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>No thanks, I don't want two-step sign-in</button></div>)}
       <div style={section}>
         <div style={{fontSize:13,fontWeight:700,color:B.navy,marginBottom:6}}>Sign out everywhere</div>
         <div style={{fontSize:13,color:B.textSoft,lineHeight:1.55,marginBottom:12}}>"Sign Out" only signs out this browser. This ends every session for your login, on all your devices.</div>
@@ -1880,10 +1887,38 @@ function SecurityModal({onClose,toast,role}){
   </Modal>;
 }
 // A "Security" button that opens SecurityModal; sits next to each Sign Out.
+// For clients (two-step is optional for them) it is flagged, "Set up security" with a dot, until they turn two-step
+// on or choose not to use it; then it goes back to normal. Staff never see the flag (two-step is required for them).
 function SecurityButton({role,toast,style,label="🔒 Security"}){
   const[open,setOpen]=useState(false);
-  return <><button onClick={()=>setOpen(true)} title="Two-step sign-in and sign out everywhere" style={style}>{label}</button>
-    {open&&<SecurityModal role={role} toast={toast} onClose={()=>setOpen(false)}/>}</>;
+  const optional=!MFA_REQUIRED_ROLES.includes(role);
+  const[st,setSt]=useState(null); // {on, optedOut}
+  const check=useCallback(async()=>{
+    if(!optional)return;
+    try{
+      const m=await mfaStatus();
+      const{data:{user}}=await sb.auth.getUser();
+      let opted=false;
+      if(user){const{data}=await sb.from("user_profiles").select("mfa_opted_out_at").eq("id",user.id).maybeSingle();opted=!!data?.mfa_opted_out_at;}
+      setSt({on:!!m.verified.length,optedOut:opted});
+    }catch(_e){setSt(null);}
+  },[optional]);
+  useEffect(()=>{check();},[check]);
+  const setOptOut=async v=>{
+    const{error}=await sb.rpc("mfa_opt_out_set",{p_opt_out:v});
+    if(error){toast(error.message,"error");return;}
+    setSt(x=>x?{...x,optedOut:v}:x);
+  };
+  const flagged=optional&&st&&!st.on&&!st.optedOut;
+  const iconOnly=String(label).trim()==="🔒";
+  const flagStyle=flagged?{...style,background:"#fef3e2",border:"1px solid #e8b04a",color:"#8a5c00",fontWeight:700,position:"relative"}:style;
+  return <><button onClick={()=>setOpen(true)} title={flagged?"Two-step sign-in isn't set up yet. Recommended.":"Two-step sign-in and sign out everywhere"}
+      aria-label={flagged?"Security: two-step sign-in isn't set up yet":undefined} style={flagStyle}>
+      {flagged?(iconOnly?"🔒":"🔒 Set up security"):label}
+      {flagged&&<span aria-hidden="true" style={{position:"absolute",top:-3,right:-3,width:9,height:9,borderRadius:"50%",background:"#d9822b",border:"2px solid #fff"}}/>}
+    </button>
+    {open&&<SecurityModal role={role} toast={toast} optedOut={!!st?.optedOut} onOptOut={optional?setOptOut:null}
+      onClose={()=>{setOpen(false);check();}}/>}</>;
 }
 
 function SetPasswordGate({onDone}){
