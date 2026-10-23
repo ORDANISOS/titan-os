@@ -836,7 +836,7 @@ async function firmDocGate(path,name,action="open_document"){
 const FIRM_GATE_MSG="This access could not be recorded, so the file was not opened.";
 // Display-only rename: the underlying role value stored in the DB/permissions stays "advisor";
 // only the label shown to users reads "ORDANIS Expert".
-const ROLE_LABELS={admin:"Admin",advisor:"ORDANIS Expert",analyst:"ORDANIS Analyst",client:"Client",partner:"Partner",enterprise_admin:"Firm Administrator"};
+const ROLE_LABELS={admin:"Admin",advisor:"ORDANIS Expert",analyst:"ORDANIS Analyst",client:"Family",partner:"Partner",enterprise_admin:"Firm Administrator"};
 const roleLabel=r=>ROLE_LABELS[(r||"").toLowerCase()]||r;
 
 
@@ -1537,11 +1537,11 @@ function InviteClientCard({familyRow,toast,isMobile}){
   };
   return <div style={{background:B.white,borderRadius:12,padding:20,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,marginBottom:20}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:10}}>
-      <div style={{fontSize:10,fontWeight:800,color:B.textMute,letterSpacing:"0.12em",textTransform:"uppercase"}}>Client logins</div>
-      {!open&&<Btn small onClick={()=>setOpen(true)}>Invite client</Btn>}
+      <div style={{fontSize:10,fontWeight:800,color:B.textMute,letterSpacing:"0.12em",textTransform:"uppercase"}}>Family logins</div>
+      {!open&&<Btn small onClick={()=>setOpen(true)}>Invite family</Btn>}
     </div>
     {logins===null?<div style={{fontSize:12.5,color:B.textMute}}>Loading…</div>
-      :logins.length===0?<div style={{fontSize:12.5,color:B.textSoft}}>No client login yet. Invite the client so they can sign in and see their household.</div>
+      :logins.length===0?<div style={{fontSize:12.5,color:B.textSoft}}>No family login yet. Invite the family so they can sign in and see their household.</div>
       :<div style={{display:"flex",flexDirection:"column",gap:8}}>{logins.map(u=><div key={u.id} style={{fontSize:13,color:B.navy,display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
         <span style={{minWidth:0}}><strong>{u.full_name||u.email}</strong>{u.full_name?<span style={{color:B.textSoft}}> · {u.email}</span>:null}
           {statusText(u)&&<span style={{display:"block",fontSize:11.5,color:u.opened_at||u.last_sign_in_at?B.textMute:"#8a5c00"}}>{statusText(u)}</span>}</span>
@@ -1550,16 +1550,16 @@ function InviteClientCard({familyRow,toast,isMobile}){
       </div>)}</div>}
     {familyRow.billing_setup_required&&!hasSub&&<div style={{fontSize:12,color:"#8a5c00",marginTop:8}}>Waiting for the client to add a card.</div>}
     {open&&<div style={{marginTop:14,paddingTop:14,borderTop:`1px solid ${B.borderLight}`}}>
-      <div style={{fontSize:12.5,color:B.textSoft,lineHeight:1.55,marginBottom:12}}>The client gets an email invite and sets their own password. Nobody else ever sees it.</div>
+      <div style={{fontSize:12.5,color:B.textSoft,lineHeight:1.55,marginBottom:12}}>They get an email invite and set their own password. Nobody else ever sees it.</div>
       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:"0 14px"}}>
-        <Field label="Client's name"><Inp value={f.name} onChange={e=>setF({...f,name:e.target.value})} placeholder="Jordan Smith"/></Field>
-        <Field label="Client's email"><Inp type="email" autoComplete="off" value={f.email} onChange={e=>setF({...f,email:e.target.value})} placeholder="jordan@example.com"/></Field>
+        <Field label="Name"><Inp value={f.name} onChange={e=>setF({...f,name:e.target.value})} placeholder="Jordan Smith"/></Field>
+        <Field label="Email"><Inp type="email" autoComplete="off" value={f.email} onChange={e=>setF({...f,email:e.target.value})} placeholder="jordan@example.com"/></Field>
       </div>
-      {firmPaid?<div style={{fontSize:12,color:B.textSoft,marginBottom:12}}>This household's plan is paid by its firm, so the client won't be asked for a card.</div>
+      {firmPaid?<div style={{fontSize:12,color:B.textSoft,marginBottom:12}}>This household's plan is paid by its firm, so the family won't be asked for a card.</div>
         :hasSub?<div style={{fontSize:12,color:B.textSoft,marginBottom:12}}>This household already has a card subscription.</div>
         :<label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:12.5,color:B.text,cursor:"pointer",marginBottom:12}}>
           <input type="checkbox" checked={f.card} onChange={e=>setF({...f,card:e.target.checked})} style={{marginTop:2}}/>
-          <span>The client pays by card. They'll be asked to add one when they sign in (promotion codes work there). Untick for a complimentary or staff-run household.</span>
+          <span>The family pays by card. They'll be asked to add one when they sign in (promotion codes work there). Untick for a complimentary or staff-run household.</span>
         </label>}
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
         <Btn variant="ghost" onClick={()=>setOpen(false)} disabled={busy}>Cancel</Btn>
@@ -8032,7 +8032,7 @@ function UserManagementView({userProfile,data={},toast}){
                   <option value="advisor">ORDANIS Expert</option>
                   <option value="analyst">ORDANIS Analyst</option>
                   <option value="partner">Partner</option>
-                  <option value="client">Client</option>
+                  <option value="client">Family</option>
                   {u.role==="enterprise_admin"&&<option value="enterprise_admin">Firm Administrator</option>}
                 </select>}
             </div>
@@ -8146,7 +8146,7 @@ function UserManagementView({userProfile,data={},toast}){
           {key:"advisor",label:"ORDANIS Experts",accent:B.gold,desc:"Scoped to their assigned families and prospects"},
           {key:"analyst",label:"ORDANIS Analysts",accent:"#5b7a99",desc:"Work alongside their Expert, with the same access to all of that Expert's households"},
           {key:"partner",label:"Partners",accent:"#7a8fa6",desc:"View-only across linked families; can upload & download documents"},
-          {key:"client",label:"Clients",accent:B.navyMid,desc:"Read-only portal access to their own family"},
+          {key:"client",label:"Families",accent:B.navyMid,desc:"Portal access to their own household"},
         ];
         const known=GROUPS.map(g=>g.key);
         const roleOf=u=>(u.role||"").toLowerCase();
@@ -8230,7 +8230,7 @@ function UserManagementView({userProfile,data={},toast}){
                   <option value="analyst">ORDANIS Analyst — same access as their Expert; assign the Expert after creating</option>
                   <option value="partner">Partner — view-only, upload/download docs only</option>
                   <option value="admin">Admin — sees everything</option>
-                  <option value="client">Client — read-only portal</option>
+                  <option value="client">Family — their own household portal</option>
                   <option value="enterprise_admin">Firm Administrator — one firm's households, view only</option>
                 </Sel>
               </Field>
@@ -8795,7 +8795,7 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
             <thead><tr style={{textAlign:"left",color:B.textMute,fontSize:10,letterSpacing:"0.06em",textTransform:"uppercase"}}>
-              <th style={{padding:"12px 22px"}}>Customer #</th><th style={{padding:"12px 12px"}}>Username</th><th style={{padding:"12px 12px"}}>Household</th><th style={{padding:"12px 12px"}}>Signed Up</th><th style={{padding:"12px 12px"}}>Status</th><th style={{padding:"12px 12px"}}>Onboarding</th><th style={{padding:"12px 22px"}}>Utilization</th>
+              <th style={{padding:"12px 22px"}}>Family #</th><th style={{padding:"12px 12px"}}>Username</th><th style={{padding:"12px 12px"}}>Household</th><th style={{padding:"12px 12px"}}>Signed Up</th><th style={{padding:"12px 12px"}}>Status</th><th style={{padding:"12px 12px"}}>Onboarding</th><th style={{padding:"12px 22px"}}>Utilization</th>
             </tr></thead>
             <tbody>
               {rows.map(f=>{const c=contacts[f.id]||{};const ob=onboardingStatusFor(f);return <tr key={f.id} onClick={()=>setDrill({type:"user",familyId:f.id})} style={{borderTop:`1px solid ${B.borderLight}`,cursor:"pointer"}}>
@@ -8863,7 +8863,7 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
         <div style={{background:B.bgCard,borderRadius:12,padding:"20px 22px",border:`1px solid ${B.borderLight}`,boxShadow:B.shadow}}>
           <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:14}}>Payment Info</div>
           {[
-            ["Customer #",family.customer_number??"—"],
+            ["Family #",family.customer_number??"—"],
             ["Plan",labelOf(family.plan)],
             ["Monthly Price",fmtMoney(priceOf(family.plan))],
             ...(promoActive(family)?[["Promotion",`${family.promo_code||family.promo_coupon||"Code"}: ${promoText(family)}`],["Pays Monthly",fmtMoney(netPriceOf(family))]]:[]),
