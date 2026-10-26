@@ -33,7 +33,7 @@ const daysBetween = (from: string, to: string) => Math.round((d12(to).getTime() 
 const validIso = (s: unknown) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}/.test(s) && !isNaN(d12(s).getTime());
 
 // Same rule as nextBillDue in src/App.jsx: month-based bills re-anchor on the original day of month.
-function nextBillDue(startDate: string | null, frequency: string | null, endDate: string | null, fromIso: string): string | null {
+export function nextBillDue(startDate: string | null, frequency: string | null, endDate: string | null, fromIso: string): string | null {
   if (!validIso(startDate)) return null;
   const freq = String(frequency || "once").toLowerCase();
   const start = d12(startDate!);

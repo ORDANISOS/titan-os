@@ -23,7 +23,17 @@ const EA_TOKEN_KEY = Deno.env.get("EA_TOKEN_KEY") ?? "";
 // Where Microsoft may send the browser back to. Defaults cover production ELIOT and local dev against demo.
 const REDIRECTS = (Deno.env.get("EA_REDIRECT_URIS") || "https://eliot.ordanisos.com/,http://localhost:5176/")
   .split(",").map((s) => s.trim()).filter(Boolean);
-const SCOPES = "offline_access User.Read Calendars.ReadWrite";
+// Mail.ReadWrite (Phase 3, 2026-10-26): read the inbox and save reply drafts. There is deliberately no Mail.Send,
+// so ELIOT can never send email; drafts are sent by the person from Outlook.
+const SCOPES = "offline_access User.Read Calendars.ReadWrite Mail.ReadWrite";
+// A refresh asks only for what the person already approved, so adding a scope here never breaks an existing link;
+// the new feature just asks them to reconnect.
+const GRANTABLE = ["User.Read", "Calendars.ReadWrite", "Calendars.Read", "Mail.ReadWrite"];
+const refreshScope = (granted: string | null | undefined) => {
+  const have = String(granted ?? "").split(/\s+/).filter((x) => GRANTABLE.includes(x));
+  return ["offline_access", ...(have.length ? have : ["User.Read", "Calendars.ReadWrite"])].join(" ");
+};
+export const hasMail = (granted: string | null | undefined) => String(granted ?? "").split(/\s+/).includes("Mail.ReadWrite");
 const GRAPH = "https://graph.microsoft.com/v1.0";
 const STATE_TTL_MS = 10 * 60_000;
 
@@ -80,8 +90,8 @@ export const timeLabel = (iso: string) => new Date(iso).toLocaleTimeString("en-U
 // ── Profiles and settings ──────────────────────────────────────────────────────────
 export type EaProfile = { user_id: string; enabled: boolean; alerts_on: boolean; alert_minutes: number; week_preview_on: boolean;
   week_preview_dow: number; week_preview_time: string; bookable_blocks: Array<{ day: number; start: string; end: string }>;
-  work_start: string; work_end: string; work_days: number[]; max_task_minutes: number; ignore_terms: string[] };
-const PROFILE_COLS = "user_id,enabled,alerts_on,alert_minutes,week_preview_on,week_preview_dow,week_preview_time,bookable_blocks,work_start,work_end,work_days,max_task_minutes,ignore_terms";
+  work_start: string; work_end: string; work_days: number[]; max_task_minutes: number; ignore_terms: string[]; agendas_on: boolean; agenda_time: string };
+const PROFILE_COLS = "user_id,enabled,alerts_on,alert_minutes,week_preview_on,week_preview_dow,week_preview_time,bookable_blocks,work_start,work_end,work_days,max_task_minutes,ignore_terms,agendas_on,agenda_time";
 
 export async function eaProfile(admin: SupabaseClient, userId: string): Promise<EaProfile | null> {
   const { data } = await admin.from("eliot_ea_profiles").select(PROFILE_COLS).eq("user_id", userId).maybeSingle();
@@ -120,6 +130,11 @@ export function validateSettings(input: Record<string, unknown>): { row?: Record
     const n = Math.round(Number(input.max_task_minutes));
     if (!(n >= 30 && n <= 600)) return { error: "Daily task time can be 30 minutes to 10 hours." };
     row.max_task_minutes = n;
+  }
+  if ("agendas_on" in input) row.agendas_on = input.agendas_on === true;
+  if ("agenda_time" in input) {
+    if (!HM.test(String(input.agenda_time))) return { error: "Pick a time for the evening agendas." };
+    row.agenda_time = String(input.agenda_time);
   }
   if ("ignore_terms" in input) {
     const list = Array.isArray(input.ignore_terms) ? input.ignore_terms : [];
@@ -164,10 +179,10 @@ export async function startConnect(admin: SupabaseClient, userId: string, redire
   return { url: `${msBase()}/authorize?${q}` };
 }
 
-async function tokenRequest(params: Record<string, string>) {
+async function tokenRequest(params: Record<string, string>, scope = SCOPES) {
   const res = await fetch(`${msBase()}/token`, {
     method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ client_id: MS_CLIENT_ID, client_secret: MS_CLIENT_SECRET, scope: SCOPES, ...params }),
+    body: new URLSearchParams({ client_id: MS_CLIENT_ID, client_secret: MS_CLIENT_SECRET, scope, ...params }),
   });
   const body = await res.json().catch(() => ({}));
   return { ok: res.ok, body: body as Record<string, unknown> };
@@ -203,7 +218,7 @@ export async function finishConnect(admin: SupabaseClient, userId: string, code:
 // A working access token for this person, refreshed (and the rotated refresh token saved) when needed.
 export async function accessToken(admin: SupabaseClient, userId: string): Promise<{ token?: string; error?: string }> {
   if (!eaConfigured()) return { error: "not configured" };
-  const { data: c } = await admin.from("eliot_ea_connections").select("refresh_token_enc,access_token_enc,access_expires_at").eq("user_id", userId).maybeSingle();
+  const { data: c } = await admin.from("eliot_ea_connections").select("refresh_token_enc,access_token_enc,access_expires_at,scopes").eq("user_id", userId).maybeSingle();
   if (!c) return { error: "not connected" };
   if (c.access_token_enc && c.access_expires_at && Date.parse(c.access_expires_at) > Date.now()) {
     const tok = await unseal(c.access_token_enc);
@@ -211,7 +226,7 @@ export async function accessToken(admin: SupabaseClient, userId: string): Promis
   }
   const refresh = await unseal(c.refresh_token_enc);
   if (!refresh) return { error: "reconnect" };
-  const t = await tokenRequest({ grant_type: "refresh_token", refresh_token: refresh });
+  const t = await tokenRequest({ grant_type: "refresh_token", refresh_token: refresh }, refreshScope(c.scopes));
   if (!t.ok || typeof t.body.access_token !== "string") {
     const reason = clean(t.body.error, 60) || "refresh failed";
     await admin.from("eliot_ea_connections").update({ last_error: reason === "invalid_grant" ? "Outlook needs to be connected again." : `Outlook refresh failed (${reason}).` }).eq("user_id", userId);
@@ -229,7 +244,8 @@ export async function accessToken(admin: SupabaseClient, userId: string): Promis
 // ── Reading the calendar ───────────────────────────────────────────────────────────
 export type CalEvent = { id: string; key: string; subject: string; start: string | null; end: string | null; all_day: boolean;
   date: string; end_date: string; location: string; join_url: string | null; organizer: string; attendees: number;
-  show_as: string; response: string; cancelled: boolean; is_organizer: boolean; categories: string[]; ignored: boolean };
+  show_as: string; response: string; cancelled: boolean; is_organizer: boolean; categories: string[]; ignored: boolean;
+  emails: string[] }; // attendee and organizer addresses (server only: matching households for agendas)
 
 const JOIN_HOSTS = /^https:\/\/([a-z0-9-]+\.)*(zoom\.us|zoomgov\.com|teams\.microsoft\.com|teams\.live\.com|meet\.google\.com|webex\.com)\//i;
 const safeJoin = (v: unknown) => { const s = String(v ?? "").trim(); return JOIN_HOSTS.test(s) && s.length < 1000 ? s : null; };
@@ -255,6 +271,7 @@ function normalize(e: Record<string, unknown>): CalEvent | null {
     show_as: clean(e.showAs, 20), response: clean(((e.responseStatus ?? {}) as Record<string, unknown>).response, 30),
     cancelled: e.isCancelled === true, is_organizer: e.isOrganizer === true,
     categories: (Array.isArray(e.categories) ? e.categories : []).map((c) => clean(c, 60)).filter(Boolean).slice(0, 10), ignored: false,
+    emails: [...new Set([...(Array.isArray(e.attendees) ? e.attendees : []), e.organizer].map((a) => clean(((a as Record<string, Record<string, unknown>> | undefined)?.emailAddress ?? {}).address, 200).toLowerCase()).filter((x) => x.includes("@")))].slice(0, 40),
   };
 }
 
@@ -396,8 +413,9 @@ type Push = (userId: string, msg: { title: string; body: string; tag: string }, 
 type Audit = (row: Record<string, unknown>) => PromiseLike<unknown>;
 type ComposeWeek = (facts: ReturnType<typeof weekFacts> & { work?: unknown }, firstName: string) => Promise<string>;
 type WorkSummary = (userId: string) => Promise<{ items: number; minutes: number; overdue: number } | null>;
+type Agendas = (p: EaProfile) => Promise<number>;
 
-export async function runEaSchedule(admin: SupabaseClient, deps: { push: Push; audit: Audit; composeWeek: ComposeWeek; work?: WorkSummary }) {
+export async function runEaSchedule(admin: SupabaseClient, deps: { push: Push; audit: Audit; composeWeek: ComposeWeek; work?: WorkSummary; agendas?: Agendas }) {
   if (!eaConfigured()) return { skipped: "not configured" };
   const { data: profiles } = await admin.from("eliot_ea_profiles").select(PROFILE_COLS).eq("enabled", true);
   const { data: conns } = await admin.from("eliot_ea_connections").select("user_id");
@@ -455,6 +473,15 @@ export async function runEaSchedule(admin: SupabaseClient, deps: { push: Push; a
               error: insErr ? String(insErr.message).slice(0, 300) : null, tool_calls: push ? [push] : [], result_summary: `${facts.total} meetings, ${facts.hours} hours.` });
             r.week = !insErr;
           } else r.error = ev.error;
+        }
+      }
+      // Evening before: agendas for tomorrow's meetings with other people, then one alert (count only).
+      if (deps.agendas) {
+        const made = await deps.agendas(p).catch((e) => { console.error("agendas failed", e); return 0; });
+        if (made > 0) {
+          const push = await deps.push(p.user_id, { title: "ELIOT", body: `Agenda${made === 1 ? "" : "s"} ready · ${made} meeting${made === 1 ? "" : "s"} tomorrow`, tag: "eliot-agenda" });
+          await deps.audit({ module: "ea-agenda", command: "[day-before agendas]", user_id: p.user_id, status: "ok", tool_calls: push ? [push] : [], result_summary: `${made} agendas prepared.` });
+          r.agendas = made;
         }
       }
     } catch (e) {
@@ -520,7 +547,7 @@ async function overlaps(admin: SupabaseClient, userId: string, startIso: string,
     .map((e) => `${timeLabel(e.start!)} ${e.subject}`);
 }
 
-async function findEvent(admin: SupabaseClient, userId: string, find: Record<string, unknown>): Promise<{ event?: CalEvent; message?: string }> {
+export async function findEvent(admin: SupabaseClient, userId: string, find: Record<string, unknown>): Promise<{ event?: CalEvent; message?: string }> {
   if (!validDate(find.date)) return { message: "Which day is the meeting on? Call again with find.date." };
   const r = await readEvents(admin, userId, find.date, 1);
   if (!r.events) return { message: "The calendar couldn't be read just now." };

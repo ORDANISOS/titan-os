@@ -8,7 +8,7 @@ Will's personal executive assistant, built into ELIOT (eliot.ordanisos.com). Onl
 |---|---|---|
 | 1 | Outlook calendar in ELIOT (Today / Week), alerts before meetings, Sunday week preview, "open for calls" blocks, voice: "what's on my calendar" | Live: demo and production 2026-10-24 (ELIOT build 838038d) |
 | 1b | Confirm-first changes: book, move, cancel (own meetings), accept / tentative / decline, by voice or tap | Live: demo and production 2026-10-24 (ELIOT build 838038d) |
-| 2 | Time blocks for client and team tasks; schedule suggestions | Planned |
+| 2 | "Plan my week": time blocks for team tasks, household tasks, bills/deadlines, workflow steps; ignore list (Work Schedule); iPhone listening (eliot-listen, ElevenLabs) | Live on demo and production 2026-10-26 (hub-command 026a3fc, ELIOT build 5cd13e5) |
 | 3 | Email triage and Outlook drafts (no send permission); meeting agendas | Planned |
 | 4 | Zoom links on meetings | Planned |
 | 5 | Phone: 1-844-ORDANIS IVR (book in open-for-calls blocks, route to the right channel), plus Will's missed calls | Planned |
