@@ -1,13 +1,13 @@
 // Zoom meetings for the executive assistant (ORDANIS's Zoom account, Server-to-Server OAuth app "ELIOT").
 //
 // Used only when a confirmed calendar draft books, moves or cancels a meeting with a Zoom link. Meetings are
-// created for one Zoom user (ZOOM_USER_EMAIL, default wperez@ordanisos.com) with the waiting room on, so nobody
+// created for one Zoom user (ZOOM_USER_EMAIL, default info@ordanisos.com, the ORDANIS Zoom login) with the waiting room on, so nobody
 // joins before the host lets them in. The app's scopes should be limited to meeting read/create/update/delete.
 
 const ZOOM_ACCOUNT_ID = Deno.env.get("ZOOM_ACCOUNT_ID") ?? "";
 const ZOOM_CLIENT_ID = Deno.env.get("ZOOM_CLIENT_ID") ?? "";
 const ZOOM_CLIENT_SECRET = Deno.env.get("ZOOM_CLIENT_SECRET") ?? "";
-const ZOOM_USER = Deno.env.get("ZOOM_USER_EMAIL") || "wperez@ordanisos.com";
+const ZOOM_USER = Deno.env.get("ZOOM_USER_EMAIL") || "info@ordanisos.com";
 const API = "https://api.zoom.us/v2";
 
 export const zoomConfigured = () => !!(ZOOM_ACCOUNT_ID && ZOOM_CLIENT_ID && ZOOM_CLIENT_SECRET);
@@ -42,6 +42,7 @@ export async function zoomCreate(topic: string, startWall: string, minutes: numb
     topic: topic.slice(0, 200), type: 2, start_time: startWall, timezone: "America/New_York", duration: minutes,
     settings: { waiting_room: true, join_before_host: false, mute_upon_entry: true },
   });
+  if (r.status === 404) throw new Error(`zoom user missing: ${ZOOM_USER}`);
   if (!r.ok || typeof r.body.join_url !== "string") throw new Error(`zoom create ${r.status}`);
   return { id: String(r.body.id), join_url: r.body.join_url as string, passcode: typeof r.body.password === "string" ? r.body.password : "" };
 }

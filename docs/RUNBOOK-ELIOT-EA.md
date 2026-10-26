@@ -6,8 +6,8 @@ Will's personal executive assistant, built into ELIOT (eliot.ordanisos.com). Onl
 ## Phases
 | Phase | What | Status |
 |---|---|---|
-| 1 | Outlook calendar in ELIOT (Today / Week), alerts before meetings, Sunday week preview, "open for calls" blocks, voice: "what's on my calendar" | On demo 2026-10-23 (back end); not on production |
-| 1b | Confirm-first changes: book, move, cancel (own meetings), accept / tentative / decline, by voice or tap | On demo 2026-10-23 (back end); not on production |
+| 1 | Outlook calendar in ELIOT (Today / Week), alerts before meetings, Sunday week preview, "open for calls" blocks, voice: "what's on my calendar" | Live: demo and production 2026-10-24 (ELIOT build 838038d) |
+| 1b | Confirm-first changes: book, move, cancel (own meetings), accept / tentative / decline, by voice or tap | Live: demo and production 2026-10-24 (ELIOT build 838038d) |
 | 2 | Time blocks for client and team tasks; schedule suggestions | Planned |
 | 3 | Email triage and Outlook drafts (no send permission); meeting agendas | Planned |
 | 4 | Zoom links on meetings | Planned |
@@ -87,7 +87,7 @@ This is ORDANIS's Microsoft 365 (ordanisos.com), not any other company's tenant.
    ```bash
    cd ~/Documents/GitHub/pcm-realestate && supabase secrets set --project-ref tkryueqzvgcigvxgjzsp ZOOM_ACCOUNT_ID="PASTE_ACCOUNT_ID" ZOOM_CLIENT_ID="PASTE_CLIENT_ID" ZOOM_CLIENT_SECRET="PASTE_CLIENT_SECRET"
    ```
-   Meetings are created for wperez@ordanisos.com. If the Zoom user is a different address, also set `ZOOM_USER_EMAIL`.
+   Meetings are hosted by the Zoom login **info@ordanisos.com** (`ZOOM_USER_EMAIL`, set on demo and production 2026-10-24). If the Zoom login changes, update that secret.
 - A free Zoom license caps meetings with 3+ people at 40 minutes; the host user should have a paid license.
 - A Server-to-Server app acts for the whole Zoom account, so keep its scopes to meetings only and the secret in Supabase only.
 

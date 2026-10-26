@@ -599,7 +599,12 @@ export async function runDraft(admin: SupabaseClient, userId: string, draftId: s
     body = { ...event, transactionId: d.id };
     if (zoom) {
       try { zoomMade = await zoomCreate(zoom.topic, zoom.start, zoom.minutes); }
-      catch (e) { console.error("zoom create failed", String((e as Error)?.message ?? e)); return finish(false, "Zoom didn't create the meeting, so nothing was booked. Try again, or book it without a Zoom link."); }
+      catch (e) {
+        const why = String((e as Error)?.message ?? e);
+        console.error("zoom create failed", why);
+        return finish(false, why.startsWith("zoom user missing") ? `Zoom has no user called ${why.slice(19)}, so nothing was booked. The Zoom host email (ZOOM_USER_EMAIL) needs to be the address you sign in to Zoom with.`
+          : "Zoom didn't create the meeting, so nothing was booked. Try again, or book it without a Zoom link.");
+      }
       const note = (event.body as Record<string, string> | undefined)?.content;
       body.location = { displayName: "Zoom" };
       body.body = { contentType: "text", content: `${note ? `${note}\n\n` : ""}Join Zoom meeting: ${zoomMade.join_url}\nMeeting ID: ${zoomMade.id.replace(/(\d{3})(\d{3,4})(\d+)/, "$1 $2 $3")}${zoomMade.passcode ? `\nPasscode: ${zoomMade.passcode}` : ""}` };
