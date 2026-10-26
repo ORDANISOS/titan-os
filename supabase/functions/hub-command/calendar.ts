@@ -79,8 +79,9 @@ export const timeLabel = (iso: string) => new Date(iso).toLocaleTimeString("en-U
 
 // ── Profiles and settings ──────────────────────────────────────────────────────────
 export type EaProfile = { user_id: string; enabled: boolean; alerts_on: boolean; alert_minutes: number; week_preview_on: boolean;
-  week_preview_dow: number; week_preview_time: string; bookable_blocks: Array<{ day: number; start: string; end: string }> };
-const PROFILE_COLS = "user_id,enabled,alerts_on,alert_minutes,week_preview_on,week_preview_dow,week_preview_time,bookable_blocks";
+  week_preview_dow: number; week_preview_time: string; bookable_blocks: Array<{ day: number; start: string; end: string }>;
+  work_start: string; work_end: string; work_days: number[]; max_task_minutes: number; ignore_terms: string[] };
+const PROFILE_COLS = "user_id,enabled,alerts_on,alert_minutes,week_preview_on,week_preview_dow,week_preview_time,bookable_blocks,work_start,work_end,work_days,max_task_minutes,ignore_terms";
 
 export async function eaProfile(admin: SupabaseClient, userId: string): Promise<EaProfile | null> {
   const { data } = await admin.from("eliot_ea_profiles").select(PROFILE_COLS).eq("user_id", userId).maybeSingle();
@@ -104,6 +105,27 @@ export function validateSettings(input: Record<string, unknown>): { row?: Record
   if ("week_preview_time" in input) {
     if (!HM.test(String(input.week_preview_time))) return { error: "Pick a time for the week preview." };
     row.week_preview_time = String(input.week_preview_time);
+  }
+  if ("work_start" in input || "work_end" in input) {
+    const ws = String(input.work_start ?? ""), we = String(input.work_end ?? "");
+    if (!HM.test(ws) || !HM.test(we) || ws >= we) return { error: "Work hours need a start before the end." };
+    row.work_start = ws; row.work_end = we;
+  }
+  if ("work_days" in input) {
+    const d = [...new Set((Array.isArray(input.work_days) ? input.work_days : []).map((n) => Math.round(Number(n))).filter((n) => n >= 1 && n <= 7))].sort();
+    if (!d.length) return { error: "Pick at least one work day." };
+    row.work_days = d;
+  }
+  if ("max_task_minutes" in input) {
+    const n = Math.round(Number(input.max_task_minutes));
+    if (!(n >= 30 && n <= 600)) return { error: "Daily task time can be 30 minutes to 10 hours." };
+    row.max_task_minutes = n;
+  }
+  if ("ignore_terms" in input) {
+    const list = Array.isArray(input.ignore_terms) ? input.ignore_terms : [];
+    const terms = [...new Set(list.map((t) => clean(t, 60)).filter((t) => t.length >= 2))];
+    if (terms.length > 15) return { error: "Keep the ignore list to 15 entries." };
+    row.ignore_terms = terms;
   }
   if ("bookable_blocks" in input) {
     const list = Array.isArray(input.bookable_blocks) ? input.bookable_blocks : [];
@@ -207,7 +229,7 @@ export async function accessToken(admin: SupabaseClient, userId: string): Promis
 // ── Reading the calendar ───────────────────────────────────────────────────────────
 export type CalEvent = { id: string; key: string; subject: string; start: string | null; end: string | null; all_day: boolean;
   date: string; end_date: string; location: string; join_url: string | null; organizer: string; attendees: number;
-  show_as: string; response: string; cancelled: boolean; is_organizer: boolean };
+  show_as: string; response: string; cancelled: boolean; is_organizer: boolean; categories: string[]; ignored: boolean };
 
 const JOIN_HOSTS = /^https:\/\/([a-z0-9-]+\.)*(zoom\.us|zoomgov\.com|teams\.microsoft\.com|teams\.live\.com|meet\.google\.com|webex\.com)\//i;
 const safeJoin = (v: unknown) => { const s = String(v ?? "").trim(); return JOIN_HOSTS.test(s) && s.length < 1000 ? s : null; };
@@ -232,6 +254,7 @@ function normalize(e: Record<string, unknown>): CalEvent | null {
     attendees: Array.isArray(e.attendees) ? e.attendees.length : 0,
     show_as: clean(e.showAs, 20), response: clean(((e.responseStatus ?? {}) as Record<string, unknown>).response, 30),
     cancelled: e.isCancelled === true, is_organizer: e.isOrganizer === true,
+    categories: (Array.isArray(e.categories) ? e.categories : []).map((c) => clean(c, 60)).filter(Boolean).slice(0, 10), ignored: false,
   };
 }
 
@@ -243,7 +266,7 @@ export async function readEvents(admin: SupabaseClient, userId: string, fromDate
   if (!startIso || !endIso) return { error: "bad range" };
   const q = new URLSearchParams({
     startDateTime: startIso, endDateTime: endIso, $top: "100", $orderby: "start/dateTime",
-    $select: "id,subject,start,end,isAllDay,location,onlineMeeting,organizer,attendees,showAs,isCancelled,responseStatus,isOrganizer",
+    $select: "id,subject,start,end,isAllDay,location,onlineMeeting,organizer,attendees,showAs,isCancelled,responseStatus,isOrganizer,categories",
   });
   let url: string | null = `${GRAPH}/me/calendarView?${q}`;
   const out: CalEvent[] = [];
@@ -259,12 +282,17 @@ export async function readEvents(admin: SupabaseClient, userId: string, fromDate
     url = next && next.startsWith(`${GRAPH}/`) ? next : null;
   }
   await admin.from("eliot_ea_connections").update({ last_sync_at: new Date().toISOString(), last_error: null }).eq("user_id", userId);
+  // The person's ignore list (e.g. "Work Schedule", their employees' timesheet): those events never count as busy,
+  // never alert and stay out of the week preview. They are still returned, marked ignored, for the panel.
+  const { data: prof } = await admin.from("eliot_ea_profiles").select("ignore_terms").eq("user_id", userId).maybeSingle();
+  const terms = ((prof?.ignore_terms ?? []) as string[]).map((t) => t.toLowerCase()).filter(Boolean);
+  if (terms.length) for (const e of out) e.ignored = terms.some((t) => e.subject.toLowerCase().includes(t) || e.categories.some((c) => c.toLowerCase().includes(t)));
   out.sort((a, b) => (a.start ?? `${a.date}T00`).localeCompare(b.start ?? `${b.date}T00`));
   return { events: out };
 }
 
 // A meeting that should take your time: not all-day, not declined, not marked free.
-export const isMeeting = (e: CalEvent) => !e.all_day && !!e.start && e.response !== "declined" && e.show_as !== "free";
+export const isMeeting = (e: CalEvent) => !e.ignored && !e.all_day && !!e.start && e.response !== "declined" && e.show_as !== "free";
 
 // ── The week preview ───────────────────────────────────────────────────────────────
 const dayName = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "long" });
@@ -278,7 +306,7 @@ export function weekFacts(events: CalEvent[], fromDate: string, profile: EaProfi
   const days = Array.from({ length: 7 }, (_, i) => addDaysTo(fromDate, i)).map((date) => {
     const iso = etNow(new Date(`${date}T17:00:00Z`)).weekday;
     const meetings = events.filter((e) => isMeeting(e) && etDateOf(e.start!) === date);
-    const allDay = events.filter((e) => e.all_day && e.date <= date && e.end_date >= date).map((e) => e.subject);
+    const allDay = events.filter((e) => e.all_day && !e.ignored && e.date <= date && e.end_date >= date).map((e) => e.subject);
     const spans = meetings.map((e) => ({ s: etMinOf(e.start!), e: Math.max(etMinOf(e.end ?? e.start!), etMinOf(e.start!) + 15), subject: e.subject }));
     const minutes = spans.reduce((t, x) => t + (x.e - x.s), 0);
     const overlaps: string[] = [];
@@ -332,7 +360,7 @@ export function weekPushText(f: ReturnType<typeof weekFacts>) {
 // ── The voice tool ─────────────────────────────────────────────────────────────────
 export const CALENDAR_TOOL = {
   name: "my_calendar",
-  description: "The administrator's own Outlook calendar (this tool only reads): meetings and all-day events from a start date for a number of days, in Eastern time, with location, whether there's a video link, organizer and attendee count. Use for 'what's on my calendar', 'when is my next meeting', 'am I free Thursday afternoon', 'how busy is next week'.",
+  description: "The administrator's own Outlook calendar (this tool only reads): meetings and all-day events from a start date for a number of days, in Eastern time, with location, whether there's a video link, organizer and attendee count. Use for 'what's on my calendar', 'when is my next meeting', 'am I free Thursday afternoon', 'how busy is next week'. Events marked not_counted (e.g. the employees' Work Schedule timesheet) are not the administrator's commitments: never count them as busy or as meetings; mention them only if asked.",
   input_schema: {
     type: "object",
     properties: {
@@ -352,6 +380,7 @@ export async function calendarToolData(admin: SupabaseClient, userId: string, in
     day: shortDay(e.all_day ? e.date : etDateOf(e.start!)), time: e.all_day ? "all day" : `${timeLabel(e.start!)} to ${timeLabel(e.end ?? e.start!)}`,
     subject: e.subject, location: e.location || null, video_link: !!e.join_url, organizer: e.organizer || null, attendees: e.attendees,
     declined: e.response === "declined" || undefined, tentative: e.response === "tentativelyAccepted" || undefined, free: e.show_as === "free" || undefined,
+    not_counted: e.ignored || undefined,
   }));
   return { rows: items.length, data: { from, days, events: items, more: r.events.length > 60 || undefined } };
 }
@@ -359,15 +388,16 @@ export async function calendarToolData(admin: SupabaseClient, userId: string, in
 // For the app: events shaped for the Calendar panel.
 export const forApp = (e: CalEvent) => ({
   id: e.key, subject: e.subject, start: e.start, end: e.end, all_day: e.all_day, date: e.all_day ? e.date : etDateOf(e.start!), end_date: e.end_date,
-  location: e.location, join_url: e.join_url, organizer: e.organizer, attendees: e.attendees, response: e.response, show_as: e.show_as, is_organizer: e.is_organizer,
+  location: e.location, join_url: e.join_url, organizer: e.organizer, attendees: e.attendees, response: e.response, show_as: e.show_as, is_organizer: e.is_organizer, ignored: e.ignored,
 });
 
 // ── Scheduled: meeting alerts and the week preview (called every 5 minutes) ───────────────
 type Push = (userId: string, msg: { title: string; body: string; tag: string }, urgency?: "normal" | "high") => Promise<{ sent: number; skipped?: string } | null>;
 type Audit = (row: Record<string, unknown>) => PromiseLike<unknown>;
-type ComposeWeek = (facts: ReturnType<typeof weekFacts>, firstName: string) => Promise<string>;
+type ComposeWeek = (facts: ReturnType<typeof weekFacts> & { work?: unknown }, firstName: string) => Promise<string>;
+type WorkSummary = (userId: string) => Promise<{ items: number; minutes: number; overdue: number } | null>;
 
-export async function runEaSchedule(admin: SupabaseClient, deps: { push: Push; audit: Audit; composeWeek: ComposeWeek }) {
+export async function runEaSchedule(admin: SupabaseClient, deps: { push: Push; audit: Audit; composeWeek: ComposeWeek; work?: WorkSummary }) {
   if (!eaConfigured()) return { skipped: "not configured" };
   const { data: profiles } = await admin.from("eliot_ea_profiles").select(PROFILE_COLS).eq("enabled", true);
   const { data: conns } = await admin.from("eliot_ea_connections").select("user_id");
@@ -414,7 +444,9 @@ export async function runEaSchedule(admin: SupabaseClient, deps: { push: Push; a
             const facts = weekFacts(ev.events, from, p);
             const { data: prof } = await admin.from("user_profiles").select("full_name").eq("id", p.user_id).maybeSingle();
             const firstName = String(prof?.full_name ?? "").trim().split(/\s+/)[0].replace(/[^\p{L}'-]/gu, "").slice(0, 30);
-            const answer = await deps.composeWeek(facts, firstName);
+            // Open work that still needs calendar time, so the preview can suggest "plan my week".
+            const work = deps.work ? await deps.work(p.user_id).catch(() => null) : null;
+            const answer = await deps.composeWeek(work ? { ...facts, work } : facts, firstName);
             const { error: insErr } = await admin.from("eliot_briefings").insert({
               user_id: p.user_id, slot, slot_label: "Week preview", answer, display: weekDisplay(facts), findings: [], counts: { meetings: facts.total },
             });

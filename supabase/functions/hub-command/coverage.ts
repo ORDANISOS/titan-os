@@ -123,15 +123,21 @@ export async function expertDesk(db: SupabaseClient, input: Record<string, unkno
   Promise<{ desk?: Desk; error?: string; options?: string[] }> {
   const found = await findExpert(db, String(input.expert ?? ""));
   if (!found.person) return { error: found.error ?? "Several Experts match. Ask which one.", options: found.options };
-  const expert = found.person;
+  return buildDesk(db, found.person, Math.min(60, Math.max(1, Math.floor(Number(input.days) || 14))), emailLookup);
+}
+
+// One person's desk by email. unassigned: also households with no Expert yet (the planner treats those as
+// the owner's). Exported for the executive assistant's planner.
+export async function buildDesk(db: SupabaseClient, expert: { full_name: string | null; email: string }, windowDays: number,
+  emailLookup: EmailLookup, opts: { unassigned?: boolean } = {}): Promise<{ desk?: Desk; error?: string; options?: string[] }> {
   const email = expert.email.toLowerCase();
-  const windowDays = Math.min(60, Math.max(1, Math.floor(Number(input.days) || 14)));
   const today = easternToday();
   const until = plusDays(today, windowDays);
   const truncated: string[] = [];
 
-  const { data: fams, error: famErr } = await db.from("families").select("id,name,plan")
-    .ilike("advisor_email", likeEscape(email)).is("archived_at", null).order("name").limit(500);
+  let famQ = db.from("families").select("id,name,plan").is("archived_at", null);
+  famQ = opts.unassigned ? famQ.or(`advisor_email.ilike.${likeEscape(email)},advisor_email.is.null,advisor_email.eq.""`) : famQ.ilike("advisor_email", likeEscape(email));
+  const { data: fams, error: famErr } = await famQ.order("name").limit(500);
   if (famErr) throw famErr;
   const famIds = (fams ?? []).map((f) => f.id as string);
   const famName = (id: unknown) => txt((fams ?? []).find((f) => f.id === id)?.name, 80).replace(/ \[DEMO\]$/, "") || null;
