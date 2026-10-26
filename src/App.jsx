@@ -1,6 +1,6 @@
 // PCM Family Office Platform — App.jsx
 // BUILD 2026-05-05 · Cash Flow (income+expenses+reorder) · MoneyInput commas · smart chart axis · client read-only · mobile
-import { useState, useEffect, useMemo, useCallback, useRef, useId, Component } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, useId, Component, Fragment } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { PDFDocument } from "pdf-lib";
 import { buildActivityReportPdf, AR_PERIODS, fig as arFig } from "./activityReport.js";
@@ -3596,7 +3596,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   //
   // Obligations is absent entirely on Core rather than shown disabled. A locked door on every
   // visit is worse than no door, and the tab row is already the tightest thing on this screen.
-  const TABS=["Overview","Properties","Portfolio","Loans & Lines","Cash Flow",...(hasWorkflows?["Obligations"]:[]),"Valuables",...(userProfile?.role==="enterprise_admin"?[]:["Deals"]),"Notes","Tasks","CHRIS",...(canSeePrompts?["Prompts"]:[]),...(userProfile?.role==="enterprise_admin"?[]:["Ask ORDANIS"])];
+  const TABS=["Overview","Properties","Portfolio","Loans & Lines","Cash Flow",...(hasWorkflows?["Workflows"]:[]),"Valuables",...(userProfile?.role==="enterprise_admin"?[]:["Deals"]),"Notes","Tasks","CHRIS",...(canSeePrompts?["Prompts"]:[]),...(userProfile?.role==="enterprise_admin"?[]:["Ask ORDANIS"])];
   const assistantName=(familyRow.assistantName||"").trim()||"ORDANIS";
   const[showWelcome,setShowWelcome]=useState(false);
   // Carries "attach a document to this property section" from the Properties tab
@@ -4314,7 +4314,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
         {/* hasWorkflows is checked here as well as in TABS. Without it, a household whose plan
             changed while this tab was open would keep rendering the panel: TABS would no longer
             offer Obligations, but activeTab would still hold the string. */}
-        {activeTab==="obligations"&&hasWorkflows&&<div style={{padding:isMobile?"16px 14px":"24px 28px"}}>
+        {activeTab==="workflows"&&hasWorkflows&&<div style={{padding:isMobile?"16px 14px":"24px 28px"}}>
           <ObligationsSection family={family} data={data} toast={toast} canEdit={canEdit} userProfile={userProfile}/>
         </div>}
 
@@ -4322,10 +4322,11 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
         {activeTab==="loans&lines"&&<div style={{padding:isMobile?"16px 14px":"24px 28px"}}>
           <LoansPanel loans={loans} properties={properties} valuables={valuables} documents={(data.documents||[]).filter(d=>d.familyId===family.id)}
             locAccounts={accounts.filter(a=>a.accountType==="Line of Credit")} toast={toast}
-            onAdd={canEdit?()=>setLoanModal({}):null} onEdit={canEdit?l=>setLoanModal({loan:l}):null} onDelete={canEdit?delLoan:null}
+            onAdd={canEdit?kind=>setLoanModal({kind}):null} onEdit={canEdit?l=>setLoanModal({loan:l}):null} onDelete={canEdit?delLoan:null}
+            onEditProperty={canEdit?p=>setModal({type:"editProperty",property:p}):null}
             onAttach={canEdit?l=>{setAttachIntent({loanId:l.id,section:"loan_statement"});setActiveTab("vault");}:null}/>
-          {loanModal&&canEdit&&<Modal title={loanModal.loan?"Edit loan or line":"Add a loan or line"} onClose={()=>setLoanModal(null)}>
-            <LoanForm initial={loanModal.loan} properties={properties} valuables={valuables}
+          {loanModal&&canEdit&&<Modal title={loanModal.loan?"Edit loan or line":({"Credit Card":"Add a credit card","Auto Loan":"Add a car loan","Line of Credit":"Add a line of credit"}[loanModal.kind]||"Add a loan")} onClose={()=>setLoanModal(null)}>
+            <LoanForm initial={loanModal.loan} defaultType={loanModal.kind||"Auto Loan"} properties={properties} valuables={valuables}
               statement={loanModal.loan?{familyId:family.id,loanId:loanModal.loan.id,toast,onUploaded:()=>reload("documents"),
                 doc:(data.documents||[]).find(d=>d.loanId===loanModal.loan.id&&d.propertySection==="loan_statement")||null}:null}
               onSave={f=>saveLoan(loanModal,f)} onClose={()=>setLoanModal(null)}/>
@@ -5006,10 +5007,11 @@ function loanRowFromForm(f){
 
 // statement (optional, editing an existing loan only): {familyId, loanId, doc, toast, onUploaded}. Snap or pick the
 // latest statement: CHRIS reads it for a name and summary, files it, and links it to this loan.
-function LoanForm({initial,onSave,onClose,properties=[],valuables=[],statement=null}){
+// defaultType: the kind a new loan starts as (from the section's own Add button, e.g. "Credit Card").
+function LoanForm({initial,onSave,onClose,properties=[],valuables=[],statement=null,defaultType="Auto Loan"}){
   const[f,setF]=useState(()=>initial
     ?{...initial,securedBy:initial.propertyId?`p:${initial.propertyId}`:initial.valuableId?`v:${initial.valuableId}`:""}
-    :{loanType:"Auto Loan",name:"",lender:"",currentBalance:"",balanceAsOf:"",creditLimit:"",originalAmount:"",interestRate:"",
+    :{loanType:defaultType,name:"",lender:"",currentBalance:"",balanceAsOf:"",creditLimit:"",originalAmount:"",interestRate:"",
       rateType:"",paymentAmount:"",paymentFrequency:"Monthly",originationDate:"",maturityDate:"",securedBy:"",notes:""});
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const line=DEBT_LINE_KINDS.has(f.loanType);
@@ -5041,6 +5043,9 @@ function LoanForm({initial,onSave,onClose,properties=[],valuables=[],statement=n
     const r=f.interestRate;
     if(r!==""&&r!=null&&(isNaN(Number(r))||Number(r)<0||Number(r)>100)){setErr("Interest rate must be a percentage between 0 and 100.");return;}
     if(f.originationDate&&f.maturityDate&&f.maturityDate<f.originationDate){setErr("The end date can't be before the start date.");return;}
+    // One home for each number: a listed property's mortgage and HELOC live on the property, so they're counted once.
+    if((f.loanType==="Mortgage"||f.loanType==="HELOC")&&String(f.securedBy||"").startsWith("p:")){
+      setErr("A mortgage or home-equity line on a listed property is kept on the property itself, so it's counted once. Close this and use Edit under Mortgages & home equity instead.");return;}
     setErr("");setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();
   };
   const propLabel=p=>p.name||p.address||"Property";
@@ -5078,7 +5083,7 @@ function LoanForm({initial,onSave,onClose,properties=[],valuables=[],statement=n
       <Field label="Start date" optional><Inp type="date" value={f.originationDate||""} onChange={set("originationDate")}/></Field>
       <Field label={line?"Draw period ends / renews":"Paid off by (maturity)"} optional><Inp type="date" value={f.maturityDate||""} onChange={set("maturityDate")}/></Field>
     </Grid2>
-    {f.loanType==="Mortgage"&&<div style={{fontSize:11.5,color:"#8a5c00",marginBottom:12,lineHeight:1.5}}>A mortgage on a property you've added belongs on that property (Properties → Edit), so it isn't counted twice. Use this for one that isn't on a listed property.</div>}
+    {(f.loanType==="Mortgage"||f.loanType==="HELOC")&&<div style={{fontSize:11.5,color:"#8a5c00",marginBottom:12,lineHeight:1.5}}>A mortgage or home-equity line on a property you've added is kept on that property, so it's counted once: use Edit under Mortgages & home equity. Use this form only for one that isn't on a listed property.</div>}
     {statement&&<div style={{marginBottom:14,padding:"12px 14px",border:`1px solid ${B.borderLight}`,borderRadius:10,background:B.bg}}>
       <div style={{fontSize:12,fontWeight:700,color:B.navy,marginBottom:4}}>Latest statement</div>
       <div style={{fontSize:12,color:B.textSoft,marginBottom:10,lineHeight:1.5}}>
@@ -5100,11 +5105,17 @@ function LoanForm({initial,onSave,onClose,properties=[],valuables=[],statement=n
 }
 
 // The Loans & Lines list with its totals. onAdd/onEdit/onDelete/onAttach are null for read-only viewers.
-function LoansPanel({loans,properties=[],valuables=[],documents=[],locAccounts=[],toast,onAdd=null,onEdit=null,onDelete=null,onAttach=null}){
-  const lines=loans.filter(l=>DEBT_LINE_KINDS.has(l.loanType)),terms=loans.filter(l=>!DEBT_LINE_KINDS.has(l.loanType));
-  const owed=loansDebt(loans);
+// onEditProperty: opens a property's own edit form, where its mortgage and second mortgage / HELOC are kept. Those
+// show here too (one record, two places to reach it) and are never stored as loans, so nothing is counted twice.
+function LoansPanel({loans,properties=[],valuables=[],documents=[],locAccounts=[],toast,onAdd=null,onEdit=null,onDelete=null,onAttach=null,onEditProperty=null}){
+  const[mortPick,setMortPick]=useState(false);
+  const lines=loans.filter(l=>DEBT_LINE_KINDS.has(l.loanType));
+  const propMorts=properties.filter(p=>(Number(p.loanBalance)||0)>0||(Number(p.secondMortgageBalance)||0)>0||String(p.lender||"").trim());
+  const propOwed=properties.reduce((t,p)=>t+(Number(p.loanBalance)||0)+(Number(p.secondMortgageBalance)||0),0);
+  const owed=loansDebt(loans)+propOwed;
   const available=lines.reduce((s,l)=>s+(l.creditLimit!=null&&l.creditLimit!==""?Math.max(0,Number(l.creditLimit)-(Number(l.currentBalance)||0)):0),0);
-  const monthly=loans.reduce((s,l)=>s+loanMonthly(l),0);
+  const monthly=loans.reduce((s,l)=>s+loanMonthly(l),0)
+    +properties.reduce((t,p)=>t+(Number(p.loanPayment)||0)+(Number(p.secondMortgagePayment)||0),0);
   const locTotal=locAccounts.reduce((s,a)=>s+(Number(a.currentBalance)||0),0);
   const today=new Date();today.setHours(0,0,0,0);
   const securedLabel=l=>{
@@ -5155,9 +5166,41 @@ function LoansPanel({loans,properties=[],valuables=[],documents=[],locAccounts=[
       </div>
     </div>;
   };
-  const group=(title,list)=>list.length>0&&<div style={{marginBottom:20}}>
-    <div style={{fontSize:12,fontWeight:800,color:B.textMute,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10}}>{title}</div>
-    {list.map(card)}
+  // Fixed sections so credit cards and car loans each have an obvious home (and their own Add button) even when
+  // empty; a section with nothing in it and no Add button is left out.
+  const SECTIONS=[
+    {title:"Credit cards",kinds:["Credit Card"],add:"Credit Card",addLabel:"+ Add a credit card",empty:"No credit cards on file."},
+    {title:"Car loans",kinds:["Auto Loan","Boat / RV / Aircraft Loan"],add:"Auto Loan",addLabel:"+ Add a car loan",empty:"No car loans on file."},
+    {title:"Lines of credit",kinds:["Line of Credit","Securities-Backed Line"],add:"Line of Credit",addLabel:"+ Add a line of credit",empty:"No lines of credit on file."},
+  ];
+  const MORT_KINDS=["Mortgage","HELOC"];
+  const propLabel=p=>p.name||p.address||"Property";
+  // A property's mortgage lines, read from the property record; Edit opens the property.
+  const propCard=(p,second)=>{
+    const bal=second?Number(p.secondMortgageBalance)||0:Number(p.loanBalance)||0;
+    const pay=second?p.secondMortgagePayment:p.loanPayment;
+    const facts=second?[pay?`${fmtMoney(pay)} monthly`:null].filter(Boolean)
+      :[p.interestRate!=null&&p.interestRate!==""?fmtPct(p.interestRate):null,pay?`${fmtMoney(pay)} monthly`:null,p.loanMaturityDate?`Matures ${fmt(p.loanMaturityDate)}`:null].filter(Boolean);
+    return <div key={p.id+(second?"-2":"-1")} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid ${B.gold}`,borderRadius:10,padding:"16px 20px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:14,boxShadow:B.shadow,flexWrap:"wrap"}}>
+      <div style={{minWidth:0,flex:"1 1 220px"}}>
+        <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{second?"Second mortgage / HELOC":"Mortgage"} · {propLabel(p)}</div>
+        <div style={{fontSize:12,color:B.textSoft}}>{[second?null:p.lender,second?null:p.loanType].filter(Boolean).join(" · ")||"Kept on the property"}</div>
+        {facts.length>0&&<div style={{fontSize:11.5,color:B.textSoft,marginTop:4}}>{facts.join(" · ")}</div>}
+      </div>
+      <div style={{textAlign:"right",flexShrink:0}}>
+        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:B.navy,fontWeight:600}}>{fmtMoney(bal)}</div>
+        {onEditProperty&&<button onClick={()=>onEditProperty(p)} style={{background:"none",border:"none",color:B.navyMid,fontSize:12,cursor:"pointer",fontFamily:"inherit",fontWeight:600,padding:0,marginTop:6}}>Edit</button>}
+      </div>
+    </div>;
+  };
+  const sectioned=new Set([...SECTIONS.flatMap(x=>x.kinds),...MORT_KINDS]);
+  const otherLoans=loans.filter(l=>!sectioned.has(l.loanType));
+  const group=(sec,list)=>(list.length>0||onAdd)&&<div key={sec.title} style={{marginBottom:20}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:10}}>
+      <div style={{fontSize:12,fontWeight:800,color:B.textMute,letterSpacing:"0.1em",textTransform:"uppercase"}}>{sec.title}{list.length?` (${list.length})`:""}</div>
+      {onAdd&&<button onClick={()=>onAdd(sec.add)} style={{background:"none",border:`1px solid ${B.border}`,color:B.navy,borderRadius:6,padding:"3px 10px",fontSize:11.5,cursor:"pointer",fontFamily:"inherit"}}>{sec.addLabel}</button>}
+    </div>
+    {list.length?list.map(card):<div style={{fontSize:12.5,color:B.textMute,padding:"4px 0 2px"}}>{sec.empty}</div>}
   </div>;
   return <div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,flexWrap:"wrap",gap:10}}>
@@ -5169,11 +5212,30 @@ function LoansPanel({loans,properties=[],valuables=[],documents=[],locAccounts=[
           {monthly>0&&<> · Payments: about <strong style={{color:B.navy}}>{fmtMoney(Math.round(monthly))}</strong>/mo</>}
         </div>
       </div>
-      {onAdd&&<Btn small onClick={onAdd}>+ Add Loan or Line</Btn>}
+      {onAdd&&<Btn small onClick={()=>onAdd("Personal Loan")}>+ Add another loan</Btn>}
     </div>
-    {loans.length===0?<Empty text="No loans or lines of credit on file yet."/>:<>{group("Loans",terms)}{group("Lines of credit & cards",lines)}</>}
+    {!onAdd&&loans.length===0&&propMorts.length===0?<Empty text="No loans or lines of credit on file yet."/>:<>
+      {(propMorts.length>0||loans.some(l=>MORT_KINDS.includes(l.loanType))||onAdd||onEditProperty)&&<div style={{marginBottom:20}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:10}}>
+          <div style={{fontSize:12,fontWeight:800,color:B.textMute,letterSpacing:"0.1em",textTransform:"uppercase"}}>Mortgages & home equity</div>
+          {(onEditProperty||onAdd)&&<button onClick={()=>setMortPick(v=>!v)} style={{background:"none",border:`1px solid ${B.border}`,color:B.navy,borderRadius:6,padding:"3px 10px",fontSize:11.5,cursor:"pointer",fontFamily:"inherit"}}>+ Add a mortgage</button>}
+        </div>
+        {mortPick&&<div style={{background:B.bg,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"12px 14px",marginBottom:10}}>
+          <div style={{fontSize:12.5,color:B.textSoft,marginBottom:8}}>Which property is it on? Its mortgage is kept on the property, so it's counted once.</div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {onEditProperty&&properties.map(p=><button key={p.id} onClick={()=>{setMortPick(false);onEditProperty(p);}} style={{background:B.white,border:`1px solid ${B.border}`,borderRadius:8,padding:"6px 12px",fontSize:12.5,color:B.navy,cursor:"pointer",fontFamily:"inherit"}}>{propLabel(p)}</button>)}
+            {onAdd&&<button onClick={()=>{setMortPick(false);onAdd("Mortgage");}} style={{background:B.white,border:`1px dashed ${B.border}`,borderRadius:8,padding:"6px 12px",fontSize:12.5,color:B.textSoft,cursor:"pointer",fontFamily:"inherit"}}>A property that isn't listed</button>}
+          </div>
+        </div>}
+        {propMorts.map(p=><Fragment key={p.id}>{((Number(p.loanBalance)||0)>0||String(p.lender||"").trim())&&propCard(p,false)}{(Number(p.secondMortgageBalance)||0)>0&&propCard(p,true)}</Fragment>)}
+        {loans.filter(l=>MORT_KINDS.includes(l.loanType)).map(card)}
+        {propMorts.length===0&&!loans.some(l=>MORT_KINDS.includes(l.loanType))&&<div style={{fontSize:12.5,color:B.textMute,padding:"4px 0 2px"}}>No mortgages on file. A property's mortgage is entered on the property and shows here too.</div>}
+      </div>}
+      {SECTIONS.map(sec=>group(sec,loans.filter(l=>sec.kinds.includes(l.loanType))))}
+      {group({title:"Other loans",add:"Personal Loan",addLabel:"+ Add a loan",empty:"Student, personal, business, private and other loans go here."},otherLoans)}
+    </>}
     <div style={{fontSize:11.5,color:B.textMute,lineHeight:1.6,marginTop:8}}>
-      Mortgages and second mortgages entered on a property are counted with that property, so they aren't listed here.
+      Mortgages and home-equity lines are kept on their property and shown here, counted once.
       {locAccounts.length>0&&<> {locAccounts.length===1?"One “Line of Credit” account":`${locAccounts.length} “Line of Credit” accounts`} in Portfolio ({fmtMoney(locTotal)}) also count toward Total Debt.</>}
       {" "}Everything here counts toward Total Debt.
     </div>
@@ -11768,13 +11830,18 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
       {activeTab==="loans"&&<div>
         <LoansPanel loans={loans} properties={properties} valuables={valuables} documents={(data.documents||[]).filter(d=>d.familyId===family.id)}
           locAccounts={accounts.filter(a=>a.accountType==="Line of Credit")} toast={toast}
-          onAdd={clientSelfServe?()=>setLoanModal({}):null} onEdit={clientSelfServe?l=>setLoanModal({loan:l}):null} onDelete={clientSelfServe?delClientLoan:null}
+          onAdd={clientSelfServe?kind=>setLoanModal({kind}):null} onEdit={clientSelfServe?l=>setLoanModal({loan:l}):null} onDelete={clientSelfServe?delClientLoan:null}
+          onEditProperty={clientSelfServe?p=>setEditingProperty(p):null}
           onAttach={clientSelfServe?l=>{setPropAttachIntent({loanId:l.id,section:"loan_statement"});setActiveTab("documents");}:null}/>
-        {loanModal&&clientSelfServe&&<Modal title={loanModal.loan?"Edit loan or line":"Add a loan or line"} onClose={()=>setLoanModal(null)}>
-          <LoanForm initial={loanModal.loan} properties={properties} valuables={valuables}
+        {loanModal&&clientSelfServe&&<Modal title={loanModal.loan?"Edit loan or line":({"Credit Card":"Add a credit card","Auto Loan":"Add a car loan","Line of Credit":"Add a line of credit"}[loanModal.kind]||"Add a loan")} onClose={()=>setLoanModal(null)}>
+          <LoanForm initial={loanModal.loan} defaultType={loanModal.kind||"Auto Loan"} properties={properties} valuables={valuables}
             statement={loanModal.loan?{familyId:family.id,loanId:loanModal.loan.id,toast,onUploaded:()=>reload("documents"),
               doc:(data.documents||[]).find(d=>d.loanId===loanModal.loan.id&&d.propertySection==="loan_statement")||null}:null}
             onSave={f=>saveClientLoan(loanModal,f)} onClose={()=>setLoanModal(null)}/>
+        </Modal>}
+        {/* A property's mortgage is edited on the property itself; the same form opens from here. */}
+        {editingProperty&&clientSelfServe&&<Modal title="Edit Property" wide onClose={()=>setEditingProperty(null)}>
+          <PropertyForm initial={editingProperty} canExtract={false} onSave={async f=>{const r=await editClientProperty(editingProperty.id,f);if(r!==false)setEditingProperty(null);return r;}} onClose={()=>setEditingProperty(null)}/>
         </Modal>}
       </div>}
 
@@ -13915,7 +13982,7 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
   return <div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:12,flexWrap:"wrap",marginBottom:6}}>
       <div>
-        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:B.navy,fontWeight:600}}>Obligations</div>
+        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:B.navy,fontWeight:600}}>Workflows</div>
         <div style={{fontSize:12,color:B.textSoft,marginTop:2,maxWidth:640,lineHeight:1.5}}>
           Recurring commitments and the playbook that carries each one. Starting a cycle lays out every
           step with its date; outbound steps wait for your approval.
