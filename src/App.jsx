@@ -1600,7 +1600,7 @@ function OnboardingSpecialistPanel({familyRow,userProfile,toast}){
   useEffect(()=>{load();},[load]);
   useEffect(()=>{
     if(!isAdmin)return;
-    sb.from("user_profiles").select("id,full_name,email,role,active").in("role",["advisor","analyst"]).order("full_name")
+    sb.from("user_profiles").select("id,full_name,email,role,active").in("role",["admin","advisor","analyst"]).order("full_name")
       .then(({data})=>setStaff((data||[]).filter(u=>u.active!==false)));
   },[isAdmin]);
   const call=async(key,fn,args,ok)=>{
@@ -1623,7 +1623,7 @@ function OnboardingSpecialistPanel({familyRow,userProfile,toast}){
     {isAdmin&&<>
       {live.length===0&&lapsed.length===0&&<div style={{fontSize:12.5,color:B.textSoft,marginBottom:10}}>No one is helping set up this household. Name an Expert or Analyst to give them 30 days to add vendors, properties and the rest, without making them its Expert.</div>}
       {[...live,...lapsed].map(r=><div key={r.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",padding:"8px 0",borderBottom:`1px solid ${B.borderLight}`}}>
-        <div style={{fontSize:13,color:B.navy,minWidth:0}}><strong>{r.staff_name}</strong> <span style={{color:B.textSoft}}>· {r.staff_role==="analyst"?"Analyst":"Expert"}</span>
+        <div style={{fontSize:13,color:B.navy,minWidth:0}}><strong>{r.staff_name}</strong> <span style={{color:B.textSoft}}>· {r.staff_role==="analyst"?"Analyst":r.staff_role==="admin"?"Admin":"Expert"}</span>
           <div style={{fontSize:11.5,color:r.live?(daysLeft(r.expires_at)<=5?"#8a5c00":B.textMute):"#8b1a1a"}}>
             {r.live?`Until ${day(r.expires_at)} · ${daysLeft(r.expires_at)} day${daysLeft(r.expires_at)===1?"":"s"} left`:`Access ended ${day(r.expires_at)}`}
             {r.extended_count>0?` · extended ${r.extended_count}×`:""}{r.assigned_by_name?` · named by ${r.assigned_by_name}`:""}</div></div>
@@ -1635,7 +1635,7 @@ function OnboardingSpecialistPanel({familyRow,userProfile,toast}){
       <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:12}}>
         <Sel value={pick} onChange={e=>setPick(e.target.value)} style={{flex:"1 1 220px"}}>
           <option value="">Name an Onboarding Specialist…</option>
-          {staff.filter(u=>!liveIds.has(u.id)).map(u=><option key={u.id} value={u.id}>{u.full_name||u.email} ({u.role==="analyst"?"Analyst":"Expert"})</option>)}
+          {staff.filter(u=>!liveIds.has(u.id)).map(u=><option key={u.id} value={u.id}>{u.full_name||u.email} ({u.role==="analyst"?"Analyst":u.role==="admin"?"Admin":"Expert"})</option>)}
         </Sel>
         <Btn small disabled={!pick||!!busy} onClick={()=>call("a","onboarding_specialist_assign",{p_family_id:familyRow.id,p_staff_id:pick},"Onboarding Specialist named for 30 days")}>{busy==="a"?"Saving…":"Give 30 days"}</Btn>
       </div>
