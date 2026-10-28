@@ -24,8 +24,13 @@
 // prompts them to set it once they land back in the app.
 //
 // Actions:
-//   POST { family_id, action: "invite", email, full_name?, redirect_to }
+//   POST { family_id, action: "invite", email, full_name?, phone, email_confirmed: true, redirect_to }
 //   POST { family_id, action: "remove", partner_user_id }
+//   POST { family_id, action: "respond", accept: boolean }   the professional accepts or declines a pending invitation
+//
+// One professional, several households (migration 20261028120000): an email that already has a professional
+// login is linked as 'pending' and gives no access, and bills no seat, until that professional accepts. An email
+// already used for a family or ORDANIS team login is refused (one login is one kind). A phone number is required.
 //
 // Secrets required: STRIPE_SECRET_KEY, RESEND_API_KEY.
 // Deploy: supabase functions deploy manage-business-partner
@@ -161,7 +166,7 @@ async function sendInviteEmail(email: string, fullName: string, familyName: stri
 }
 
 async function countHouseholdSeats(familyId: string) {
-  const { count } = await admin.from("family_partners").select("id", { count: "exact", head: true }).eq("family_id", familyId).eq("source", "household");
+  const { count } = await admin.from("family_partners").select("id", { count: "exact", head: true }).eq("family_id", familyId).eq("source", "household").eq("status", "active");
   return count ?? 0;
 }
 
@@ -171,7 +176,7 @@ async function countHouseholdSeats(familyId: string) {
 // "none") -- a deliberate, conservative default matching how toggle-contacts-import's disable
 // path behaves, not a policy this function is trying to newly decide.
 async function syncSeatBilling(familyId: string, stripeSubscriptionId: string | null, existingItemId: string | null) {
-  const { count } = await admin.from("family_partners").select("id", { count: "exact", head: true }).eq("family_id", familyId).eq("source", "household");
+  const { count } = await admin.from("family_partners").select("id", { count: "exact", head: true }).eq("family_id", familyId).eq("source", "household").eq("status", "active");
   const seatCount = count ?? 0;
 
   if (seatCount === 0) {
@@ -213,12 +218,40 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get("Authorization") ?? "";
   if (!authHeader) return json({ error: "Missing Authorization header" }, 401);
 
-  let body: { family_id?: string; action?: string; email?: string; full_name?: string; redirect_to?: string; partner_user_id?: string };
+  let body: { family_id?: string; action?: string; email?: string; full_name?: string; redirect_to?: string; partner_user_id?: string;
+    phone?: string; email_confirmed?: boolean; accept?: boolean };
   try { body = await req.json(); } catch { return json({ error: "Invalid JSON body" }, 400); }
 
   const { family_id, action } = body;
-  if (!family_id || (action !== "invite" && action !== "remove")) {
-    return json({ error: "family_id and action ('invite'|'remove') are required" }, 400);
+  if (!family_id || !["invite", "remove", "respond"].includes(String(action))) {
+    return json({ error: "family_id and action ('invite'|'remove'|'respond') are required" }, 400);
+  }
+
+  // The professional answering a pending invitation. They can't read the household yet (no access until they
+  // accept), so this runs before the household read below, with the service role, for their own row only.
+  if (action === "respond") {
+    const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: authHeader } } });
+    const { data: { user } } = await userClient.auth.getUser();
+    if (!user) return json({ error: "Not signed in." }, 401);
+    const { data: prof } = await admin.from("user_profiles").select("role").eq("id", user.id).maybeSingle();
+    if (prof?.role !== "partner") return json({ error: "Only a Business Partner can answer this." }, 403);
+    const { data: link } = await admin.from("family_partners").select("id, status").eq("family_id", family_id).eq("user_id", user.id).maybeSingle();
+    if (!link || link.status !== "pending") return json({ error: "There's no invitation waiting from this household." }, 404);
+    if (body.accept !== true) {
+      await admin.from("family_partners").delete().eq("id", link.id);
+      return json({ success: true, accepted: false });
+    }
+    const { data: fam } = await admin.from("families")
+      .select("plan, stripe_subscription_id, business_partner_seats_stripe_item_id").eq("id", family_id).maybeSingle();
+    await admin.from("family_partners").update({ status: "active" }).eq("id", link.id);
+    try {
+      const { data: t } = await admin.from("plan_features").select("self_serve").eq("plan", fam?.plan ?? "").maybeSingle();
+      if (t?.self_serve) await syncSeatBilling(family_id, fam?.stripe_subscription_id ?? null, fam?.business_partner_seats_stripe_item_id ?? null);
+    } catch (e) {
+      // Access is theirs; a billing hiccup is logged for ORDANIS to fix rather than undoing their acceptance.
+      console.error(`seat billing after accept failed for family ${family_id}:`, e instanceof Error ? e.message : e);
+    }
+    return json({ success: true, accepted: true });
   }
 
   // Runs as the caller -- RLS decides whether this user may see this family (client role sees
@@ -255,8 +288,19 @@ Deno.serve(async (req) => {
       const fullName = clean(body.full_name) || email;
       const redirectTo = clean(body.redirect_to) || undefined;
       if (!EMAIL_RE.test(email)) return json({ error: "A valid email is required." }, 400);
+      // Stored in the international form user_profiles requires (+15551234567); US numbers may be typed any way.
+      const digits = clean(body.phone).replace(/\D/g, "");
+      const phone = digits.length === 10 ? `+1${digits}` : digits.length === 11 && digits.startsWith("1") ? `+${digits}`
+        : digits.length >= 8 && digits.length <= 15 && clean(body.phone).startsWith("+") ? `+${digits}` : "";
+      if (!phone) return json({ error: "Enter a valid phone number so the ORDANIS team can reach them." }, 400);
+      if (body.email_confirmed !== true) return json({ error: "Confirm the email address is correct first." }, 400);
 
-      const { data: existingProfile } = await admin.from("user_profiles").select("id, email").ilike("email", email).maybeSingle();
+      const { data: existingProfile } = await admin.from("user_profiles").select("id, email, role").ilike("email", email).maybeSingle();
+      // One login is one kind: an email used for a family or team login can't also be a Business Partner. The
+      // message doesn't say whose it is.
+      if (existingProfile && existingProfile.role !== "partner") {
+        return json({ error: "This email is already used for another kind of ORDANIS login. Ask them for a different email for their professional access." }, 409);
+      }
 
       let userId: string;
       let isNewUser = false;
@@ -278,7 +322,7 @@ Deno.serve(async (req) => {
         isNewUser = true;
 
         const { error: profErr } = await admin.from("user_profiles").upsert({
-          id: userId, email, full_name: fullName, role: "partner", partner_kind: "professional", active: true, can_run_scheduled_prompts: false,
+          id: userId, email, full_name: fullName, phone, role: "partner", partner_kind: "professional", active: true, can_run_scheduled_prompts: false,
         });
         if (profErr) return json({ error: profErr.message }, 500);
       }
@@ -298,8 +342,28 @@ Deno.serve(async (req) => {
         }
       }
 
+      // An existing professional login: ask them first. Nothing is visible to them and no seat is billed until
+      // they accept from their own sign-in.
+      if (!isNewUser) {
+        const { error: pendErr } = await admin.from("family_partners").insert({
+          family_id, user_id: userId, source: "household", email, full_name: fullName, phone, status: "pending",
+        });
+        if (pendErr) return json({ error: pendErr.message }, 500);
+        let pendingEmailSent = true;
+        try {
+          await sendMail(email, `${family.name || "A household"} would like to give you access`,
+            `<div style="font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;line-height:1.6"><p>Hi ${esc(fullName)},</p>` +
+            `<p>${esc(family.name || "A household")} would like to add you as a Business Partner on their portal. Sign in with your existing login and choose <strong>Accept</strong> on your client list to see it, or <strong>Decline</strong> if this isn't for you.</p></div>`,
+            `${family.name || "A household"} would like to add you as a Business Partner. Sign in and choose Accept or Decline on your client list.`);
+        } catch (e) {
+          pendingEmailSent = false;
+          console.error(`partner pending email failed for ${email}:`, e instanceof Error ? e.message : e);
+        }
+        return json({ success: true, pending: true, email_sent: pendingEmailSent });
+      }
+
       const { error: linkInsErr } = await admin.from("family_partners").insert({
-        family_id, user_id: userId, source: "household", email, full_name: fullName,
+        family_id, user_id: userId, source: "household", email, full_name: fullName, phone,
       });
       if (linkInsErr) return json({ error: linkInsErr.message }, 500);
 

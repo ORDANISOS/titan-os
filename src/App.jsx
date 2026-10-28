@@ -11046,13 +11046,14 @@ function MemberQuickForm({onSave,onCancel,saving}){
 // an assigned Expert, and the server-side check in manage-business-partner enforces the same rule
 // independently of whatever this prop is set to.
 function ProfessionalQuickForm({onSave,onCancel,saving,allowPortalGrant,partnerSeatFree}){
-  const mkInit=()=>({name:"",role:"",company:"",email:"",phone:"",grantPortalAccess:false});
+  const mkInit=()=>({name:"",role:"",company:"",email:"",phone:"",grantPortalAccess:false,emailConfirmed:false});
   const[f,setF]=useState(mkInit);
   const set=(k,v)=>setF(m=>({...m,[k]:v}));
   const emailOk=EMAIL_RE.test(f.email.trim());
   const phoneOk=isValidPhone(f.phone);
   const companyOk=f.company.trim().length>0;
-  const valid=f.name.trim().length>0&&companyOk&&phoneOk&&(!f.grantPortalAccess||emailOk);
+  // A portal login also needs a phone number (so the ORDANIS team can reach them) and a confirmed email.
+  const valid=f.name.trim().length>0&&companyOk&&phoneOk&&(!f.grantPortalAccess||(emailOk&&String(f.phone||"").trim()&&f.emailConfirmed));
   return <div>
     <ImportFromContactsButton onPick={c=>setF(m=>({...m,name:c.name||m.name,email:c.email||m.email,phone:c.phone?formatPhoneInput(c.phone):m.phone}))}/>
     <Grid2>
@@ -11071,6 +11072,13 @@ function ProfessionalQuickForm({onSave,onCancel,saving,allowPortalGrant,partnerS
         <strong style={{color:B.navy}}>Also give this Business Partner their own portal login</strong> — a read-only account so they can see this household's dashboard on their own (properties, cash flow, documents, and more). We'll email them a secure link to set it up. {partnerSeatFree?<><strong style={{color:B.navy}}>Free</strong>, included with Premier.</>:<><strong style={{color:B.navy}}>$5.00/month</strong>, billed to this household until removed.</>}
       </span>
     </label>}
+    {allowPortalGrant&&f.grantPortalAccess&&<>
+      {!String(f.phone||"").trim()&&<div style={{fontSize:11.5,color:"#b4551f",margin:"-8px 0 10px"}}>A phone number is required for a portal login, so the ORDANIS team can reach them.</div>}
+      <label style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:12,cursor:"pointer"}}>
+      <input type="checkbox" checked={!!f.emailConfirmed} onChange={e=>set("emailConfirmed",e.target.checked)} style={{marginTop:2}}/>
+      <span style={{fontSize:12.5,color:B.text,lineHeight:1.5}}>I've checked that <strong style={{color:B.navy}}>{f.email.trim()||"the email"}</strong> is correct. Access goes to whoever owns this address.</span>
+    </label>
+    </>}
     {!valid&&<div style={{fontSize:11.5,color:B.textMute,textAlign:"right",marginBottom:8}}>Fill in the fields marked * to continue.</div>}
     <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
       {onCancel&&<Btn variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Btn>}
@@ -11084,11 +11092,12 @@ function ProfessionalQuickForm({onSave,onCancel,saving,allowPortalGrant,partnerS
 // manage-business-partner call), with the same cost wording, but creates no Professional Network
 // row -- the two records are independent. On paid plans the cost must be acknowledged first.
 function BusinessPartnerQuickForm({onSave,onCancel,saving,seatFree}){
-  const mkInit=()=>({name:"",email:"",agree:false});
+  const mkInit=()=>({name:"",email:"",phone:"",agree:false,emailConfirmed:false});
   const[f,setF]=useState(mkInit);
   const set=(k,v)=>setF(m=>({...m,[k]:v}));
   const emailOk=EMAIL_RE.test(f.email.trim());
-  const valid=f.name.trim().length>0&&emailOk&&(seatFree||f.agree);
+  const phoneOk=String(f.phone||"").trim()&&isValidPhone(f.phone);
+  const valid=f.name.trim().length>0&&emailOk&&phoneOk&&f.emailConfirmed&&(seatFree||f.agree);
   return <div>
     <Grid2>
       <Field label="Name" required><Inp value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Jane Reyes"/></Field>
@@ -11097,7 +11106,15 @@ function BusinessPartnerQuickForm({onSave,onCancel,saving,seatFree}){
         {f.email&&!emailOk&&<div style={{fontSize:11,color:"#b4551f",marginTop:4}}>Enter a valid email address.</div>}
       </Field>
     </Grid2>
-    <div style={{fontSize:11.5,color:B.textMute,margin:"-6px 0 12px"}}>The login link is emailed to this address.</div>
+    <Field label="Phone" required>
+      <Inp value={f.phone} onChange={e=>set("phone",formatPhoneInput(e.target.value))} placeholder="(555) 123-4567"/>
+      <div style={{fontSize:11,color:B.textMute,marginTop:4}}>So the ORDANIS team can reach them if needed.</div>
+    </Field>
+    <div style={{fontSize:11.5,color:B.textMute,margin:"-6px 0 12px"}}>The login link is emailed to this address. If they already have an ORDANIS professional login (for example a CPA with several clients), they'll be asked to accept, then they switch between their clients.</div>
+    <label style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:12,cursor:"pointer"}}>
+      <input type="checkbox" checked={!!f.emailConfirmed} onChange={e=>set("emailConfirmed",e.target.checked)} style={{marginTop:2}}/>
+      <span style={{fontSize:12.5,color:B.text,lineHeight:1.5}}>I've checked that <strong style={{color:B.navy}}>{f.email.trim()||"the email"}</strong> is correct. Access goes to whoever owns this address.</span>
+    </label>
     <div style={{background:B.bg,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"12px 14px",marginBottom:12,fontSize:12.5,color:B.text,lineHeight:1.5}}>
       <strong style={{color:B.navy}}>Business Partner portal login</strong> — a read-only account so they can see this household's dashboard on their own (properties, cash flow, documents, and more). We'll email them a secure link to set it up. {seatFree?<><strong style={{color:B.navy}}>Free</strong>, included with Premier.</>:<><strong style={{color:B.navy}}>$5.00/month</strong>, billed to this household until removed.</>}
     </div>
@@ -11137,7 +11154,7 @@ function OnboardingWizard({userProfile=null,onClose,addMember,addProfessional,ad
     try{
       let r;
       if(kind==="member")r=await addMember(f);
-      if(kind==="professional"){r=await addProfessional(f);if(r!==false&&f.grantPortalAccess)await addBusinessPartner(f.email,f.name);}
+      if(kind==="professional"){r=await addProfessional(f);if(r!==false&&f.grantPortalAccess)await addBusinessPartner(f.email,f.name,f.phone);}
       if(kind==="property")r=await addProperty(f);
       if(kind==="account")r=await addAccount(f);
       if(kind==="valuable")r=await addValuable(f);
@@ -11692,11 +11709,13 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     try{const j=await error.context?.json?.();if(j&&j.error)return j.error;}catch(_e){}
     return error.message||fallback;
   };
-  const addBusinessPartner=async(email,fullName)=>{
-    const{data:resp,error}=await sb.functions.invoke("manage-business-partner",{body:{family_id:family.id,action:"invite",email,full_name:fullName,redirect_to:window.location.origin}});
+  const addBusinessPartner=async(email,fullName,phone)=>{
+    const{data:resp,error}=await sb.functions.invoke("manage-business-partner",{body:{family_id:family.id,action:"invite",email,full_name:fullName,phone,email_confirmed:true,redirect_to:window.location.origin}});
     if(error){toast(await fnErrorText(error,"Could not send the invite."),"error");return false;}
     if(resp&&resp.error){toast(resp.error,"error");return false;}
-    if(resp&&resp.email_sent===false){
+    if(resp&&resp.pending){
+      toast("This person already has an ORDANIS professional login. We've asked them to accept; nothing is visible to them until they do.");
+    }else if(resp&&resp.email_sent===false){
       toast(`Access was granted, but the email could not be sent (${resp.email_error||"unknown reason"}). Add the same person again to resend it.`,"error");
     }else{
       toast(resp&&resp.resent?"This person already had access. The invitation was sent again.":"Invite sent");
@@ -12108,7 +12127,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           {myPerm.edit&&<Btn small onClick={()=>setAddProfessionalOpen(true)}>+ Add Contact</Btn>}
         </div>
         {addProfessionalOpen&&<Modal title="Add a professional contact" onClose={()=>setAddProfessionalOpen(false)}>
-          <ProfessionalQuickForm saving={savingQuickAdd} allowPortalGrant={true} partnerSeatFree={clientPlan==="premier"} onCancel={()=>setAddProfessionalOpen(false)} onSave={async f=>{setSavingQuickAdd(true);try{const r=await addProfessional(f);if(r===false)return r;if(f.grantPortalAccess)await addBusinessPartner(f.email,f.name);setAddProfessionalOpen(false);}finally{setSavingQuickAdd(false);}}}/>
+          <ProfessionalQuickForm saving={savingQuickAdd} allowPortalGrant={true} partnerSeatFree={clientPlan==="premier"} onCancel={()=>setAddProfessionalOpen(false)} onSave={async f=>{setSavingQuickAdd(true);try{const r=await addProfessional(f);if(r===false)return r;if(f.grantPortalAccess)await addBusinessPartner(f.email,f.name,f.phone);setAddProfessionalOpen(false);}finally{setSavingQuickAdd(false);}}}/>
         </Modal>}
         {professionals.length===0?<Empty text="No professional contacts on file yet."/>:<div style={{marginBottom:28}}>
           {professionals.map(p=><div key={p.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"14px 18px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:B.shadow,gap:12,flexWrap:"wrap"}}>
@@ -12132,13 +12151,14 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           {myPerm.manage&&<Btn small onClick={()=>setAddPartnerOpen(true)}>+ Add Business Partner</Btn>}
         </div>
         {addPartnerOpen&&<Modal title="Add a Business Partner" onClose={()=>setAddPartnerOpen(false)}>
-          <BusinessPartnerQuickForm saving={savingQuickAdd} seatFree={clientPlan==="premier"} onCancel={()=>setAddPartnerOpen(false)} onSave={async f=>{setSavingQuickAdd(true);try{const ok=await addBusinessPartner(f.email.trim(),f.name.trim());if(ok)setAddPartnerOpen(false);return ok?undefined:false;}finally{setSavingQuickAdd(false);}}}/>
+          <BusinessPartnerQuickForm saving={savingQuickAdd} seatFree={clientPlan==="premier"} onCancel={()=>setAddPartnerOpen(false)} onSave={async f=>{setSavingQuickAdd(true);try{const ok=await addBusinessPartner(f.email.trim(),f.name.trim(),f.phone);if(ok)setAddPartnerOpen(false);return ok?undefined:false;}finally{setSavingQuickAdd(false);}}}/>
         </Modal>}
         {businessPartners.length===0?<Empty text="No portal seats granted yet."/>:<div>
           {businessPartners.map(p=><div key={p.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid ${B.gold}`,borderRadius:10,padding:"14px 18px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:B.shadow,gap:12,flexWrap:"wrap"}}>
             <div>
               <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{p.fullName||p.email}</div>
               <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>{p.email} · invited {fmt(p.invitedAt)} · {clientPlan==="premier"?"Free":"$5.00/mo"}</div>
+              {p.status==="pending"&&<div style={{fontSize:11.5,color:"#8a5c00",fontWeight:600,marginTop:3}}>Waiting for them to accept. Nothing is visible to them until they do, and no seat is billed.</div>}
             </div>
             {myPerm.manage&&<button onClick={()=>removeBusinessPartner(p.userId)} style={{background:"none",border:"none",color:B.textMute,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Revoke access</button>}
           </div>)}
@@ -12617,11 +12637,25 @@ function FirmDashboard({userProfile,logout,toast}){
 }
 
 function PartnerDashboard({data,userProfile,logout,toast,reload}){
+  // Households waiting for this professional to accept (migration 20261028120000). Nothing of theirs is visible
+  // until accepted; the household's name is all that's shown here.
+  const[pending,setPending]=useState(null); // null until loaded, so a single household isn't auto-opened over an invitation
+  const[answering,setAnswering]=useState("");
+  const loadPending=useCallback(()=>{sb.rpc("partner_pending_invitations").then(({data,error})=>{setPending(error?[]:(data||[]));});},[]);
+  useEffect(()=>{loadPending();},[loadPending]);
+  const respond=async(inv,accept)=>{
+    setAnswering(inv.family_id);
+    const{data:resp,error}=await sb.functions.invoke("manage-business-partner",{body:{family_id:inv.family_id,action:"respond",accept}});
+    setAnswering("");
+    if(error||!resp?.success){let msg=resp?.error||error?.message||"That didn't work";try{const b=await error?.context?.json?.();if(b?.error)msg=b.error;}catch(_e){}toast(msg,"error");return;}
+    toast(accept?`You now have access to ${inv.family_name}.`:`Declined. ${inv.family_name} has been told nothing else.`);
+    loadPending();if(accept)reload();
+  };
   const myFamilies=data.families||[];
   const[selectedId,setSelectedId]=useState(null);
   useEffect(()=>{
-    if(selectedId===null&&myFamilies.length===1)setSelectedId(myFamilies[0].id);
-  },[myFamilies.length]);
+    if(selectedId===null&&myFamilies.length===1&&pending&&pending.length===0)setSelectedId(myFamilies[0].id);
+  },[myFamilies.length,pending]);
   const selected=myFamilies.find(f=>f.id===selectedId);
 
   const HeaderBar=({children})=><div style={{padding:"12px 20px",borderBottom:`1px solid ${B.borderLight}`,background:B.white,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
@@ -12655,8 +12689,18 @@ function PartnerDashboard({data,userProfile,logout,toast,reload}){
   return <div style={{minHeight:"100vh",background:B.bg,fontFamily:"'DM Sans','Helvetica Neue',sans-serif"}}>
     <HeaderBar/>
     <div style={{padding:24,maxWidth:960,margin:"0 auto"}}>
+      {pending&&pending.length>0&&<div style={{background:"rgba(206,182,132,0.12)",border:`1px solid ${B.gold}`,borderRadius:12,padding:"14px 18px",marginBottom:20}}>
+        <div style={{fontSize:13,fontWeight:700,color:B.navy,marginBottom:8}}>Waiting for you to accept</div>
+        {pending.map(inv=><div key={inv.family_id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",padding:"8px 0",borderTop:`1px solid ${B.borderLight}`}}>
+          <div style={{fontSize:13.5,color:B.text}}><strong style={{color:B.navy}}>{inv.family_name}</strong> would like to add you as a Business Partner.</div>
+          <div style={{display:"flex",gap:8}}>
+            <Btn small disabled={!!answering} onClick={()=>respond(inv,true)}>{answering===inv.family_id?"Working…":"Accept"}</Btn>
+            <Btn small variant="ghost" disabled={!!answering} onClick={()=>respond(inv,false)}>Decline</Btn>
+          </div>
+        </div>)}
+      </div>}
       <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:B.navy,fontWeight:600,marginBottom:16}}>Select a Family</div>
-      {myFamilies.length===0&&<Empty text={`No families are linked to your account yet. Contact your ${BRAND.short} representative.`}/>}
+      {myFamilies.length===0&&!(pending&&pending.length)&&<Empty text={`No families are linked to your account yet. Contact your ${BRAND.short} representative.`}/>}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(280px,100%),1fr))",gap:16}}>
         {myFamilies.map(f=><div key={f.id} onClick={()=>setSelectedId(f.id)} style={{background:B.white,borderRadius:12,border:`1px solid ${B.borderLight}`,borderTop:`3px solid ${B.gold}`,padding:20,cursor:"pointer",boxShadow:B.shadow,transition:"box-shadow .15s"}}
           onMouseEnter={e=>e.currentTarget.style.boxShadow=B.shadowMd}
