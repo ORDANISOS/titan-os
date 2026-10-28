@@ -15,6 +15,11 @@
 // ORDANIS Expert, ordered by due date. Tasks keep their existing one-email-each
 // behaviour so nothing about the current flow changes.
 //
+// FAMILY REMINDERS ON SELF-DIRECTED PLANS (migration 20261028140000)
+// On Basic and Core (plan_features.self_serve) the household runs its own records, so task reminders also go to the
+// family logins allowed to act on them (the primary and every active family user with "Edit records"), and bills the
+// household tracks itself get a daily digest to the same people. The Expert, when there is one, is still emailed.
+//
 // RECURRENCE
 // cash_flow_events.reminder_sent_for stores the OCCURRENCE a reminder covered, not
 // a boolean. Deciding whether to send is a comparison against the next due date, so
@@ -135,7 +140,19 @@ Deno.serve(async (req) => {
     }), { status: 409, headers: { "Content-Type": "application/json" } });
   }
 
-  const summary = { tasks: { sent: 0, skipped: 0, failed: 0 }, bills: { sent: 0, digests: 0, failed: 0 } };
+  const summary = { tasks: { sent: 0, skipped: 0, failed: 0 }, bills: { sent: 0, digests: 0, failed: 0 },
+    family: { taskEmails: 0, billDigests: 0, failed: 0 } };
+  // Which plans are self-directed, and each household's family recipients (looked up once per household).
+  const { data: planRows } = await sb.from("plan_features").select("plan, self_serve");
+  const selfServe = new Set((planRows || []).filter((p) => p.self_serve).map((p) => p.plan));
+  const recipientCache = new Map<string, { email: string; full_name: string | null }[]>();
+  const familyRecipients = async (familyId: string) => {
+    if (!recipientCache.has(familyId)) {
+      const { data } = await sb.rpc("household_reminder_recipients", { p_family_id: familyId });
+      recipientCache.set(familyId, (data || []) as { email: string; full_name: string | null }[]);
+    }
+    return recipientCache.get(familyId)!;
+  };
 
   try {
     // ── 1. TASK REMINDERS ────────────────────────────────────────────────
@@ -144,7 +161,7 @@ Deno.serve(async (req) => {
 
     const { data: tasks, error: taskErr } = await sb
       .from("tasks")
-      .select(`*, families ( id, name, advisor_name, advisor_email )`)
+      .select(`*, families ( id, name, advisor_name, advisor_email, plan )`)
       .eq("done", false)
       .eq("reminder_sent", false)
       .not("due_date", "is", null)
@@ -154,7 +171,8 @@ Deno.serve(async (req) => {
 
     for (const task of tasks || []) {
       const family = task.families;
-      if (!family?.advisor_email) { summary.tasks.skipped++; continue; }
+      const famPeople = family && selfServe.has(family.plan) ? await familyRecipients(family.id) : [];
+      if (!family?.advisor_email && !famPeople.length) { summary.tasks.skipped++; continue; }
 
       const due = new Date(task.due_date);
       due.setHours(0, 0, 0, 0);
@@ -186,7 +204,29 @@ Deno.serve(async (req) => {
 
       const html = shell(brand, family.name, "Task Reminder", body, overdue);
       const subject = `Reminder: "${task.title}" — ${family.name} (${overdue ? "OVERDUE" : `due in ${daysUntil} days`})`;
-      const r = await sendEmail(family.advisor_email, subject, html, brand, from);
+      let r = { ok: false, detail: "" };
+      if (family.advisor_email) r = await sendEmail(family.advisor_email, subject, html, brand, from);
+
+      // The family's own reminder, worded for them.
+      for (const person of famPeople) {
+        const famBody = `
+        <p style="font-size:14px;color:#5a6e84;margin:0 0 18px;">
+          Hello ${esc(person.full_name || "")},<br><br>
+          A reminder about a task for your household.
+        </p>
+        <div style="background:${tint};border-left:4px solid ${edge};border-radius:8px;padding:16px 20px;margin-bottom:20px;">
+          <div style="font-size:11px;font-weight:700;color:${edge};text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">
+            ${overdue ? "Overdue" : `Due in ${daysUntil} day${daysUntil === 1 ? "" : "s"}`}
+          </div>
+          <div style="font-size:19px;color:#092b49;font-weight:600;">${esc(task.title)}</div>
+          <div style="font-size:13px;color:#5a6e84;margin-top:3px;">${esc(prettyDate(task.due_date))}</div>
+        </div>
+        ${appUrl ? `<a href="${esc(appUrl)}" style="display:inline-block;background:#092b49;color:#fff;padding:11px 26px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;margin-top:6px;">Open your household →</a>` : ""}`;
+        const fr = await sendEmail(person.email, `Reminder: "${task.title}" (${overdue ? "overdue" : `due in ${daysUntil} day${daysUntil === 1 ? "" : "s"}`})`,
+          shell(brand, family.name, "Task Reminder", famBody, overdue), brand, from);
+        if (fr.ok) { summary.family.taskEmails++; r = { ok: true, detail: "" }; }
+        else { summary.family.failed++; console.error("family task reminder failed", task.id, fr.detail); }
+      }
 
       if (r.ok) {
         await sb.from("tasks").update({ reminder_sent: true }).eq("id", task.id);
@@ -272,6 +312,63 @@ Deno.serve(async (req) => {
       } else {
         summary.bills.failed += rows.length;
         console.error("bill digest failed", expertEmail, r.detail);
+      }
+    }
+
+    // ── 3. FAMILY BILL REMINDERS (Basic / Core) ──────────────────────────
+    // Bills the household tracks itself: one digest per household to its family recipients. The SQL decides what is
+    // due (recurrence, payment log, already reminded), exactly as for the Expert digest above.
+    const { data: famBills, error: famBillErr } = await sb.rpc("household_bills_due_for_reminder");
+    if (famBillErr) throw famBillErr;
+    const byFamily = new Map<string, Record<string, unknown>[]>();
+    for (const b of famBills || []) {
+      const k = String(b.family_id);
+      if (!byFamily.has(k)) byFamily.set(k, []);
+      byFamily.get(k)!.push(b);
+    }
+    for (const [familyId, rows] of byFamily) {
+      const people = await familyRecipients(familyId);
+      if (!people.length) continue;
+      const total = rows.reduce((t, r) => t + (Number(r.amount) || 0), 0);
+      const soonest = Math.min(...rows.map((r) => Number(r.days_until) || 0));
+      const lines = rows.map((r) => {
+        const d = Number(r.days_until) || 0;
+        const edge = d <= 1 ? "#d43030" : d <= 3 ? "#d4900a" : "#293d5c";
+        return `<tr>
+          <td style="padding:10px 0;border-bottom:1px solid #ede8de;">
+            <div style="font-size:14px;color:#092b49;font-weight:600;">${esc(r.description || r.event_type)}</div>
+            <div style="font-size:12px;color:#8fa0b2;margin-top:2px;">${r.category ? esc(r.category) + " · " : ""}${esc(r.frequency)}</div>
+          </td>
+          <td style="padding:10px 0;border-bottom:1px solid #ede8de;text-align:right;white-space:nowrap;">
+            <div style="font-size:14px;color:#092b49;font-weight:700;">${money(r.amount)}</div>
+            <div style="font-size:12px;color:${edge};font-weight:600;margin-top:2px;">${d === 0 ? "Due today" : `in ${d} day${d === 1 ? "" : "s"}`} · ${esc(String(r.due_date))}</div>
+          </td>
+        </tr>`;
+      }).join("");
+      let anyOk = false;
+      for (const person of people) {
+        const body = `
+        <p style="font-size:14px;color:#5a6e84;margin:0 0 18px;">
+          Hello ${esc(person.full_name || "")},<br><br>
+          ${rows.length} household bill${rows.length === 1 ? " is" : "s are"} coming due.
+        </p>
+        <div style="background:#e8f0f8;border-left:4px solid #293d5c;border-radius:8px;padding:14px 18px;margin-bottom:18px;">
+          <div style="font-size:11px;font-weight:700;color:#293d5c;text-transform:uppercase;letter-spacing:0.08em;">Total coming due</div>
+          <div style="font-size:22px;color:#092b49;font-weight:700;margin-top:3px;">${money(total)}</div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;">${lines}</table>
+        ${appUrl ? `<a href="${esc(appUrl)}" style="display:inline-block;background:#092b49;color:#fff;padding:11px 26px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;margin-top:22px;">Open Cash Flow →</a>` : ""}
+        <p style="font-size:11px;color:#8fa0b2;margin-top:20px;">Tick "I paid this" in Cash Flow once a bill is paid, so it drops off this list.</p>`;
+        const subject = rows.length === 1
+          ? `Bill due ${soonest === 0 ? "today" : `in ${soonest} day${soonest === 1 ? "" : "s"}`}: ${rows[0].description || rows[0].event_type}`
+          : `${rows.length} bills due — ${money(total)} (soonest ${soonest === 0 ? "today" : `in ${soonest} day${soonest === 1 ? "" : "s"}`})`;
+        const fr = await sendEmail(person.email, subject, shell(brand, String(rows[0].family_name), "Bills Due", body, soonest <= 1), brand, from);
+        if (fr.ok) { anyOk = true; summary.family.billDigests++; }
+        else { summary.family.failed++; console.error("family bill digest failed", familyId, fr.detail); }
+      }
+      // Stamped once someone in the household has the reminder; a failed send is retried tomorrow.
+      if (anyOk) {
+        for (const b of rows) await sb.from("cash_flow_events").update({ reminder_sent_for: b.due_date }).eq("id", b.event_id);
       }
     }
 

@@ -11961,7 +11961,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         {/* Alert banners */}
         {overdue.length>0&&<div style={{background:"#fde8e8",border:"1px solid #f5c6c6",borderRadius:10,padding:"12px 18px",marginBottom:12,display:"flex",alignItems:"center",gap:12}}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d43030" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M10.3 3.8 1.8 18a2 2 0 0 0 1.7 3h16.9a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-          <div><div style={{fontWeight:700,color:"#8b1a1a",fontSize:14}}>Overdue Tasks</div><div style={{fontSize:13,color:"#8b1a1a"}}>{overdue.length} task{overdue.length>1?"s":""} past due — please contact {clientHasExpert?"your ORDANIS Expert":"your lead partner"}.</div></div>
+          <div><div style={{fontWeight:700,color:"#8b1a1a",fontSize:14}}>Overdue Tasks</div><div style={{fontSize:13,color:"#8b1a1a"}}>{overdue.length} task{overdue.length>1?"s":""} past due — {clientHasExpert?"please contact your ORDANIS Expert.":"open Tasks to take care of them."}</div></div>
         </div>}
         {soon.length>0&&<div style={{background:"#fef3e2",border:"1px solid #fcd97d",borderRadius:10,padding:"12px 18px",marginBottom:12,display:"flex",alignItems:"center",gap:12}}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d4900a" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5l3 2"/></svg>
