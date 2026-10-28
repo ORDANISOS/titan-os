@@ -8,8 +8,12 @@
 // POST { action: "list", family_id }                                               the household's client logins + status
 // POST { action: "resend", family_id, user_id, redirect_to? }                      never opened: a fresh invite;
 //                                                                                   opened: a set-a-new-password email
-// Allowed: an ORDANIS admin, or the household's own Expert. Firm-paid households are refused here (firm enroll
-// covers them). An address that already has a login is refused before anything is created. Logged to audit_log.
+// POST { action: "remove", family_id, user_id }                                    turn a secondary family user's
+//                                                                                   access off (and block their sign-in)
+// An invite may carry perms {edit, upload, download, manage} for a secondary family user (migration 20261028100000).
+// Allowed: an ORDANIS admin; the household's own Expert; or a family login of that household that is its primary or
+// has "Manage users and billing" (a family invite never asks for a card). An address that already has a login is
+// refused before anything is created. Logged to audit_log.
 //
 // Secrets: none beyond the platform's SUPABASE_*. Deploy: supabase functions deploy invite-client (verify_jwt ON)
 
@@ -84,20 +88,29 @@ Deno.serve(async (req) => {
     const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: authHeader } } });
     const { data: { user }, error: uErr } = await sb.auth.getUser(token);
     if (uErr || !user) return json({ error: "Not authenticated." }, 401);
-    const { data: me } = await admin.from("user_profiles").select("role, email, active").eq("id", user.id).maybeSingle();
-    if (!me || me.active === false || !["admin", "advisor"].includes(String(me.role))) {
-      return json({ error: "Only an ORDANIS admin or the household's Expert can invite a client." }, 403);
+    const { data: me } = await admin.from("user_profiles")
+      .select("role, email, active, family_id, household_role, perm_manage").eq("id", user.id).maybeSingle();
+    const familyManager = me?.role === "client" && (me.household_role === "primary" || me.perm_manage === true);
+    if (!me || me.active === false || !(["admin", "advisor"].includes(String(me.role)) || familyManager)) {
+      return json({ error: "Only the household's primary user, someone they allow to manage users, its Expert or an ORDANIS admin can do this." }, 403);
     }
 
-    let body: { action?: string; family_id?: string; user_id?: string; full_name?: string; email?: string; pays_by_card?: boolean; redirect_to?: string };
+    let body: { action?: string; family_id?: string; user_id?: string; full_name?: string; email?: string; pays_by_card?: boolean; redirect_to?: string;
+      perms?: { edit?: boolean; upload?: boolean; download?: boolean; manage?: boolean } };
     try { body = await req.json(); } catch { return json({ error: "Invalid JSON body" }, 400); }
     const action = clean(body.action) || "invite";
     const familyId = clean(body.family_id);
     const fullName = clean(body.full_name).slice(0, 120);
     const email = clean(body.email).toLowerCase();
-    const paysByCard = body.pays_by_card === true;
+    // A family user inviting another family user never sets up billing.
+    const paysByCard = body.pays_by_card === true && me.role !== "client";
+    const perms = {
+      perm_edit: body.perms?.edit !== false, perm_upload: body.perms?.upload !== false,
+      perm_download: body.perms?.download !== false, perm_manage: body.perms?.manage === true,
+    };
     if (!familyId) return json({ error: "Choose a household." }, 400);
-    if (!["invite", "list", "resend"].includes(action)) return json({ error: "Unknown action." }, 400);
+    if (!["invite", "list", "resend", "remove"].includes(action)) return json({ error: "Unknown action." }, 400);
+    if (me.role === "client" && me.family_id !== familyId) return json({ error: "Household not found." }, 404);
     if (action === "invite" && fullName.length < 2) return json({ error: "Enter the client's name." }, 400);
     if (action === "invite" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: "Enter a valid email address." }, 400);
 
@@ -111,8 +124,10 @@ Deno.serve(async (req) => {
     if (me.role === "advisor" && String(fam.advisor_email ?? "").toLowerCase() !== String(me.email ?? "").toLowerCase()) {
       return json({ error: "Only the household's own Expert or an admin can invite its client." }, 403);
     }
-    if (action === "list" || action === "resend") {
-      const { data: profs } = await admin.from("user_profiles").select("id, full_name, email, active").eq("family_id", fam.id).eq("role", "client");
+    if (action === "list" || action === "resend" || action === "remove") {
+      const { data: profs } = await admin.from("user_profiles")
+        .select("id, full_name, email, active, household_role, perm_edit, perm_upload, perm_download, perm_manage")
+        .eq("family_id", fam.id).eq("role", "client");
       const statusOf = async (id: string) => {
         const { data } = await admin.auth.admin.getUserById(id);
         const u = data?.user;
@@ -124,6 +139,19 @@ Deno.serve(async (req) => {
       }
       const target = (profs ?? []).find((p) => p.id === clean(body.user_id));
       if (!target || target.active === false) return json({ error: "That login isn't an active client of this household." }, 404);
+      if (action === "remove") {
+        if (target.household_role === "primary") return json({ error: "The primary user's access can't be turned off here. Ask ORDANIS." }, 409);
+        if (target.id === user.id) return json({ error: "Ask the primary user to turn off your access." }, 409);
+        const { error: offErr } = await admin.from("user_profiles").update({ active: false }).eq("id", target.id);
+        if (offErr) return json({ error: `Access could not be turned off: ${offErr.message}` }, 500);
+        await admin.auth.admin.updateUserById(target.id, { ban_duration: "876000h" });
+        await admin.from("audit_log").insert({
+          request_id: crypto.randomUUID(), user_id: user.id, user_email: me.email, user_role: me.role, source: "portal", module: "household-users",
+          command: "turn off access", tool_calls: [{ family_id: fam.id, user_id: target.id }],
+          result_summary: `${target.full_name || target.email}: access turned off for ${fam.name}`, status: "ok",
+        }).then(({ error }) => { if (error) console.error("invite-client audit_log insert failed:", error.message); });
+        return json({ success: true, removed: target.email });
+      }
       const st = await statusOf(target.id);
       const redirectTo = await safeRedirect(body.redirect_to);
       const brand = await brandFor(fam.id);
@@ -161,8 +189,10 @@ Deno.serve(async (req) => {
     const newUserId = inv.user.id;
 
     // 2. Their profile, as a client of this household. If it can't be written, the login is removed again.
+    //    The household's first family login becomes its primary on its own (database trigger); later ones are members
+    //    with the permissions chosen here.
     const { error: profErr } = await admin.from("user_profiles").upsert(
-      { id: newUserId, email, full_name: fullName, role: "client", family_id: fam.id, active: true }, { onConflict: "id" });
+      { id: newUserId, email, full_name: fullName, role: "client", family_id: fam.id, active: true, ...perms }, { onConflict: "id" });
     if (profErr) {
       try { await admin.auth.admin.deleteUser(newUserId); } catch (_e) { /* logged below */ }
       return json({ error: `The client's profile could not be created: ${profErr.message}` }, 500);
@@ -181,7 +211,7 @@ Deno.serve(async (req) => {
 
     await admin.from("audit_log").insert({
       request_id: crypto.randomUUID(), user_id: user.id, user_email: me.email, user_role: me.role, source: "portal", module: "invite-client",
-      command: "invite client", tool_calls: [{ family_id: fam.id, invited_user_id: newUserId, pays_by_card: paysByCard }],
+      command: "invite client", tool_calls: [{ family_id: fam.id, invited_user_id: newUserId, pays_by_card: paysByCard, ...perms }],
       result_summary: `Invited a client to ${fam.name}${paysByCard ? " (pays by card)" : ""}`, status: "ok",
     }).then(({ error }) => { if (error) console.error("invite-client audit_log insert failed:", error.message); });
 

@@ -94,6 +94,11 @@ Deno.serve(async (req) => {
     return json({ error: "Only the household's client, its Expert or an admin can start checkout." }, 403);
   }
 
+  // A family user needs "Manage users and billing" (or to be the household's primary) to touch billing
+  // (migration 20261028100000). household_can is true for staff, who are governed by their own rules.
+  const { data: canManage } = await sb.rpc("household_can", { p_perm: "manage" });
+  if (canManage === false) return json({ error: "Ask your household's primary user to change billing, or to give you access to it." }, 403);
+
   const { data: tier, error: tierErr } = await sb
     .from("plan_features")
     .select("plan, label, monthly_price, stripe_product_id")

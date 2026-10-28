@@ -1429,6 +1429,155 @@ function PrivateGate({familyId,onBack,children}){
 // Invite the client of a household the team set up (invite-client): an email invite to set their own password,
 // instead of an admin choosing one. Optionally the household pays by card; the client is then asked for a card in
 // their portal. Admins and the household's own Expert. Firm-paid households can be invited without card payment.
+// ── HOUSEHOLD LOGINS (family users and what each may do) ──────────────────────────
+// Migration 20261028100000. The household's primary (or anyone they allow to manage users) invites family members by
+// email; each gets their own login and sets their own password. Seeing the household is always on; the four
+// permissions below are chosen per person, each explained beside its checkbox, and the database enforces them.
+// Giving "Manage users and billing" (or all four) asks for a second confirmation listing exactly what is given.
+const HOUSEHOLD_PERMS=[
+  {key:"edit",label:"Edit records",desc:"Add, change and remove the household's records: properties, accounts, loans, bills, valuables, tasks and notes."},
+  {key:"upload",label:"Upload documents",desc:"Add files to CHRIS, the household's document vault."},
+  {key:"download",label:"Download documents",desc:"Open and download files in CHRIS. Without this they see file names only. Their own Private folder is always theirs."},
+  {key:"manage",label:"Manage users and billing",desc:"Invite or remove people, change what each person can do, change the plan, and add or change the payment card. This is the same control you have."},
+];
+const HOUSEHOLD_PRESETS=[
+  {key:"full",label:"Full access",perms:{edit:true,upload:true,download:true,manage:true}},
+  {key:"docs",label:"Documents only",perms:{edit:false,upload:true,download:true,manage:false}},
+  {key:"view",label:"View only",perms:{edit:false,upload:false,download:false,manage:false}},
+];
+const permSummary=u=>{
+  if(u.household_role==="primary")return "Primary · full access";
+  const on=HOUSEHOLD_PERMS.filter(x=>u["perm_"+x.key]!==false).map(x=>x.label.toLowerCase());
+  return on.length?`Can view, ${on.join(", ")}`:"View only";
+};
+function HouseholdPermsPicker({value,onChange}){
+  return <div>
+    <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+      {HOUSEHOLD_PRESETS.map(pr=>{const on=HOUSEHOLD_PERMS.every(x=>!!value[x.key]===!!pr.perms[x.key]);
+        return <button key={pr.key} type="button" onClick={()=>onChange({...pr.perms})} style={{border:`1px solid ${on?B.navy:B.border}`,background:on?B.navy:B.white,color:on?B.white:B.navy,borderRadius:16,padding:"5px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{pr.label}</button>;})}
+    </div>
+    <div style={{fontSize:12,color:B.textSoft,marginBottom:8}}>Seeing the household is always included.</div>
+    {HOUSEHOLD_PERMS.map(x=><label key={x.key} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"9px 0",borderTop:`1px solid ${B.borderLight}`,cursor:"pointer"}}>
+      <input type="checkbox" checked={!!value[x.key]} onChange={e=>onChange({...value,[x.key]:e.target.checked})} style={{marginTop:3,width:16,height:16,accentColor:B.navy,flexShrink:0}}/>
+      <span><span style={{fontSize:13,fontWeight:700,color:B.navy}}>{x.label}</span>
+        <span style={{display:"block",fontSize:12,color:B.textSoft,lineHeight:1.5,marginTop:2}}>{x.desc}</span></span>
+    </label>)}
+  </div>;
+}
+// The second look before giving full authority.
+function FullAuthorityConfirm({name,perms,onConfirm,onCancel,busy}){
+  const given=HOUSEHOLD_PERMS.filter(x=>perms[x.key]);
+  return <Modal title="Confirm full authority" onClose={()=>!busy&&onCancel()}>
+    <div style={{fontSize:13.5,color:B.text,lineHeight:1.6,marginBottom:12}}>You're giving <strong>{name||"this person"}</strong> authority over your household. They will be able to:</div>
+    <ul style={{margin:"0 0 14px",paddingLeft:20,fontSize:13,color:B.text,lineHeight:1.6}}>
+      <li>See everything in the household</li>
+      {given.map(x=><li key={x.key}><strong>{x.label}:</strong> {x.desc}</li>)}
+    </ul>
+    {perms.manage&&<div style={{fontSize:12.5,color:"#8a5c00",background:"#fef3e2",border:"1px solid #f3d29a",borderRadius:8,padding:"9px 12px",marginBottom:14,lineHeight:1.5}}>With Manage users and billing they can also change other people's access, including giving it to someone else. Only give this to someone you trust with the household.</div>}
+    <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+      <Btn variant="ghost" onClick={onCancel} disabled={busy}>Go back</Btn>
+      <Btn onClick={onConfirm} disabled={busy}>{busy?"Saving…":"Yes, give this authority"}</Btn>
+    </div>
+  </Modal>;
+}
+// mode "card": the full list (Household tab); mode "wizard": just the invite form, for the onboarding wizard.
+function HouseholdLogins({familyId,userProfile,toast,mode="card",onInvited=null}){
+  const isPrimary=userProfile?.household_role!=="member";
+  const canManage=isPrimary||userProfile?.perm_manage===true;
+  const[logins,setLogins]=useState(null);
+  const[open,setOpen]=useState(mode==="wizard");
+  const[f,setF]=useState({name:"",email:"",perms:{edit:true,upload:true,download:true,manage:false}});
+  const[editing,setEditing]=useState(null); // {user, perms}
+  const[confirm,setConfirm]=useState(null); // {name, perms, run}
+  const[busy,setBusy]=useState("");
+  const call=async body=>{
+    const{data:resp,error}=await sb.functions.invoke("invite-client",{body:{family_id:familyId,...body}});
+    if(error||!resp?.success){let msg=resp?.error||error?.message||"That didn't work";try{const b=await error?.context?.json?.();if(b?.error)msg=b.error;}catch(_e){}throw new Error(msg);}
+    return resp;
+  };
+  const load=useCallback(async()=>{
+    if(mode==="wizard")return;
+    if(canManage){try{const r=await call({action:"list"});setLogins(r.logins||[]);return;}catch(_e){}}
+    const{data}=await sb.from("user_profiles").select("id,full_name,email,active,household_role,perm_edit,perm_upload,perm_download,perm_manage").eq("family_id",familyId).eq("role","client");
+    setLogins(data||[]);
+  },[familyId,canManage,mode]);
+  useEffect(()=>{load();},[load]);
+  const needsConfirm=perms=>perms.manage||HOUSEHOLD_PERMS.every(x=>perms[x.key]);
+  const sendInvite=async()=>{
+    setBusy("invite");
+    try{const r=await call({full_name:f.name.trim(),email:f.email.trim(),perms:f.perms,redirect_to:window.location.origin});
+      toast(`Invite sent to ${r.invited}. They'll set their own password from the email.`);
+      setF({name:"",email:"",perms:{edit:true,upload:true,download:true,manage:false}});if(mode!=="wizard")setOpen(false);load();if(onInvited)onInvited();
+    }catch(e){toast(e.message,"error");}
+    setBusy("");setConfirm(null);
+  };
+  const saveAccess=async()=>{
+    const{user,perms}=editing;setBusy("save");
+    const{error}=await sb.rpc("household_member_set",{p_user_id:user.id,p_edit:!!perms.edit,p_upload:!!perms.upload,p_download:!!perms.download,p_manage:!!perms.manage});
+    setBusy("");setConfirm(null);
+    if(error){toast(error.message,"error");return;}
+    toast("Access updated");setEditing(null);load();
+  };
+  const resend=async u=>{setBusy("r"+u.id);try{const r=await call({action:"resend",user_id:u.id,redirect_to:window.location.origin});toast(r.sent==="invite"?`Invite resent to ${r.email}`:`Email sent to ${r.email} to set a new password`);}catch(e){toast(e.message,"error");}setBusy("");};
+  const turnOff=async u=>{if(!window.confirm(`Turn off ${u.full_name||u.email}'s access to the household? They won't be able to sign in.`))return;
+    setBusy("x"+u.id);try{await call({action:"remove",user_id:u.id});toast("Access turned off");load();}catch(e){toast(e.message,"error");}setBusy("");};
+  const validInvite=f.name.trim().length>1&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim());
+  const inviteForm=<div>
+    <div style={{fontSize:12.5,color:B.textSoft,lineHeight:1.55,marginBottom:12}}>They get an email to set up their own login and password. Choose what they can do; you can change it any time.</div>
+    <Grid2>
+      <Field label="Name"><Inp value={f.name} onChange={e=>setF({...f,name:e.target.value})} placeholder="Alex Smith"/></Field>
+      <Field label="Email"><Inp type="email" autoComplete="off" value={f.email} onChange={e=>setF({...f,email:e.target.value})} placeholder="alex@example.com"/></Field>
+    </Grid2>
+    <HouseholdPermsPicker value={f.perms} onChange={v=>setF({...f,perms:v})}/>
+    <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:12}}>
+      {mode!=="wizard"&&<Btn variant="ghost" onClick={()=>setOpen(false)} disabled={!!busy}>Cancel</Btn>}
+      <Btn disabled={!!busy||!validInvite} onClick={()=>needsConfirm(f.perms)?setConfirm({name:f.name.trim(),perms:f.perms,run:"invite"}):sendInvite()}>{busy==="invite"?"Sending…":"Send invite"}</Btn>
+    </div>
+  </div>;
+  const confirmModal=confirm&&<FullAuthorityConfirm name={confirm.name} perms={confirm.perms} busy={!!busy}
+    onCancel={()=>setConfirm(null)} onConfirm={confirm.run==="invite"?sendInvite:saveAccess}/>;
+  if(mode==="wizard")return canManage?<div>{inviteForm}{confirmModal}</div>:<div style={{fontSize:13,color:B.textSoft}}>Your household's primary user can give family members their own login from the Household tab.</div>;
+  const day=v=>v?new Date(v).toLocaleDateString("en-US",{month:"short",day:"numeric"}):"";
+  return <div style={{marginBottom:28}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:10}}>
+      <div>
+        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600}}>Household Logins</div>
+        <div style={{fontSize:13,color:B.textSoft,marginTop:2}}>Family members with their own sign-in, and what each can do. Free on every plan.</div>
+      </div>
+      {canManage&&!open&&<Btn small onClick={()=>setOpen(true)}>+ Invite a family member</Btn>}
+    </div>
+    {open&&canManage&&<div style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:12,padding:"16px 18px",marginBottom:12}}>{inviteForm}</div>}
+    {logins===null?<div style={{fontSize:12.5,color:B.textMute}}>Loading…</div>:logins.filter(u=>u.active!==false).map(u=>{
+      const status=u.last_sign_in_at?`Last signed in ${day(u.last_sign_in_at)}`:u.opened_at?"Opened the invite":u.invited_at?`Invited ${day(u.invited_at)}, not opened yet`:"";
+      const ed=editing&&editing.user.id===u.id;
+      const isMe=u.id===userProfile?.id;
+      return <div key={u.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"14px 18px",marginBottom:8}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
+          <div style={{minWidth:0}}>
+            <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{u.full_name||u.email}{isMe&&<span style={{fontWeight:400,color:B.textSoft}}> (you)</span>}</div>
+            <div style={{fontSize:12,color:B.textSoft}}>{u.email}</div>
+            <div style={{fontSize:12,color:B.navyMid,marginTop:3}}>{permSummary(u)}</div>
+            {status&&<div style={{fontSize:11.5,color:u.last_sign_in_at||u.opened_at?B.textMute:"#8a5c00",marginTop:2}}>{status}</div>}
+          </div>
+          {canManage&&u.household_role!=="primary"&&!isMe&&!ed&&<div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+            <button onClick={()=>setEditing({user:u,perms:{edit:u.perm_edit!==false,upload:u.perm_upload!==false,download:u.perm_download!==false,manage:u.perm_manage===true}})} style={{background:"none",border:"none",color:B.navyMid,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0}}>Change access</button>
+            <button onClick={()=>resend(u)} disabled={busy==="r"+u.id} style={{background:"none",border:"none",color:B.navyMid,fontSize:12,cursor:"pointer",fontFamily:"inherit",padding:0}}>{busy==="r"+u.id?"Sending…":(u.opened_at||u.last_sign_in_at)?"Send password reset":"Resend invite"}</button>
+            <button onClick={()=>turnOff(u)} disabled={busy==="x"+u.id} style={{background:"none",border:"none",color:"#8b1a1a",fontSize:12,cursor:"pointer",fontFamily:"inherit",padding:0}}>Turn off access</button>
+          </div>}
+        </div>
+        {ed&&<div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${B.borderLight}`}}>
+          <HouseholdPermsPicker value={editing.perms} onChange={v=>setEditing({...editing,perms:v})}/>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}>
+            <Btn variant="ghost" onClick={()=>setEditing(null)} disabled={!!busy}>Cancel</Btn>
+            <Btn disabled={!!busy} onClick={()=>needsConfirm(editing.perms)?setConfirm({name:u.full_name||u.email,perms:editing.perms,run:"save"}):saveAccess()}>{busy==="save"?"Saving…":"Save access"}</Btn>
+          </div>
+        </div>}
+      </div>;
+    })}
+    {confirmModal}
+  </div>;
+}
+
 // Onboarding Specialist (migration 20261022140000): an admin names an Expert or Analyst who may open and edit this
 // household for 30 days to help set it up. Day 30: the admin who named them and the specialist are emailed
 // (onboarding-notices); an admin can extend 30 days or end it here. A specialist sees only their own line.
@@ -10973,8 +11122,8 @@ function BusinessPartnerQuickForm({onSave,onCancel,saving,seatFree}){
 // the form; only the chrome around it (a wizard step vs. a popup modal) differs.
 // The "documents" step is the CHRIS snap-or-add-several filer, so a new household can
 // photograph its paperwork straight into the right folders while it is setting up.
-const WIZARD_STEPS=["welcome","member","professional","property","account","valuable","documents","done"];
-function OnboardingWizard({onClose,addMember,addProfessional,addBusinessPartner,addProperty,addAccount,addValuable,members,professionals,properties,accounts,valuables,familyId,toast,reload}){
+const WIZARD_STEPS=["welcome","member","logins","professional","property","account","valuable","documents","done"];
+function OnboardingWizard({userProfile=null,onClose,addMember,addProfessional,addBusinessPartner,addProperty,addAccount,addValuable,members,professionals,properties,accounts,valuables,familyId,toast,reload}){
   const[stepIdx,setStepIdx]=useState(0);
   const mobile=useIsMobile(640);
   const[docsFiled,setDocsFiled]=useState(0);
@@ -11042,6 +11191,18 @@ function OnboardingWizard({onClose,addMember,addProfessional,addBusinessPartner,
     <>
       <button onClick={back} style={{background:"none",border:"none",color:B.textSoft,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>← Back</button>
       <Btn variant="ghost" onClick={next}>{members.length?"Next":"Skip"}</Btn>
+    </>
+  );
+
+  // Give a spouse or another family member their own sign-in, with the permissions chosen here
+  // (HouseholdLogins; migration 20261028100000).
+  if(step==="logins")return shell(
+    "Give a family member their own login",
+    "A spouse or partner can have their own sign-in to the household. They get an email to set up their own password, and you choose what they can do. Free on every plan, and you can change it later on the Household tab.",
+    <HouseholdLogins familyId={familyId} userProfile={userProfile} toast={toast} mode="wizard"/>,
+    <>
+      <button onClick={back} style={{background:"none",border:"none",color:B.textSoft,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>← Back</button>
+      <Btn variant="ghost" onClick={next}>Next</Btn>
     </>
   );
 
@@ -11165,6 +11326,13 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   // onboarding wizard exist. Premier already has someone doing this for the household, so neither
   // is shown there.
   const clientSelfServe=!clientHasExpert;
+  // What this family login may do (migration 20261028100000): the primary has everything; a secondary family user has
+  // what the primary ticked. The database enforces it; these just hide the buttons they can't use.
+  const myPerm=(()=>{const prim=userProfile?.household_role!=="member";
+    return{edit:prim||userProfile?.perm_edit!==false,upload:prim||userProfile?.perm_upload!==false,
+           download:prim||userProfile?.perm_download!==false,manage:prim||userProfile?.perm_manage===true};})();
+  const selfEdit=clientSelfServe&&myPerm.edit;
+  const selfUpload=clientSelfServe&&myPerm.upload;
 
   // ── Billing (upgrade / downgrade) ──────────────────────────────────────
   // Only Basic <-> Core is ever self-serve here (plan_features.self_serve / plans.js
@@ -11559,7 +11727,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const[wizardOpen,setWizardOpen]=useState(false);
   const wizardSeenKey=`ordanis_onboarding_wizard_seen_${family.id}`;
   useEffect(()=>{
-    if(!clientSelfServe)return;
+    if(!selfEdit)return;
     // The "name your assistant" prompt goes first on a first/second login; the wizard opens once
     // that has been answered or dismissed, so the two never stack on top of each other.
     if(promptPending||showNamePrompt)return;
@@ -11567,7 +11735,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     let seen=!!fam.onboarding_wizard_seen_at;
     try{seen=seen||localStorage.getItem(wizardSeenKey)==="1";}catch{}
     if(!seen)setWizardOpen(true);
-  },[family.id,clientSelfServe,promptPending,showNamePrompt]);
+  },[family.id,selfEdit,promptPending,showNamePrompt]);
   const closeWizard=()=>{
     try{localStorage.setItem(wizardSeenKey,"1");}catch{}
     setWizardOpen(false);
@@ -11632,7 +11800,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     {showAssistantGreeting&&!showNamePrompt&&<AssistantWelcome family={family} data={data} reload={reload} userProfile={userProfile} onClose={()=>setShowAssistantGreeting(false)} toast={toast} onWatchVideo={hasPlanVideo?()=>setPlanVideoWatching(true):undefined}/>}
     {planVideoWatching&&<PlanVideoModal plan={planVideoPlan} mode="watch" onPlayed={onPlanVideoPlayed} onClose={()=>setPlanVideoWatching(false)}/>}
     {emailAdvisorOpen&&<EmailAdvisorModal family={family} userProfile={userProfile} data={data} onClose={()=>setEmailAdvisorOpen(false)}/>}
-    {wizardOpen&&<OnboardingWizard onClose={closeWizard} addMember={addMember} addProfessional={addProfessional} addBusinessPartner={addBusinessPartner} addProperty={addProperty} addAccount={addAccount} addValuable={addValuable} members={members} professionals={professionals} properties={properties} accounts={accounts} valuables={valuables} familyId={family.id} toast={toast} reload={reload}/>}
+    {wizardOpen&&<OnboardingWizard userProfile={userProfile} onClose={closeWizard} addMember={addMember} addProfessional={addProfessional} addBusinessPartner={addBusinessPartner} addProperty={addProperty} addAccount={addAccount} addValuable={addValuable} members={members} professionals={professionals} properties={properties} accounts={accounts} valuables={valuables} familyId={family.id} toast={toast} reload={reload}/>}
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 
     {/* Header (white banner with logo, family name, sign out) */}
@@ -11726,7 +11894,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     <div ref={tabPanelRef} style={{maxWidth:1100,margin:"0 auto",padding:isMobile?"16px 14px":"28px 24px"}}>
 
       {/* Invited by the team to pay by card (invite-client): ask for a card until Stripe has a subscription. */}
-      {fam.billing_setup_required&&!fam.stripe_subscription_id&&<div style={{background:"rgba(206,182,132,0.14)",border:`1px solid ${B.gold}`,borderRadius:12,padding:"14px 18px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+      {fam.billing_setup_required&&!fam.stripe_subscription_id&&myPerm.manage&&<div style={{background:"rgba(206,182,132,0.14)",border:`1px solid ${B.gold}`,borderRadius:12,padding:"14px 18px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center",gap:14,flexWrap:"wrap"}}>
         <div style={{fontSize:13.5,color:B.text,lineHeight:1.55,flex:"1 1 280px"}}>
           <strong style={{color:B.navy}}>Add a card to start your {planLabel(clientPlan)} plan</strong>
           {(()=>{const p=billingPlans.find(x=>x.plan===clientPlan);return p?<> ({fmtMoney(p.monthly_price)}/month)</>:null;})()}.
@@ -11743,7 +11911,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:12,flexWrap:"wrap",marginBottom:24}}>
           <div style={{color:B.textSoft,fontSize:14}}>Here is your financial overview as of {new Date().toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}</div>
           {/* Reopens the onboarding wizard on demand (self-directed households, who set up their own records). */}
-          {clientSelfServe&&<button onClick={()=>setWizardOpen(true)} style={{background:"none",border:"none",padding:0,color:B.navyMid,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline",textUnderlineOffset:3}}>Setup guide</button>}
+          {selfEdit&&<button onClick={()=>setWizardOpen(true)} style={{background:"none",border:"none",padding:0,color:B.navyMid,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline",textUnderlineOffset:3}}>Setup guide</button>}
         </div>
         <HouseholdTeamCard familyId={family.id}/>
 
@@ -11794,7 +11962,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
       {activeTab==="portfolio"&&<div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600}}>Investment Portfolio</div>
-          {clientSelfServe&&<Btn small onClick={()=>setAddAccountOpen(true)}>+ Add Account</Btn>}
+          {selfEdit&&<Btn small onClick={()=>setAddAccountOpen(true)}>+ Add Account</Btn>}
         </div>
         {addAccountOpen&&<Modal title="Add a portfolio account" onClose={()=>setAddAccountOpen(false)}>
           <AccountQuickForm saving={savingQuickAdd} onCancel={()=>setAddAccountOpen(false)} onSave={runQuickAdd(addAccount,()=>setAddAccountOpen(false))}/>
@@ -11830,17 +11998,17 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
       {activeTab==="loans"&&<div>
         <LoansPanel loans={loans} properties={properties} valuables={valuables} documents={(data.documents||[]).filter(d=>d.familyId===family.id)}
           locAccounts={accounts.filter(a=>a.accountType==="Line of Credit")} toast={toast}
-          onAdd={clientSelfServe?kind=>setLoanModal({kind}):null} onEdit={clientSelfServe?l=>setLoanModal({loan:l}):null} onDelete={clientSelfServe?delClientLoan:null}
-          onEditProperty={clientSelfServe?p=>setEditingProperty(p):null}
-          onAttach={clientSelfServe?l=>{setPropAttachIntent({loanId:l.id,section:"loan_statement"});setActiveTab("documents");}:null}/>
-        {loanModal&&clientSelfServe&&<Modal title={loanModal.loan?"Edit loan or line":({"Credit Card":"Add a credit card","Auto Loan":"Add a car loan","Line of Credit":"Add a line of credit"}[loanModal.kind]||"Add a loan")} onClose={()=>setLoanModal(null)}>
+          onAdd={selfEdit?kind=>setLoanModal({kind}):null} onEdit={selfEdit?l=>setLoanModal({loan:l}):null} onDelete={selfEdit?delClientLoan:null}
+          onEditProperty={selfEdit?p=>setEditingProperty(p):null}
+          onAttach={selfUpload?l=>{setPropAttachIntent({loanId:l.id,section:"loan_statement"});setActiveTab("documents");}:null}/>
+        {loanModal&&selfEdit&&<Modal title={loanModal.loan?"Edit loan or line":({"Credit Card":"Add a credit card","Auto Loan":"Add a car loan","Line of Credit":"Add a line of credit"}[loanModal.kind]||"Add a loan")} onClose={()=>setLoanModal(null)}>
           <LoanForm initial={loanModal.loan} defaultType={loanModal.kind||"Auto Loan"} properties={properties} valuables={valuables}
             statement={loanModal.loan?{familyId:family.id,loanId:loanModal.loan.id,toast,onUploaded:()=>reload("documents"),
               doc:(data.documents||[]).find(d=>d.loanId===loanModal.loan.id&&d.propertySection==="loan_statement")||null}:null}
             onSave={f=>saveClientLoan(loanModal,f)} onClose={()=>setLoanModal(null)}/>
         </Modal>}
         {/* A property's mortgage is edited on the property itself; the same form opens from here. */}
-        {editingProperty&&clientSelfServe&&<Modal title="Edit Property" wide onClose={()=>setEditingProperty(null)}>
+        {editingProperty&&selfEdit&&<Modal title="Edit Property" wide onClose={()=>setEditingProperty(null)}>
           <PropertyForm initial={editingProperty} canExtract={false} onSave={async f=>{const r=await editClientProperty(editingProperty.id,f);if(r!==false)setEditingProperty(null);return r;}} onClose={()=>setEditingProperty(null)}/>
         </Modal>}
       </div>}
@@ -11849,16 +12017,16 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
       {activeTab==="properties"&&<div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600}}>Property Holdings</div>
-          {clientSelfServe&&<Btn small onClick={()=>setAddPropertyOpen(true)}>+ Add Property</Btn>}
+          {selfEdit&&<Btn small onClick={()=>setAddPropertyOpen(true)}>+ Add Property</Btn>}
         </div>
         {addPropertyOpen&&<Modal title="Add a property" onClose={()=>setAddPropertyOpen(false)}>
           <PropertyQuickForm saving={savingQuickAdd} onCancel={()=>setAddPropertyOpen(false)} onSave={runQuickAdd(addProperty,()=>setAddPropertyOpen(false))}/>
         </Modal>}
-        {vendorModal&&clientSelfServe&&<Modal title={vendorModal.contact?"Edit vendor":"Add a vendor"} onClose={()=>setVendorModal(null)}>
+        {vendorModal&&selfEdit&&<Modal title={vendorModal.contact?"Edit vendor":"Add a vendor"} onClose={()=>setVendorModal(null)}>
           <PropertyContactForm initial={vendorModal.contact?{name:vendorModal.contact.name||"",role:vendorModal.contact.role||"",company:vendorModal.contact.company||"",email:vendorModal.contact.email||"",phone:vendorModal.contact.phone||"",notes:vendorModal.contact.notes||""}:null}
             onSave={async f=>{const r=await saveVendor(vendorModal,f);if(r!==false)setVendorModal(null);return r;}} onClose={()=>setVendorModal(null)}/>
         </Modal>}
-        {editingProperty&&clientSelfServe&&<Modal title="Edit Property" wide onClose={()=>setEditingProperty(null)}>
+        {editingProperty&&selfEdit&&<Modal title="Edit Property" wide onClose={()=>setEditingProperty(null)}>
           <PropertyForm initial={editingProperty} canExtract={false} onSave={async f=>{const r=await editClientProperty(editingProperty.id,f);if(r!==false)setEditingProperty(null);return r;}} onClose={()=>setEditingProperty(null)}/>
         </Modal>}
         {properties.length===0?<Empty text="No properties on file yet."/>:(()=>{
@@ -11875,24 +12043,24 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
             <Btn small variant="ghost" onClick={()=>window.open(`https://www.zillow.com/homes/${encodeURIComponent(p.address||"")}_rb/`,"_blank","noopener,noreferrer")}>🔗 Zillow</Btn>
             <Btn small variant="ghost" onClick={()=>window.open(`https://www.google.com/search?q=${encodeURIComponent(`"${p.address||""}" property tax records`)}`,"_blank","noopener,noreferrer")}>🏛 Tax Records</Btn>
-            {clientSelfServe&&<Btn small variant="ghost" onClick={()=>setEditingProperty(p)}>Edit</Btn>}
-            {clientSelfServe&&<Btn small variant="danger" onClick={()=>delClientProperty(p)}>Remove</Btn>}
+            {selfEdit&&<Btn small variant="ghost" onClick={()=>setEditingProperty(p)}>Edit</Btn>}
+            {selfEdit&&<Btn small variant="danger" onClick={()=>delClientProperty(p)}>Remove</Btn>}
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(140px,100%),1fr))",gap:10}}>
             {[["Property Type",p.propertyType],["Purchase Price",fmtMoney(p.purchasePrice)],["Purchase Date",fmt(p.purchaseDate)],["Lender",p.lender||"—","mortgage"],["Loan Balance",fmtMoney(p.loanBalance),"mortgage"],["Interest Rate",fmtPct(p.interestRate)],["Monthly Payment",fmtMoney(p.loanPayment)],...(Number(p.secondMortgageBalance)>0?[["2nd Mtg Balance",fmtMoney(p.secondMortgageBalance)],["2nd Mtg Payment",p.secondMortgagePayment?`${fmtMoney(p.secondMortgagePayment)}/mo`:"—"]]:[]),["Loan Maturity",fmt(p.loanMaturityDate)],["Rental Income",p.rentalIncome?`${fmtMoney(p.rentalIncome)}/mo`:"—","rental"],["Property Taxes",p.propertyTaxes?`${fmtMoney(p.propertyTaxes)}/yr`:"—","tax"],["Insurance",p.insuranceCompany||"—","insurance_dec"],["Insurance Expires",p.insuranceExpiration?fmt(p.insuranceExpiration):"—"],["Flood Insurance",p.floodInsurance?"Yes":"No","flood_dec"]].map(([l,v,sec])=><div key={l} style={{background:B.bg,borderRadius:8,padding:"10px 12px"}}>
-              <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:3}}>{l}{sec&&(docForSection(p.id,sec)?<DocLink doc={docForSection(p.id,sec)} toast={toast}/>:(clientSelfServe?<AttachLink section={sec} onClick={()=>startPropertyAttach(p.id,sec)}/>:null))}</div>
+              <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:3}}>{l}{sec&&(docForSection(p.id,sec)?<DocLink doc={docForSection(p.id,sec)} toast={toast}/>:(selfUpload?<AttachLink section={sec} onClick={()=>startPropertyAttach(p.id,sec)}/>:null))}</div>
               <div style={{fontSize:13,color:B.text,fontWeight:600}}>{v}</div>
             </div>)}
           </div>
           {(()=>{const vendors=(data.property_contacts||[]).filter(pc=>pc.propertyId===p.id);return <div style={{marginTop:16,paddingTop:12,borderTop:`1px solid ${B.borderLight}`}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8}}>
               <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase"}}>Vendors & Service Providers</div>
-              {clientSelfServe&&<Btn small variant="ghost" onClick={()=>setVendorModal({propertyId:p.id})}>+ Add vendor</Btn>}
+              {selfEdit&&<Btn small variant="ghost" onClick={()=>setVendorModal({propertyId:p.id})}>+ Add vendor</Btn>}
             </div>
             {vendors.length===0
-              ? <div style={{fontSize:12,color:B.textMute}}>None on file yet.{clientSelfServe?" Add the plumber, landscaper, property manager or anyone else who looks after it.":""}</div>
-              : <div style={{display:"flex",flexDirection:"column",gap:6}}>{vendors.map(c=><div key={c.id} style={{background:B.bg,borderRadius:6,padding:"6px 10px",position:"relative",paddingRight:clientSelfServe?110:10}}>
-                  {clientSelfServe&&<div style={{position:"absolute",top:6,right:8,display:"flex",gap:10}}>
+              ? <div style={{fontSize:12,color:B.textMute}}>None on file yet.{selfEdit?" Add the plumber, landscaper, property manager or anyone else who looks after it.":""}</div>
+              : <div style={{display:"flex",flexDirection:"column",gap:6}}>{vendors.map(c=><div key={c.id} style={{background:B.bg,borderRadius:6,padding:"6px 10px",position:"relative",paddingRight:selfEdit?110:10}}>
+                  {selfEdit&&<div style={{position:"absolute",top:6,right:8,display:"flex",gap:10}}>
                     <button onClick={()=>setVendorModal({propertyId:p.id,contact:c})} style={{background:"none",border:"none",color:B.navyMid,fontSize:12,cursor:"pointer",fontFamily:"inherit",fontWeight:600,padding:0}}>Edit</button>
                     <button onClick={()=>delVendor(c)} style={{background:"none",border:"none",color:B.textMute,fontSize:12,cursor:"pointer",fontFamily:"inherit",padding:0}}>Remove</button>
                   </div>}
@@ -11917,9 +12085,10 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           from scratch if it skipped the wizard. Premier doesn't get this tab: an assigned Expert
           already maintains this for that household on the staff side. */}
       {activeTab==="household"&&(clientSelfServe||clientPlan==="premier")&&<div>
+        <HouseholdLogins familyId={family.id} userProfile={userProfile} toast={toast}/>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600}}>Household Members</div>
-          <Btn small onClick={()=>setAddMemberOpen(true)}>+ Add Member</Btn>
+          {myPerm.edit&&<Btn small onClick={()=>setAddMemberOpen(true)}>+ Add Member</Btn>}
         </div>
         {addMemberOpen&&<Modal title="Add a household member" onClose={()=>setAddMemberOpen(false)}>
           <MemberQuickForm saving={savingQuickAdd} onCancel={()=>setAddMemberOpen(false)} onSave={runQuickAdd(addMember,()=>setAddMemberOpen(false))}/>
@@ -11930,13 +12099,13 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
               <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{m.name}{m.relationship&&<span style={{fontWeight:400,color:B.textSoft,marginLeft:8}}>· {m.relationship}</span>}</div>
               <div style={{fontSize:12,color:B.textSoft,display:"flex",gap:10,flexWrap:"wrap",marginTop:2}}>{m.phone&&<span>📞 <PhoneLink value={m.phone}/></span>}{m.email&&<span>✉ <EmailLink value={m.email}/></span>}</div>
             </div>
-            <button onClick={()=>delMember(m.id)} style={{background:"none",border:"none",color:B.textMute,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Remove</button>
+            {myPerm.edit&&<button onClick={()=>delMember(m.id)} style={{background:"none",border:"none",color:B.textMute,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Remove</button>}
           </div>)}
         </div>}
 
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600}}>Professional Network</div>
-          <Btn small onClick={()=>setAddProfessionalOpen(true)}>+ Add Contact</Btn>
+          {myPerm.edit&&<Btn small onClick={()=>setAddProfessionalOpen(true)}>+ Add Contact</Btn>}
         </div>
         {addProfessionalOpen&&<Modal title="Add a professional contact" onClose={()=>setAddProfessionalOpen(false)}>
           <ProfessionalQuickForm saving={savingQuickAdd} allowPortalGrant={true} partnerSeatFree={clientPlan==="premier"} onCancel={()=>setAddProfessionalOpen(false)} onSave={async f=>{setSavingQuickAdd(true);try{const r=await addProfessional(f);if(r===false)return r;if(f.grantPortalAccess)await addBusinessPartner(f.email,f.name);setAddProfessionalOpen(false);}finally{setSavingQuickAdd(false);}}}/>
@@ -11947,7 +12116,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
               <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{p.name}{p.role&&<span style={{fontWeight:400,color:B.textSoft,marginLeft:8}}>· {p.role}</span>}</div>
               <div style={{fontSize:12,color:B.textSoft,display:"flex",gap:10,flexWrap:"wrap",marginTop:2}}>{p.company&&<span>{p.company}</span>}{p.phone&&<span>📞 <PhoneLink value={p.phone}/></span>}{p.email&&<span>✉ <EmailLink value={p.email}/></span>}</div>
             </div>
-            <button onClick={()=>delProfessional(p.id)} style={{background:"none",border:"none",color:B.textMute,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Remove</button>
+            {myPerm.edit&&<button onClick={()=>delProfessional(p.id)} style={{background:"none",border:"none",color:B.textMute,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Remove</button>}
           </div>)}
         </div>}
 
@@ -11960,7 +12129,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600}}>Business Partner Portal Access</div>
             <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>Read-only logins to this household's portal{clientPlan==="premier"?" — included free with Premier.":" — $5.00/month each."} Add one with the button at right, or from the Professional Network form above.</div>
           </div>
-          <Btn small onClick={()=>setAddPartnerOpen(true)}>+ Add Business Partner</Btn>
+          {myPerm.manage&&<Btn small onClick={()=>setAddPartnerOpen(true)}>+ Add Business Partner</Btn>}
         </div>
         {addPartnerOpen&&<Modal title="Add a Business Partner" onClose={()=>setAddPartnerOpen(false)}>
           <BusinessPartnerQuickForm saving={savingQuickAdd} seatFree={clientPlan==="premier"} onCancel={()=>setAddPartnerOpen(false)} onSave={async f=>{setSavingQuickAdd(true);try{const ok=await addBusinessPartner(f.email.trim(),f.name.trim());if(ok)setAddPartnerOpen(false);return ok?undefined:false;}finally{setSavingQuickAdd(false);}}}/>
@@ -11971,7 +12140,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
               <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{p.fullName||p.email}</div>
               <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>{p.email} · invited {fmt(p.invitedAt)} · {clientPlan==="premier"?"Free":"$5.00/mo"}</div>
             </div>
-            <button onClick={()=>removeBusinessPartner(p.userId)} style={{background:"none",border:"none",color:B.textMute,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Revoke access</button>
+            {myPerm.manage&&<button onClick={()=>removeBusinessPartner(p.userId)} style={{background:"none",border:"none",color:B.textMute,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Revoke access</button>}
           </div>)}
         </div>}
       </div>}
@@ -11982,7 +12151,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:8}}>Cash Flow Projection</div>
         <div style={{fontSize:14,color:B.textSoft,marginBottom:20}}>{clientSelfServe?"Add and manage your own income and expense events below.":`Projection of expected cash flow events configured by your ORDANIS Expert.`}</div>
         {/* fam, not the `family` prop, so the bill-pay gate reads the current plan. */}
-        <CashFlowView family={fam} events={(data.cash_flow_events||[]).filter(e=>e.familyId===family.id)} paymentLog={(data.cash_flow_payment_log||[]).filter(p=>p.familyId===family.id)} properties={properties} vendors={vendorOptions} reload={reload} toast={toast||(()=>{})} readOnly={!clientSelfServe}/>
+        <CashFlowView family={fam} events={(data.cash_flow_events||[]).filter(e=>e.familyId===family.id)} paymentLog={(data.cash_flow_payment_log||[]).filter(p=>p.familyId===family.id)} properties={properties} vendors={vendorOptions} reload={reload} toast={toast||(()=>{})} readOnly={!selfEdit}/>
       </div>}
 
       {/* WORKFLOWS -- self-directed on Core: the household runs its own obligations/playbooks
@@ -11999,12 +12168,12 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600}}>Personal Property & Valuables</div>
             <div style={{fontSize:14,color:B.textSoft,marginTop:4}}>Total estimated value: <strong style={{color:B.navy}}>{fmtMoney(totalValuables)}</strong></div>
           </div>
-          {clientSelfServe&&<Btn small onClick={()=>setAddValuableOpen(true)}>+ Add Valuable</Btn>}
+          {selfEdit&&<Btn small onClick={()=>setAddValuableOpen(true)}>+ Add Valuable</Btn>}
         </div>
         {addValuableOpen&&<Modal title="Add a valuable" onClose={()=>setAddValuableOpen(false)}>
           <ValuableQuickForm saving={savingQuickAdd} onCancel={()=>setAddValuableOpen(false)} onSave={runQuickAdd(addValuable,()=>setAddValuableOpen(false))}/>
         </Modal>}
-        {editingValuable&&clientSelfServe&&<Modal title="Edit valuable" onClose={()=>setEditingValuable(null)}>
+        {editingValuable&&selfEdit&&<Modal title="Edit valuable" onClose={()=>setEditingValuable(null)}>
           <ValuableForm initial={editingValuable} policy={{familyId:family.id,valuableId:editingValuable.id,toast,onUploaded:()=>reload("documents"),
               doc:(data.documents||[]).find(d=>d.valuableId===editingValuable.id&&d.propertySection==="valuable_policy")||null}}
             onSave={f=>editClientValuable(editingValuable.id,f)} onClose={()=>setEditingValuable(null)}/>
@@ -12022,11 +12191,11 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
                 {v.makeModel&&<div style={{fontSize:12,color:B.textSoft}}>{v.makeModel}{v.year?` · ${v.year}`:""}</div>}
                 {v.insured?<div style={{fontSize:11,color:"#18a850",fontWeight:600,marginTop:3}}>✓ Insured{v.insuranceCompany?` — ${v.insuranceCompany}`:""}<DocLink doc={valuablesPolicyDoc()} toast={toast} label="📄 policy"/></div>:<div style={{fontSize:11,color:"#b4551f",fontWeight:600,marginTop:3}}>⚠ Not scheduled<DocLink doc={valuablesPolicyDoc()} toast={toast} label="📄 policy"/></div>}
                 <ValuablePolicyDetails v={v} doc={(data.documents||[]).find(d=>d.valuableId===v.id&&d.propertySection==="valuable_policy")} toast={toast}
-                  onAttach={clientSelfServe?()=>{setPropAttachIntent({valuableId:v.id,section:"valuable_policy"});setActiveTab("documents");}:null}/>
+                  onAttach={selfUpload?()=>{setPropAttachIntent({valuableId:v.id,section:"valuable_policy"});setActiveTab("documents");}:null}/>
               </div>
               <div style={{textAlign:"right",flexShrink:0}}>
                 <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:B.navy,fontWeight:600}}>{fmtMoney(v.estimatedValue)}</div>
-                {clientSelfServe&&<div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:4}}>
+                {selfEdit&&<div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:4}}>
                   <button onClick={()=>setEditingValuable(v)} style={{background:"none",border:"none",color:B.navyMid,fontSize:12,cursor:"pointer",fontFamily:"inherit",fontWeight:600,padding:0}}>Edit</button>
                   <button onClick={()=>delClientValuable(v)} style={{background:"none",border:"none",color:B.textMute,fontSize:12,cursor:"pointer",fontFamily:"inherit",padding:0}}>Remove</button>
                 </div>}
@@ -12063,6 +12232,9 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
 
       {/* BILLING */}
       {activeTab==="billing"&&<div style={{maxWidth:640}}>
+        {/* Billing changes need "Manage users and billing" (migration 20261028100000); the server refuses them too. */}
+        {!myPerm.manage&&<div style={{fontSize:13,color:B.textSoft,background:B.bg,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"10px 14px",marginBottom:14,lineHeight:1.5}}>You can see your household's plan. Only your household's primary user, or someone they allow, can change the plan or payment details.</div>}
+        <fieldset disabled={!myPerm.manage} style={{border:0,padding:0,margin:0,minWidth:0}}>
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:8}}>Billing & Plan</div>
         <div style={{fontSize:14,color:B.textSoft,marginBottom:20}}>Manage your ORDANIS subscription.</div>
 
@@ -12263,6 +12435,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
             <Btn variant="danger" onClick={()=>runCancel("schedule")} disabled={cancelBusy}>{cancelBusy?"Working…":"Cancel at the end of my paid month"}</Btn>
           </div>
         </Modal>}
+        </fieldset>
       </div>}
 
       {/* ASK AI */}

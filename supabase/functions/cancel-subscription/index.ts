@@ -56,9 +56,11 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
     const { data: caller } = await admin.from("user_profiles")
-      .select("role, family_id, email, full_name").eq("id", user.id).maybeSingle();
+      .select("role, family_id, email, full_name, household_role, perm_manage").eq("id", user.id).maybeSingle();
     const isAdmin = caller?.role === "admin";
-    const isOwnClient = caller?.role === "client" && caller?.family_id === familyId;
+    // A family user needs to be the primary or have "Manage users and billing" (migration 20261028100000).
+    const isOwnClient = caller?.role === "client" && caller?.family_id === familyId
+      && (caller?.household_role !== "member" || caller?.perm_manage === true);
     if (!isAdmin && !isOwnClient) return json({ error: "You can't change this household's subscription." }, 403);
 
     const { data: family, error: fErr } = await admin.from("families")

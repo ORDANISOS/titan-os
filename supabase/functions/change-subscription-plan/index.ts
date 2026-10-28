@@ -109,6 +109,11 @@ Deno.serve(async (req) => {
 
   if (familyErr) return json({ error: familyErr.message }, 500);
   if (!family) return json({ error: "Family not found, or you do not have access to it" }, 404);
+
+  // A family user needs "Manage users and billing" (or to be the household's primary) to touch billing
+  // (migration 20261028100000). household_can is true for staff, who are governed by their own rules.
+  const { data: canManage } = await sb.rpc("household_can", { p_perm: "manage" });
+  if (canManage === false) return json({ error: "Ask your household's primary user to change billing, or to give you access to it." }, 403);
   if (!family.stripe_subscription_id) {
     return json({ error: "This household has no active Stripe subscription to change." }, 409);
   }
