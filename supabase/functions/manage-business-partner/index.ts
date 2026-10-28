@@ -288,11 +288,11 @@ Deno.serve(async (req) => {
       const fullName = clean(body.full_name) || email;
       const redirectTo = clean(body.redirect_to) || undefined;
       if (!EMAIL_RE.test(email)) return json({ error: "A valid email is required." }, 400);
-      // Stored in the international form user_profiles requires (+15551234567); US numbers may be typed any way.
-      const digits = clean(body.phone).replace(/\D/g, "");
-      const phone = digits.length === 10 ? `+1${digits}` : digits.length === 11 && digits.startsWith("1") ? `+${digits}`
-        : digits.length >= 8 && digits.length <= 15 && clean(body.phone).startsWith("+") ? `+${digits}` : "";
-      if (!phone) return json({ error: "Enter a valid phone number so the ORDANIS team can reach them." }, 400);
+      // A US number, stored as user_profiles requires (+1 and 10 digits; constraint user_profiles_phone_e164).
+      let digits = clean(body.phone).replace(/\D/g, "");
+      if (digits.length === 11 && digits.startsWith("1")) digits = digits.slice(1);
+      const phone = /^[2-9]\d{2}[2-9]\d{6}$/.test(digits) ? `+1${digits}` : "";
+      if (!phone) return json({ error: "Enter a valid 10-digit US phone number so the ORDANIS team can reach them." }, 400);
       if (body.email_confirmed !== true) return json({ error: "Confirm the email address is correct first." }, 400);
 
       const { data: existingProfile } = await admin.from("user_profiles").select("id, email, role").ilike("email", email).maybeSingle();
@@ -321,9 +321,13 @@ Deno.serve(async (req) => {
         inviteLink = linkData.properties?.action_link || null;
         isNewUser = true;
 
-        const { error: profErr } = await admin.from("user_profiles").upsert({
-          id: userId, email, full_name: fullName, phone, role: "partner", partner_kind: "professional", active: true, can_run_scheduled_prompts: false,
-        });
+        const profile = { id: userId, email, full_name: fullName, phone, role: "partner", partner_kind: "professional", active: true, can_run_scheduled_prompts: false };
+        let { error: profErr } = await admin.from("user_profiles").upsert(profile);
+        // Demo has no profile phone column by decision; the phone is still kept on the household link below.
+        if (profErr && /phone/i.test(profErr.message)) {
+          const { phone: _p, ...noPhone } = profile;
+          ({ error: profErr } = await admin.from("user_profiles").upsert(noPhone));
+        }
         if (profErr) return json({ error: profErr.message }, 500);
       }
 

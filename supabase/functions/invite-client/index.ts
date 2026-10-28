@@ -113,11 +113,12 @@ Deno.serve(async (req) => {
     if (me.role === "client" && me.family_id !== familyId) return json({ error: "Household not found." }, 404);
     if (action === "invite" && fullName.length < 2) return json({ error: "Enter the client's name." }, 400);
     if (action === "invite" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: "Enter a valid email address." }, 400);
-    // Phone is required on every family invite, stored in the international form user_profiles requires (+15551234567).
-    const phoneDigits = clean(body.phone).replace(/\D/g, "");
-    const phone = phoneDigits.length === 10 ? `+1${phoneDigits}` : phoneDigits.length === 11 && phoneDigits.startsWith("1") ? `+${phoneDigits}`
-      : phoneDigits.length >= 8 && phoneDigits.length <= 15 && clean(body.phone).startsWith("+") ? `+${phoneDigits}` : "";
-    if (action === "invite" && !phone) return json({ error: "Enter a valid phone number for them." }, 400);
+    // Phone is required on every family invite: a US number, stored as user_profiles requires (+1 and 10 digits whose
+    // area code and exchange start with 2-9; constraint user_profiles_phone_e164).
+    let phoneDigits = clean(body.phone).replace(/\D/g, "");
+    if (phoneDigits.length === 11 && phoneDigits.startsWith("1")) phoneDigits = phoneDigits.slice(1);
+    const phone = /^[2-9]\d{2}[2-9]\d{6}$/.test(phoneDigits) ? `+1${phoneDigits}` : "";
+    if (action === "invite" && !phone) return json({ error: "Enter a valid 10-digit US phone number for them." }, 400);
 
     // Read through the caller's own access first: a private household they aren't named on, or a household
     // outside an Expert's book, is simply not found.
@@ -196,8 +197,13 @@ Deno.serve(async (req) => {
     // 2. Their profile, as a client of this household. If it can't be written, the login is removed again.
     //    The household's first family login becomes its primary on its own (database trigger); later ones are members
     //    with the permissions chosen here.
-    const { error: profErr } = await admin.from("user_profiles").upsert(
-      { id: newUserId, email, full_name: fullName, phone, role: "client", family_id: fam.id, active: true, ...perms }, { onConflict: "id" });
+    const profile = { id: newUserId, email, full_name: fullName, phone, role: "client", family_id: fam.id, active: true, ...perms };
+    let { error: profErr } = await admin.from("user_profiles").upsert(profile, { onConflict: "id" });
+    // Demo has no profile phone column by decision (migration 20261012120000 is production-only): save without it.
+    if (profErr && /phone/i.test(profErr.message)) {
+      const { phone: _p, ...noPhone } = profile;
+      ({ error: profErr } = await admin.from("user_profiles").upsert(noPhone, { onConflict: "id" }));
+    }
     if (profErr) {
       try { await admin.auth.admin.deleteUser(newUserId); } catch (_e) { /* logged below */ }
       return json({ error: `The client's profile could not be created: ${profErr.message}` }, 500);

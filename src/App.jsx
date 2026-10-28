@@ -1,6 +1,7 @@
 // PCM Family Office Platform — App.jsx
 // BUILD 2026-05-05 · Cash Flow (income+expenses+reorder) · MoneyInput commas · smart chart axis · client read-only · mobile
 import { useState, useEffect, useMemo, useCallback, useRef, useId, Component, Fragment } from "react";
+import { createPortal } from "react-dom";
 import { createClient } from "@supabase/supabase-js";
 import { PDFDocument } from "pdf-lib";
 import { buildActivityReportPdf, AR_PERIODS, fig as arFig } from "./activityReport.js";
@@ -861,9 +862,12 @@ function GoldLine(){return <div style={{height:1,background:`linear-gradient(90d
 function Spinner({size=34}){return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",flexDirection:"column",gap:14}}><div style={{width:size,height:size,border:`3px solid ${B.borderLight}`,borderTop:`3px solid ${B.gold}`,borderRadius:"50%",animation:"pcmspin 0.8s linear infinite"}}/><style>{`@keyframes pcmspin{to{transform:rotate(360deg)}}`}</style></div>;}
 function Toast({msg,type}){return <div style={{position:"fixed",bottom:24,right:24,zIndex:9000,background:type==="error"?"#fde8e8":B.navy,color:type==="error"?"#8b1a1a":B.white,padding:"12px 20px",borderRadius:10,fontSize:13,fontWeight:600,boxShadow:B.shadowMd,border:`1px solid ${type==="error"?"#f5c6c6":"rgba(206,182,132,0.3)"}`}}>{type==="error"?"⚠ ":"✓ "}{msg}</div>;}
 
+// Rendered into <body> (a portal), so it is always placed against the screen and opens centred at eye level, even when
+// the button that opened it sits inside a scrolled or animated panel (an animated ancestor would otherwise pin a fixed
+// overlay to that panel instead of the screen).
 function Modal({title,onClose,wide,children}){
   const mobile=useIsMobile(640);
-  return <div style={{position:"fixed",inset:0,background:"rgba(9,43,73,0.45)",zIndex:1000,display:"flex",alignItems:mobile?"flex-end":"center",justifyContent:"center",backdropFilter:"blur(3px)",padding:mobile?0:20,overflowY:"auto"}} onClick={onClose}>
+  return createPortal(<div style={{position:"fixed",inset:0,background:"rgba(9,43,73,0.45)",zIndex:1000,display:"flex",alignItems:mobile?"flex-end":"center",justifyContent:"center",backdropFilter:"blur(3px)",padding:mobile?0:20,overflowY:"auto"}} onClick={onClose}>
     <div onClick={e=>e.stopPropagation()} style={{background:B.white,borderRadius:mobile?"16px 16px 0 0":16,padding:mobile?"24px 20px 32px":36,width:"100%",maxWidth:mobile?"100%":wide?780:540,boxShadow:B.shadowMd,border:`1px solid ${B.borderLight}`,margin:mobile?0:"auto",maxHeight:mobile?"90vh":"none",overflowY:"auto"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600}}>{title}</span>
@@ -871,7 +875,7 @@ function Modal({title,onClose,wide,children}){
       </div>
       <GoldLine/>{children}
     </div>
-  </div>;
+  </div>,document.body);
 }
 
 const inp={width:"100%",background:B.bg,border:`1px solid ${B.border}`,borderRadius:8,padding:"9px 13px",color:B.text,fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"inherit"};
@@ -3616,7 +3620,7 @@ function EmailAdvisorModal({family,userProfile,data,onClose}){
 // (that would reset forms and open panels); the animation is restarted on it. Off for "reduce motion" devices.
 // Inactive tabs get a soft gold wash on hover (!important: the buttons' own inline colours would otherwise win).
 const TAB_MOTION_CSS=`@keyframes pcmTabIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-.pcm-tab-in{animation:pcmTabIn 220ms cubic-bezier(.2,.7,.2,1) both}
+.pcm-tab-in{animation:pcmTabIn 220ms cubic-bezier(.2,.7,.2,1) backwards}
 .pcm-tab{transition:background 160ms ease,color 160ms ease,border-color 160ms ease}
 .pcm-tab:not([aria-current]):hover{color:${B.navy}!important;background:rgba(206,182,132,0.12)!important}
 @media (prefers-reduced-motion:reduce){.pcm-tab-in{animation:none}.pcm-tab{transition:none}}`;
@@ -3628,6 +3632,10 @@ function useTabEntrance(activeTab,{scrollWindow=false}={}){
     if(first.current){first.current=false;return;}
     if(scrollWindow){if(window.scrollY>0)window.scrollTo({top:0});}else el.scrollTop=0;
     el.classList.remove("pcm-tab-in");void el.offsetWidth;el.classList.add("pcm-tab-in");
+    // Drop the class once it has played: a lingering transform would make the panel, not the screen, the frame for
+    // anything fixed inside it.
+    const done=()=>{el.classList.remove("pcm-tab-in");el.removeEventListener("animationend",done);};
+    el.addEventListener("animationend",done);
   },[activeTab,scrollWindow]);
   return ref;
 }
