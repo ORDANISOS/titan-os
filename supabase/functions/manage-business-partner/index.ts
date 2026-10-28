@@ -106,7 +106,10 @@ async function sendMail(to: string, subject: string, html: string, text: string)
   const resp = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: fromHeader, to: [to], subject, html, text }),
+    // Sent from the no-reply address: say so in every message rather than leave a reply to bounce unexplained.
+    body: JSON.stringify({ from: fromHeader, to: [to], subject,
+      html: html + `<p style="font-family:Arial,sans-serif;font-size:11px;color:#8fa0b2;margin-top:18px">This is an automated message from ORDANIS. Replies to this address aren't read; sign in to the portal for anything you need.</p>`,
+      text: `${text}\n\nThis is an automated message from ORDANIS. Replies to this address aren't read; sign in to the portal for anything you need.` }),
   });
   if (!resp.ok) {
     const detail = await resp.text().catch(() => "");

@@ -50,7 +50,8 @@ const shell = (heading: string, body: string, appUrl: string, button: string) =>
   `<div style="font-family:Arial,sans-serif;background:#F8F6F1;padding:24px 12px;"><div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e6e0d2;border-radius:12px;overflow:hidden;">` +
   `<div style="background:#0A2540;padding:20px 28px;color:#C9A961;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;">ORDANIS · Onboarding</div>` +
   `<div style="padding:24px 28px;color:#0A2540;font-size:15px;line-height:1.6;"><h1 style="font-family:Georgia,serif;font-weight:normal;font-size:22px;margin:0 0 12px;">${esc(heading)}</h1>${body}` +
-  `<p style="margin:20px 0 0;"><a href="${esc(appUrl)}" style="display:inline-block;background:#0A2540;color:#fff;text-decoration:none;font-weight:bold;padding:12px 24px;border-radius:8px;">${esc(button)}</a></p></div></div></div>`;
+  `<p style="margin:20px 0 0;"><a href="${esc(appUrl)}" style="display:inline-block;background:#0A2540;color:#fff;text-decoration:none;font-weight:bold;padding:12px 24px;border-radius:8px;">${esc(button)}</a></p>` +
+  `<p style="margin:18px 0 0;font-size:11px;color:#8fa0b2;">This is an automated message from ORDANIS. Replies to this address aren't read; sign in to the portal for anything you need.</p></div></div></div>`;
 
 Deno.serve(async (req) => {
   const presented = (req.headers.get("x-cron-secret") ?? "").trim();

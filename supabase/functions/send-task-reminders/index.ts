@@ -114,6 +114,7 @@ function shell(brand: string, headline: string, sub: string, body: string, accen
     </div>
     <div style="height:2px;background:linear-gradient(90deg,#ceb684,#dfc99a,transparent);"></div>
     <div style="padding:28px 34px;">${body}</div>
+    <div style="padding:0 34px 18px;font-size:11px;color:#8fa0b2;">This is an automated message from ORDANIS. Replies to this address aren't read; sign in to the portal for anything you need.</div>
     <div style="background:#092b49;padding:14px 34px;display:flex;justify-content:space-between;">
       <span style="font-size:11px;color:rgba(255,255,255,0.4);">${esc(brand)}</span>
       <span style="font-size:10px;color:rgba(206,182,132,0.5);letter-spacing:0.1em;">CONFIDENTIAL</span>

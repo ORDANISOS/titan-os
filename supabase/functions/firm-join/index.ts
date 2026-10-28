@@ -145,7 +145,8 @@ async function notifyFirm(eventId: string): Promise<{ sent: number; skipped?: st
         `<tr><td style="padding:3px 14px 3px 0;color:#5A6E84">Date</td><td>${esc(when)}</td></tr>` +
         `</table>` +
         `<p><a href="${esc(sender.appUrl)}" style="color:#0A2540;font-weight:600">Sign in to see it</a></p>` +
-        `<p style="margin-top:24px">${esc(sender.label)}</p></div>`;
+        `<p style="margin-top:24px">${esc(sender.label)}</p>` +
+        `<p style="font-size:11px;color:#8fa0b2;margin-top:16px">This is an automated message from ORDANIS. Replies to this address aren't read; sign in to the portal for anything you need.</p></div>`;
       const resp = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
