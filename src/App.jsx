@@ -6407,17 +6407,23 @@ function FamilyForm({initial,onSave,onClose,userProfile,advisors=[]}){
     const adv=advisors.find(a=>a.email===email);
     setF(p=>({...p,advisorEmail:email,advisorName:adv?(adv.full_name||""):""}));
   };
+  const stripeLocked=!!(initial&&(initial.stripe_subscription_id||initial.stripeSubscriptionId));
   const canSave=!!f.name.trim()&&PLANS.includes(f.plan);
   const[showReq,setShowReq]=useState(false);
   const save=async()=>{if(!canSave){setShowReq(true);return;}setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();};
   return <div>
     <Field label="Family Name" required><Inp placeholder="The Smith Family" value={f.name} onChange={set("name")}/></Field>
     <Field label="Plan">
+      {/* A household paying through Stripe changes plan through Plan requests or its Billing tab, which move the
+          subscription too. Changing it here would switch the portal only and leave Stripe billing the old plan. */}
+      {stripeLocked&&<div style={{fontSize:12,color:B.textSoft,background:B.bg,border:`1px solid ${B.borderLight}`,borderRadius:8,padding:"8px 10px",marginBottom:8,lineHeight:1.5}}>
+        This household pays through Stripe, so its plan can't be changed here. Use <strong>Plan requests</strong> (or the household's Billing tab) so billing moves with it.
+      </div>}
       <div style={{display:"grid",gap:8}}>
         {PLANS.map(p=>{
           const on=f.plan===p;
-          return <button key={p} type="button" onClick={()=>setF(prev=>({...prev,plan:p}))}
-            style={{textAlign:"left",padding:"10px 12px",borderRadius:8,cursor:"pointer",
+          return <button key={p} type="button" disabled={stripeLocked&&!on} onClick={()=>{if(!stripeLocked)setF(prev=>({...prev,plan:p}));}}
+            style={{textAlign:"left",padding:"10px 12px",borderRadius:8,cursor:stripeLocked?"default":"pointer",opacity:stripeLocked&&!on?0.45:1,
               border:`1px solid ${on?B.gold:B.border}`,background:on?B.bg:B.white,
               borderLeft:`3px solid ${on?B.gold:"transparent"}`,fontFamily:"'DM Sans',sans-serif"}}>
             <div style={{fontSize:13,fontWeight:700,color:B.navy}}>{planLabel(p)}</div>
