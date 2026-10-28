@@ -8273,12 +8273,12 @@ function UserManagementView({userProfile,data={},toast}){
               </span>
             </div>
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              {u.role==="advisor"&&<select value={analystOf(u.id)} onChange={e=>setAnalystFor(u,e.target.value)} title="This Expert's Analyst: same access to the Expert's households. The Expert stays the point person."
+              {(u.role==="advisor"||u.role==="admin")&&<select value={analystOf(u.id)} onChange={e=>setAnalystFor(u,e.target.value)} title="This Expert's Analyst: same access to the Expert's households. The Expert stays the point person."
                 style={{background:B.bg,border:`1px solid ${B.border}`,borderRadius:6,padding:"3px 6px",fontSize:11,color:B.textMid,fontFamily:"inherit",maxWidth:170}}>
                 <option value="">Analyst: none</option>
-                {users.filter(a=>a.role==="analyst"&&a.active!==false).map(a=><option key={a.id} value={a.id}>Analyst: {a.full_name||a.email}</option>)}
+                {users.filter(a=>(a.role==="analyst"||a.role==="admin")&&a.active!==false&&a.id!==u.id).map(a=><option key={a.id} value={a.id}>Analyst: {a.full_name||a.email}</option>)}
               </select>}
-              {u.role==="analyst"&&<span title="Experts this Analyst supports" style={{fontSize:11,color:B.textMute,whiteSpace:"nowrap"}}>
+              {(u.role==="analyst"||(u.role==="admin"&&expertsOfAnalyst(u.id).length>0))&&<span title="Experts this Analyst supports" style={{fontSize:11,color:B.textMute,whiteSpace:"nowrap"}}>
                 Supports: {expertsOfAnalyst(u.id).map(x=>x.full_name||x.email).join(", ")||"no Expert yet"}
               </span>}
               {/* Load against cap, editable in place. Only for roles that hold
