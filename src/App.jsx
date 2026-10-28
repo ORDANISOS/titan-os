@@ -8243,6 +8243,7 @@ function UserManagementView({userProfile,data={},toast}){
             <div>
               <div style={{fontWeight:700,color:B.navy,fontSize:13}}>{u.full_name||"—"}</div>
               {u.id===userProfile?.id&&<div style={{fontSize:10,color:B.gold,fontWeight:700}}>You</div>}
+              {famOnly&&u.family_id&&<div style={{fontSize:10,color:B.textMute,fontWeight:700}}>{u.household_role==="primary"?"Primary user":"Family user"}</div>}
               {mfaUsers.has(u.id)
                 ?<div title="Signs in with a code from an authenticator app" style={{fontSize:10,color:"#1E6B3A",fontWeight:700}}>🔒 2-step on</div>
                 :MFA_REQUIRED_ROLES.includes(u.role)&&<div title="Will be asked to set up two-step sign-in at their next sign-in" style={{fontSize:10,color:"#8A5A00",fontWeight:700}}>2-step not set up</div>}
@@ -8339,7 +8340,20 @@ function UserManagementView({userProfile,data={},toast}){
               <div style={{display:"grid",gridTemplateColumns:key==="client"?FAM_COLS:COLS,padding:"10px 20px",background:B.bg,borderBottom:`1px solid ${B.borderLight}`,gap:8}}>
                 {(key==="client"?FAM_HEADERS:HEADERS).map(h=><div key={h} style={{fontSize:10,fontWeight:800,color:B.textMute,letterSpacing:"0.08em",textTransform:"uppercase"}}>{h}</div>)}
               </div>
-              {list.map(u=>renderRow(u,key==="client"))}
+              {key==="client"?(()=>{
+                // Families: one block per household (primary user first), logins with no household last.
+                const byFam={};
+                list.forEach(u=>{(byFam[u.family_id||""]=byFam[u.family_id||""]||[]).push(u);});
+                const famName=id=>(families.find(f=>f.id===id)||{}).name||"Household";
+                const ids=Object.keys(byFam).sort((a,b)=>!a?1:!b?-1:famName(a).localeCompare(famName(b)));
+                return ids.map(id=><div key={id||"none"}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 20px",background:B.bgCard||B.bg,borderBottom:`1px solid ${B.borderLight}`,borderTop:`1px solid ${B.borderLight}`}}>
+                    <span style={{fontSize:12.5,fontWeight:700,color:id?B.navy:"#8A5A00"}}>{id?famName(id):"No household yet"}</span>
+                    <span style={{fontSize:11,color:B.textMute}}>{byFam[id].length} login{byFam[id].length===1?"":"s"}</span>
+                  </div>
+                  {byFam[id].slice().sort((a,b)=>(a.household_role==="primary"?0:1)-(b.household_role==="primary"?0:1)).map(u=>renderRow(u,true))}
+                </div>);
+              })():list.map(u=>renderRow(u,false))}
             </>:<div style={{padding:"16px 20px",color:B.textMute,fontSize:13}}>No {label.toLowerCase()} in this group yet.</div>}
           </div>);
         };
