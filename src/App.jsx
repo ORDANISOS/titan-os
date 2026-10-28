@@ -1486,7 +1486,7 @@ function HouseholdLogins({familyId,userProfile,toast,mode="card",onInvited=null}
   const canManage=isPrimary||userProfile?.perm_manage===true;
   const[logins,setLogins]=useState(null);
   const[open,setOpen]=useState(mode==="wizard");
-  const[f,setF]=useState({name:"",email:"",perms:{edit:true,upload:true,download:true,manage:false}});
+  const[f,setF]=useState({name:"",email:"",phone:"",perms:{edit:true,upload:true,download:true,manage:false}});
   const[editing,setEditing]=useState(null); // {user, perms}
   const[confirm,setConfirm]=useState(null); // {name, perms, run}
   const[busy,setBusy]=useState("");
@@ -1505,9 +1505,9 @@ function HouseholdLogins({familyId,userProfile,toast,mode="card",onInvited=null}
   const needsConfirm=perms=>perms.manage||HOUSEHOLD_PERMS.every(x=>perms[x.key]);
   const sendInvite=async()=>{
     setBusy("invite");
-    try{const r=await call({full_name:f.name.trim(),email:f.email.trim(),perms:f.perms,redirect_to:window.location.origin});
+    try{const r=await call({full_name:f.name.trim(),email:f.email.trim(),phone:f.phone,perms:f.perms,redirect_to:window.location.origin});
       toast(`Invite sent to ${r.invited}. They'll set their own password from the email.`);
-      setF({name:"",email:"",perms:{edit:true,upload:true,download:true,manage:false}});if(mode!=="wizard")setOpen(false);load();if(onInvited)onInvited();
+      setF({name:"",email:"",phone:"",perms:{edit:true,upload:true,download:true,manage:false}});if(mode!=="wizard")setOpen(false);load();if(onInvited)onInvited();
     }catch(e){toast(e.message,"error");}
     setBusy("");setConfirm(null);
   };
@@ -1521,13 +1521,14 @@ function HouseholdLogins({familyId,userProfile,toast,mode="card",onInvited=null}
   const resend=async u=>{setBusy("r"+u.id);try{const r=await call({action:"resend",user_id:u.id,redirect_to:window.location.origin});toast(r.sent==="invite"?`Invite resent to ${r.email}`:`Email sent to ${r.email} to set a new password`);}catch(e){toast(e.message,"error");}setBusy("");};
   const turnOff=async u=>{if(!window.confirm(`Turn off ${u.full_name||u.email}'s access to the household? They won't be able to sign in.`))return;
     setBusy("x"+u.id);try{await call({action:"remove",user_id:u.id});toast("Access turned off");load();}catch(e){toast(e.message,"error");}setBusy("");};
-  const validInvite=f.name.trim().length>1&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim());
+  const validInvite=f.name.trim().length>1&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())&&String(f.phone).trim()&&isValidPhone(f.phone);
   const inviteForm=<div>
     <div style={{fontSize:12.5,color:B.textSoft,lineHeight:1.55,marginBottom:12}}>They get an email to set up their own login and password. Choose what they can do; you can change it any time.</div>
     <Grid2>
       <Field label="Name"><Inp value={f.name} onChange={e=>setF({...f,name:e.target.value})} placeholder="Alex Smith"/></Field>
       <Field label="Email"><Inp type="email" autoComplete="off" value={f.email} onChange={e=>setF({...f,email:e.target.value})} placeholder="alex@example.com"/></Field>
     </Grid2>
+    <Field label="Phone" required><Inp value={f.phone} onChange={e=>setF({...f,phone:formatPhoneInput(e.target.value)})} placeholder="(555) 123-4567"/></Field>
     <HouseholdPermsPicker value={f.perms} onChange={v=>setF({...f,perms:v})}/>
     <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:12}}>
       {mode!=="wizard"&&<Btn variant="ghost" onClick={()=>setOpen(false)} disabled={!!busy}>Cancel</Btn>}
@@ -1642,7 +1643,7 @@ function OnboardingSpecialistPanel({familyRow,userProfile,toast}){
 function InviteClientCard({familyRow,toast,isMobile}){
   const[logins,setLogins]=useState(null);
   const[open,setOpen]=useState(false);
-  const[f,setF]=useState({name:"",email:"",card:true});
+  const[f,setF]=useState({name:"",email:"",phone:"",card:true});
   const[busy,setBusy]=useState(false);
   const firmPaid=familyRow.paidBy==="enterprise"||familyRow.paid_by==="enterprise";
   const hasSub=!!familyRow.stripe_subscription_id;
@@ -1669,10 +1670,10 @@ function InviteClientCard({familyRow,toast,isMobile}){
   const statusText=u=>u.active===false?"deactivated":u.last_sign_in_at?`last signed in ${shortDate(u.last_sign_in_at)}`
     :u.opened_at?"opened the invite":u.invited_at?`invited ${shortDate(u.invited_at)}, not opened yet`:"";
   useEffect(()=>{load();},[load]);
-  const valid=f.name.trim().length>1&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim());
+  const valid=f.name.trim().length>1&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())&&String(f.phone).trim()&&isValidPhone(f.phone);
   const send=async()=>{
     setBusy(true);
-    const{data:resp,error}=await sb.functions.invoke("invite-client",{body:{family_id:familyRow.id,full_name:f.name.trim(),email:f.email.trim(),
+    const{data:resp,error}=await sb.functions.invoke("invite-client",{body:{family_id:familyRow.id,full_name:f.name.trim(),email:f.email.trim(),phone:f.phone,
       pays_by_card:!firmPaid&&!hasSub&&f.card,redirect_to:window.location.origin}});
     setBusy(false);
     if(error||!resp?.success){
@@ -1682,7 +1683,7 @@ function InviteClientCard({familyRow,toast,isMobile}){
     }
     toast(`Invite sent to ${resp.invited}${resp.pays_by_card?". They'll be asked to add a card when they sign in.":""}`);
     if(resp.note)toast(resp.note,"error");
-    setF({name:"",email:"",card:true});setOpen(false);load();
+    setF({name:"",email:"",phone:"",card:true});setOpen(false);load();
   };
   return <div style={{background:B.white,borderRadius:12,padding:20,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,marginBottom:20}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:10}}>
@@ -1703,6 +1704,7 @@ function InviteClientCard({familyRow,toast,isMobile}){
       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:"0 14px"}}>
         <Field label="Name"><Inp value={f.name} onChange={e=>setF({...f,name:e.target.value})} placeholder="Jordan Smith"/></Field>
         <Field label="Email"><Inp type="email" autoComplete="off" value={f.email} onChange={e=>setF({...f,email:e.target.value})} placeholder="jordan@example.com"/></Field>
+        <Field label="Phone" required><Inp value={f.phone} onChange={e=>setF({...f,phone:formatPhoneInput(e.target.value)})} placeholder="(555) 123-4567"/></Field>
       </div>
       {firmPaid?<div style={{fontSize:12,color:B.textSoft,marginBottom:12}}>This household's plan is paid by its firm, so the family won't be asked for a card.</div>
         :hasSub?<div style={{fontSize:12,color:B.textSoft,marginBottom:12}}>This household already has a card subscription.</div>

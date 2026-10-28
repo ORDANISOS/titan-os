@@ -4,7 +4,7 @@
 // client's portal then asks them to add a card (create-checkout-session), and stripe-webhook links the
 // subscription to the household and clears the request.
 //
-// POST { family_id, full_name, email, pays_by_card: boolean, redirect_to? }      send a new invite
+// POST { family_id, full_name, email, phone, pays_by_card: boolean, redirect_to? }  send a new invite (phone required)
 // POST { action: "list", family_id }                                               the household's client logins + status
 // POST { action: "resend", family_id, user_id, redirect_to? }                      never opened: a fresh invite;
 //                                                                                   opened: a set-a-new-password email
@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
     }
 
     let body: { action?: string; family_id?: string; user_id?: string; full_name?: string; email?: string; pays_by_card?: boolean; redirect_to?: string;
-      perms?: { edit?: boolean; upload?: boolean; download?: boolean; manage?: boolean } };
+      perms?: { edit?: boolean; upload?: boolean; download?: boolean; manage?: boolean }; phone?: string };
     try { body = await req.json(); } catch { return json({ error: "Invalid JSON body" }, 400); }
     const action = clean(body.action) || "invite";
     const familyId = clean(body.family_id);
@@ -113,6 +113,11 @@ Deno.serve(async (req) => {
     if (me.role === "client" && me.family_id !== familyId) return json({ error: "Household not found." }, 404);
     if (action === "invite" && fullName.length < 2) return json({ error: "Enter the client's name." }, 400);
     if (action === "invite" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: "Enter a valid email address." }, 400);
+    // Phone is required on every family invite, stored in the international form user_profiles requires (+15551234567).
+    const phoneDigits = clean(body.phone).replace(/\D/g, "");
+    const phone = phoneDigits.length === 10 ? `+1${phoneDigits}` : phoneDigits.length === 11 && phoneDigits.startsWith("1") ? `+${phoneDigits}`
+      : phoneDigits.length >= 8 && phoneDigits.length <= 15 && clean(body.phone).startsWith("+") ? `+${phoneDigits}` : "";
+    if (action === "invite" && !phone) return json({ error: "Enter a valid phone number for them." }, 400);
 
     // Read through the caller's own access first: a private household they aren't named on, or a household
     // outside an Expert's book, is simply not found.
@@ -192,7 +197,7 @@ Deno.serve(async (req) => {
     //    The household's first family login becomes its primary on its own (database trigger); later ones are members
     //    with the permissions chosen here.
     const { error: profErr } = await admin.from("user_profiles").upsert(
-      { id: newUserId, email, full_name: fullName, role: "client", family_id: fam.id, active: true, ...perms }, { onConflict: "id" });
+      { id: newUserId, email, full_name: fullName, phone, role: "client", family_id: fam.id, active: true, ...perms }, { onConflict: "id" });
     if (profErr) {
       try { await admin.auth.admin.deleteUser(newUserId); } catch (_e) { /* logged below */ }
       return json({ error: `The client's profile could not be created: ${profErr.message}` }, 500);
