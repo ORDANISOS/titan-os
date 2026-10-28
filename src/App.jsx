@@ -8233,10 +8233,13 @@ function UserManagementView({userProfile,data={},toast}){
       {loading?<Spinner/>:(()=>{
         const HEADERS=["Name","Email","Role","Family (clients)","Status","Actions"];
         const COLS="1.2fr 1.4fr 130px 1fr 110px 130px";
-        const renderRow=u=>{
+        // Families: no Role column (a family login is changed from its household, not here).
+        const FAM_HEADERS=["Name","Email","Household","Status","Actions"];
+        const FAM_COLS="1.2fr 1.4fr 1.1fr 110px 130px";
+        const renderRow=(u,famOnly)=>{
           const pFamilyIds=partnerFamilyIdsFor(u.id);
           return (
-          <div key={u.id} style={{display:"grid",gridTemplateColumns:COLS,padding:"12px 20px",borderBottom:`1px solid ${B.borderLight}`,alignItems:"center",gap:8,opacity:u.active?1:0.6}}>
+          <div key={u.id} style={{display:"grid",gridTemplateColumns:famOnly?FAM_COLS:COLS,padding:"12px 20px",borderBottom:`1px solid ${B.borderLight}`,alignItems:"center",gap:8,opacity:u.active?1:0.6}}>
             <div>
               <div style={{fontWeight:700,color:B.navy,fontSize:13}}>{u.full_name||"—"}</div>
               {u.id===userProfile?.id&&<div style={{fontSize:10,color:B.gold,fontWeight:700}}>You</div>}
@@ -8245,7 +8248,7 @@ function UserManagementView({userProfile,data={},toast}){
                 :MFA_REQUIRED_ROLES.includes(u.role)&&<div title="Will be asked to set up two-step sign-in at their next sign-in" style={{fontSize:10,color:"#8A5A00",fontWeight:700}}>2-step not set up</div>}
             </div>
             <div style={{fontSize:12,color:B.textMid,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.email}</div>
-            <div>
+            {!famOnly&&<div>
               {u.id===userProfile?.id
                 ?<Badge scheme={{bg:"#e8f0f8",text:B.navyMid,dot:B.navyMid}}>{roleLabel(u.role)}</Badge>
                 :<select value={u.role||"advisor"} onChange={e=>changeRole(u,e.target.value)} style={{background:B.bg,border:`1px solid ${B.border}`,borderRadius:6,padding:"4px 8px",fontSize:12,color:B.text,outline:"none",fontFamily:"inherit",cursor:"pointer",width:"100%"}}>
@@ -8256,7 +8259,7 @@ function UserManagementView({userProfile,data={},toast}){
                   <option value="client">Family</option>
                   {u.role==="enterprise_admin"&&<option value="enterprise_admin">Firm Administrator</option>}
                 </select>}
-            </div>
+            </div>}
             <div>
               {u.role==="client"
                 ?<select value={u.family_id||""} onChange={e=>assignFamily(u,e.target.value)} style={{background:B.bg,border:`1px solid ${B.border}`,borderRadius:6,padding:"4px 8px",fontSize:11,color:B.text,outline:"none",fontFamily:"inherit",cursor:"pointer",width:"100%"}}>
@@ -8333,10 +8336,10 @@ function UserManagementView({userProfile,data={},toast}){
               <div style={{fontSize:11,color:B.textMute,marginLeft:4}}>{desc}</div>
             </div>
             {collapsed?null:list.length>0?<>
-              <div style={{display:"grid",gridTemplateColumns:COLS,padding:"10px 20px",background:B.bg,borderBottom:`1px solid ${B.borderLight}`,gap:8}}>
-                {HEADERS.map(h=><div key={h} style={{fontSize:10,fontWeight:800,color:B.textMute,letterSpacing:"0.08em",textTransform:"uppercase"}}>{h}</div>)}
+              <div style={{display:"grid",gridTemplateColumns:key==="client"?FAM_COLS:COLS,padding:"10px 20px",background:B.bg,borderBottom:`1px solid ${B.borderLight}`,gap:8}}>
+                {(key==="client"?FAM_HEADERS:HEADERS).map(h=><div key={h} style={{fontSize:10,fontWeight:800,color:B.textMute,letterSpacing:"0.08em",textTransform:"uppercase"}}>{h}</div>)}
               </div>
-              {list.map(renderRow)}
+              {list.map(u=>renderRow(u,key==="client"))}
             </>:<div style={{padding:"16px 20px",color:B.textMute,fontSize:13}}>No {label.toLowerCase()} in this group yet.</div>}
           </div>);
         };
