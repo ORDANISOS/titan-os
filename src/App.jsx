@@ -8634,9 +8634,19 @@ function PlanRequestsView({data,toast,reload,onChanged}){
   const approve=async r=>{
     setBusyId(r.id);
     try{
-      if(hasStripe(r)){
+      const already=(famOf(r.family_id)||{}).plan===r.to_plan;
+      if(already){
+        // The plan was already changed by hand (Edit Family), so there is nothing to move: record the decision only.
+        const{error}=await sb.rpc("decide_plan_change_request",{p_id:r.id,p_status:"approved",p_note:note||null,p_billing:"no_billing"});
+        if(error)throw new Error(error.message);
+        await after(`Approved. ${famOf(r.family_id)?.name||"The household"} was already on ${planLabel(r.to_plan)}.${hasStripe(r)?" Stripe was not changed, so check that its subscription matches.":""}`);
+      }else if(hasStripe(r)){
         const{data:resp,error}=await sb.functions.invoke("change-subscription-plan",{body:{family_id:r.family_id,new_plan:r.to_plan,request_id:r.id,decision_note:note||null}});
-        if(error)throw new Error(error.message||"Could not change the plan.");
+        if(error){
+          // Show the function's own reason rather than "non-2xx status code".
+          let msg=error.message;try{const b=await error.context?.json?.();if(b?.error)msg=b.error;}catch(_e){}
+          throw new Error(msg||"Could not change the plan.");
+        }
         if(resp&&resp.error)throw new Error(resp.error);
         if(resp&&resp.request_warning)toast(resp.request_warning,"error");
         await after(resp&&resp.pending_plan
