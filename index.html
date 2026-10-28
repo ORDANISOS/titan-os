@@ -32,10 +32,16 @@
     <link rel="apple-touch-icon" sizes="180x180" href="__BRAND_APPLE_ICON__" />
     <link rel="icon" type="image/png" sizes="192x192" href="__BRAND_FAVICON_192__" />
     <link rel="icon" type="image/png" sizes="512x512" href="__BRAND_FAVICON_512__" />
+    <!-- The portal's standard fonts, loaded once for every screen: DM Sans for text, Cormorant Garamond for headings.
+         Set on <body> so pop-ups (rendered straight into <body>) and form controls use them too. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       html, body, #root { height: 100%; }
-      body { -webkit-font-smoothing: antialiased; overscroll-behavior-y: none; }
+      body { -webkit-font-smoothing: antialiased; overscroll-behavior-y: none; font-family: 'DM Sans', 'Helvetica Neue', Arial, sans-serif; }
+      button, input, select, textarea { font-family: inherit; }
     </style>
   </head>
   <body>
