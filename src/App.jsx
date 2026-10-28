@@ -11525,9 +11525,11 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   useEffect(()=>{loadPlanRequests();},[family.id,fam.plan]);
   const sendPlanRequest=async()=>{
     setAskBusy(true);
-    const{error}=await sb.rpc("request_plan_change",{p_to_plan:askPlan,p_note:askNote.trim()||null});
+    const{data:filed,error}=await sb.rpc("request_plan_change",{p_to_plan:askPlan,p_note:askNote.trim()||null});
     setAskBusy(false);
     if(error){toast(error.message||"Could not send your request.","error");return;}
+    // Tell the ORDANIS team by email. The request is already saved, so a failure here never blocks the household.
+    if(filed?.id)sb.functions.invoke("plan-request-notify",{body:{request_id:filed.id}}).catch(()=>{});
     toast(`Request sent. The ${BRAND.name} team will be in touch about ${billingLabelOf(askPlan)}.`);
     setAskPlan(null);setAskNote("");await loadPlanRequests();
   };
