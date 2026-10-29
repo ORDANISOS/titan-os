@@ -3,7 +3,7 @@
 S = []
 
 S.append(("Platform at a glance", "What ORDANIS is made of and where each piece lives", """
-<p class="lede">ORDANIS is a multi-enterprise client portal. A household gets a private place for its records, obligations,
+<p class="lede">ORDANIS is a multi-enterprise client portal. A household gets a private place for its records,
 workflows, documents (CHRIS, the Centralized Household Records Integration Server) and an AI assistant. A firm can sit on top with view-only admin access and its own skin.</p>
 <h2>The stack</h2>
 <table>
@@ -104,7 +104,7 @@ where not exists (select 1 from supabase_migrations.schema_migrations where vers
 <tr><td><code>properties</code>, <code>portfolio_accounts</code>, <code>account_balances</code>, <code>loans</code>, <code>valuables</code></td><td>The balance sheet. A property's mortgage and second mortgage live on the property; other debt lives in <code>loans</code>, optionally secured by a property, portfolio account or valuable.</td></tr>
 <tr><td><code>cash_flow_events</code>, <code>cash_flow_payment_log</code></td><td>Income and bills, recurrence, who pays (<code>pcm_responsible</code>), payments per period.</td></tr>
 <tr><td><code>documents</code>, <code>document_folders</code>, <code>document_downloads</code></td><td>CHRIS (section 07).</td></tr>
-<tr><td><code>tasks</code>, <code>notes</code>, <code>obligations</code>, <code>workflow_*</code></td><td>Work: tasks, notes, recurring obligations and the playbooks that carry them.</td></tr>
+<tr><td><code>tasks</code>, <code>notes</code>, <code>obligations</code>, <code>workflow_*</code></td><td>Work: tasks, notes, and workflows (stored in <code>obligations</code>, shown everywhere as "workflows") with the playbooks that carry them.</td></tr>
 <tr><td><code>plan_features</code>, <code>plan_change_requests</code></td><td>Plan prices and gates (the single source for app and database); requests to change plan.</td></tr>
 <tr><td><code>household_activity</code></td><td>Client Activity: every add/change/remove a family login makes (field names only).</td></tr>
 <tr><td><code>expert_analysts</code>, <code>household_onboarding_specialists</code>, <code>family_partners</code></td><td>Staffing: Analyst per Expert, 30-day Onboarding Specialists, Business Partner seats.</td></tr>

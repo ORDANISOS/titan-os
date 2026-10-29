@@ -27,7 +27,7 @@ S.append(("Plans: what each household has", "So you know what to promise, and wh
 <table>
 <tr><th style="width:18%">Plan</th><th>Includes</th><th style="width:26%">Who does the work</th></tr>
 <tr><td><b>Basic</b></td><td>Household record, CHRIS (5 GB), the AI assistant. No workflows, no Expert.</td><td>The family, self-directed</td></tr>
-<tr><td><b>Core</b></td><td>Everything in Basic plus 15 GB, workflows (10 included), obligations, scheduled prompts, resources, Business Partner seats. Optional ORDANIS Expert on one workflow (Expert assist, one-time fee).</td><td>The family, self-directed</td></tr>
+<tr><td><b>Core</b></td><td>Everything in Basic plus 15 GB, workflows (10 included), scheduled prompts, resources, Business Partner seats. Optional ORDANIS Expert on one workflow (Expert assist, one-time fee).</td><td>The family, self-directed</td></tr>
 <tr><td><b>Premier</b></td><td>Everything, plus a named ORDANIS Expert, bill pay and the payment register, unlimited workflows.</td><td>You and the family together</td></tr>
 </table>
 <ul>
@@ -46,7 +46,7 @@ supporting document in CHRIS, in the first 30 days.</p>
 <li><b>Invite the family's primary user.</b> From the household, send the invite. The family sets their own password; nobody at ORDANIS ever chooses or sees it. For card-paid households, the family is asked for a card in their portal.</li>
 <li><b>Gather the paper.</b> Ask for: deeds and mortgage statements, property tax bills, insurance declarations (home, flood, auto, umbrella, valuables), brokerage and bank statements, loan and credit line statements, estate documents, and recurring bills.</li>
 <li><b>Load CHRIS with "Snap or add several".</b> Photograph pages one after another or pick a stack of PDFs. CHRIS reads each one and proposes a name, summary, folder and the record it belongs to. Check each card and tap <b>File</b> (section 05).</li>
-<li><b>Build the records</b> in this order: Properties (with mortgage), Portfolio accounts, Loans &amp; Lines, Valuables, Cash Flow (income and bills), then Tasks and obligations.</li>
+<li><b>Build the records</b> in this order: Properties (with mortgage), Portfolio accounts, Loans &amp; Lines, Valuables, Cash Flow (income and bills), then Tasks and workflows.</li>
 <li><b>Pin documents to figures</b> as you go: the paperclip beside a figure opens an upload already pointed at that spot.</li>
 <li><b>Hand over.</b> Walk the family through their portal, confirm who in the household needs a login and with which permissions, and note anything outstanding as Tasks.</li>
 </ol>
@@ -65,7 +65,7 @@ S.append(("Working a household", "Every tab on the household screen, and what it
 <tr><td>Portfolio</td><td>Accounts with dated balances and history. Upload a statement and the platform proposes the closing balance for you to confirm.</td></tr>
 <tr><td>Loans &amp; Lines</td><td>All debt. Adding a mortgage asks which property it's on and saves it on that property. Other loans and lines record what secures them: unsecured, a property, a portfolio account or a valuable.</td></tr>
 <tr><td>Cash Flow</td><td>Income and bills with recurrence and tax treatment; projections; mark bills paid (who paid and when is recorded).</td></tr>
-<tr><td>Workflows</td><td>Obligations and the playbooks that carry them (Core and Premier).</td></tr>
+<tr><td>Workflows</td><td>Each workflow, laid out step by step against real dates (Core and Premier).</td></tr>
 <tr><td>Valuables</td><td>Art, jewellery, vehicles and the policy that covers each.</td></tr>
 <tr><td>Deals, Notes, Tasks</td><td>Pipeline items, running notes (with attachments) and tasks with reminders.</td></tr>
 <tr><td><b>Client Activity</b></td><td>Everything the family changed themselves, newest first (section 07).</td></tr>
@@ -111,10 +111,10 @@ household's assistant answers from it. That is the difference between storing pa
 </ul>
 """))
 
-S.append(("Workflows, bills and the daily rhythm", "Getting obligations done, on time, with a person approving", """
+S.append(("Workflows, bills and the daily rhythm", "Getting workflows done, on time, with a person approving", """
 <h2>Workflows</h2>
 <ul>
-<li>An obligation (premium, estimated tax, RMD, capital call, loan interest…) is carried by a playbook. Starting a cycle lays out every step against a real calendar date, measured back from the due date.</li>
+<li>A workflow (premium, estimated tax, RMD, capital call, loan interest…) follows a ready-made playbook from the library; add one with <b>+ New Workflow</b>. Starting a cycle lays out every step against a real calendar date, measured back from the due date.</li>
 <li>Steps that are already late flag the cycle <b>At risk</b> on day one.</li>
 <li><b>Nothing sends without a named approval.</b> Drafts wait in the review queue; approving records who approved. Recipients are checked against the family's known contacts, and the family principal is copied.</li>
 <li>The platform prepares payment instructions; it <b>never moves money</b>.</li>

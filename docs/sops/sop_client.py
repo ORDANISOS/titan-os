@@ -6,12 +6,12 @@ S = []
 S.append(("Welcome to ORDANIS", "One private place for your household", f"""
 <p class="lede">ORDANIS brings everything your household owns, owes, pays and keeps into one private, organised place:
 your properties, accounts, loans, bills, valuables and important documents, with an assistant that knows your records
-and workflows that carry your obligations through to done.</p>
+and workflows that carry your household's recurring responsibilities through to done.</p>
 <table>
 <tr><th style="width:30%">You can</th><th>For example</th></tr>
 <tr><td>See the whole picture</td><td>Net worth, what's coming due, and everything in one place.</td></tr>
 <tr><td>Keep documents organised and findable</td><td>Policies, statements, deeds and tax bills in CHRIS ({FULL}).</td></tr>
-<tr><td>Get obligations done on time</td><td>An insurance renewal, an estimated tax payment or a capital call, laid out step by step with dates.</td></tr>
+<tr><td>Get recurring work done on time</td><td>An insurance renewal, an estimated tax payment or a capital call, laid out step by step with dates.</td></tr>
 <tr><td>Stay ahead of deadlines</td><td>Bills, renewals and tasks, with reminders.</td></tr>
 <tr><td>Ask questions in plain English</td><td>"When does our home insurance renew?"</td></tr>
 <tr><td>Share with the right people</td><td>Family members and your accountant or attorney, each with the access you choose.</td></tr>
@@ -30,7 +30,7 @@ much the platform does for you, and whether an ORDANIS Expert works alongside yo
 <tr><td>AI assistant</td><td>✓</td><td>✓</td><td>✓</td></tr>
 <tr><td>Task and bill reminders by email</td><td>✓</td><td>✓</td><td>Handled by your Expert</td></tr>
 <tr><td><b>Workflows</b></td><td>—</td><td>10 active included, then $8/month each</td><td>Unlimited, run by your Expert</td></tr>
-<tr><td>Obligations, scheduled reports, resources</td><td>—</td><td>✓</td><td>✓</td></tr>
+<tr><td>Scheduled reports and resources</td><td>—</td><td>✓</td><td>✓</td></tr>
 <tr><td>Professional (Business Partner) seats</td><td>—</td><td>$5/month each</td><td>Included</td></tr>
 <tr><td><b>ORDANIS Expert</b></td><td>—</td><td><b>Optional: $25 per workflow</b></td><td>Named Expert for everything</td></tr>
 <tr><td>Bill pay and payment register</td><td>—</td><td>—</td><td>✓</td></tr>
@@ -40,7 +40,7 @@ much the platform does for you, and whether an ORDANIS Expert works alongside yo
 <h2>Which plan is right for you?</h2>
 <ul>
 <li><b>Basic</b> if you want everything in one organised, searchable place and reminders so nothing is missed.</li>
-<li><b>Core</b> if you want ORDANIS to lay out and prepare your recurring obligations (renewals, tax payments, trust and estate
+<li><b>Core</b> if you want ORDANIS to lay out and prepare your recurring workflows (renewals, tax payments, trust and estate
 tasks) while you stay in control, with an Expert available on any single workflow for <b>$25</b>.</li>
 <li><b>Premier</b> if you want a named ORDANIS Expert to run your household administration, pay bills and work every workflow.</li>
 </ul>
@@ -68,7 +68,7 @@ S.append(("Your portal", "What each tab is for", """
 <tr><td>Portfolio</td><td>Your accounts and their balances over time.</td></tr>
 <tr><td>Loans &amp; Lines</td><td>Every loan, line of credit and card. When you add one, choose what secures it: a property, an account, or nothing (unsecured). A mortgage is added straight onto its property.</td></tr>
 <tr><td>Cash Flow</td><td>Income and bills, with a projection of what's ahead. Tick a bill once it's paid.</td></tr>
-<tr><td><b>Workflows</b></td><td>Your obligations and the step-by-step workflows that carry them (Core and Premier; section 06).</td></tr>
+<tr><td><b>Workflows</b></td><td>Your workflows, each laid out step by step with dates (Core and Premier; section 06).</td></tr>
 <tr><td>Valuables</td><td>Art, jewellery, vehicles and the insurance that covers them.</td></tr>
 <tr><td>Tasks</td><td>Your to-do list, with reminders.</td></tr>
 <tr><td><b>CHRIS</b></td><td>Your documents (section 05).</td></tr>
@@ -108,17 +108,16 @@ anything by what it says, your assistant can answer questions from it, and your 
 ORDANIS), and it is never read by AI.</p>
 """))
 
-S.append(("Workflows: obligations carried through to done", "How workflows work, step by step", """
+S.append(("Workflows: recurring work carried through to done", "How workflows work, step by step", """
 <div class="chris"><div class="head"><img src="__MARK__"><span>What a workflow is</span></div>
 Some things a household must do are not one task but a sequence with deadlines: renewing insurance, paying estimated
 taxes, funding a trust, answering a capital call. A <b>workflow</b> is the proven sequence of steps for one of these,
-already written. You tell ORDANIS what the obligation is and when it is due; ORDANIS lays out every step on your calendar,
+already written. You choose the workflow and tell ORDANIS when it is due; ORDANIS lays out every step on your calendar,
 counted back from the due date, prepares the emails and letters for you, and tracks each step until it is done.</div>
-<h2>Four words to know</h2>
+<h2>Three words to know</h2>
 <table>
 <tr><th style="width:22%">Word</th><th>Meaning</th><th style="width:34%">Example</th></tr>
-<tr><td><b>Obligation</b></td><td>Something your household must do, with a due date, and often a repeat.</td><td>"Home and auto insurance renewal, every June 1"</td></tr>
-<tr><td><b>Workflow</b></td><td>The ready-made playbook that carries it: the steps, who does each, and how far ahead.</td><td>"Insurance renewal — all lines" (8 steps, starts 60 days out)</td></tr>
+<tr><td><b>Workflow</b></td><td>Something your household must do on a schedule, with the ready-made steps that carry it: what happens, who does each step, and how far ahead.</td><td>"Insurance renewal — all lines", due every June 1 (8 steps, starts 60 days out)</td></tr>
 <tr><td><b>Cycle</b></td><td>One run of the workflow for one due date.</td><td>"June 2027 renewal"</td></tr>
 <tr><td><b>Step</b></td><td>One action in the cycle, with its own date.</td><td>"Shop the market — 50 days before"</td></tr>
 </table>
@@ -140,13 +139,13 @@ counted back from the due date, prepares the emails and letters for you, and tra
 
 <h2>Running a workflow, step by step (Core)</h2>
 <ol class="steps">
-<li><b>Add the obligation.</b> Open <b>Workflows</b> and choose <b>+ New Obligation</b>. Pick the workflow first: ORDANIS fills in the name, type, repeat and notes for you.</li>
+<li><b>Add the workflow.</b> Open <b>Workflows</b> and choose <b>+ New Workflow</b>. Pick it from the library first: ORDANIS fills in the name, type, repeat and notes for you.</li>
 <li><b>Add the details.</b> Enter the <b>due date</b> (required), and if they apply, the amount, a later grace date, and a reference such as a policy number or fund name. Some workflows ask a yes/no question (for example, "confirm the figure with your CPA?") that switches optional steps on or off.</li>
 <li><b>Start the cycle.</b> Press <b>▶ Start cycle</b>. ORDANIS lays out every step against a real calendar date, counted back from the due date. Optional steps you switched off appear as <b>Not required</b>, so you can see they were considered.</li>
 <li><b>Check for "At risk".</b> If you start too late for the workflow's own lead times, the cycle is flagged <b>At risk</b> on day one and names the step that has already slipped, so you can act now, not in week six.</li>
 <li><b>Work each step when it comes due.</b> Each step says what to do, by when, and who does it. What each kind of step asks of you is in the table below.</li>
 <li><b>Approve before anything is sent.</b> When a step needs an email or letter, ORDANIS prepares the draft from your records and documents. You read it, change anything, and choose <b>Approve &amp; send</b>, or <b>Approve, don't send</b> to send later.</li>
-<li><b>Finish.</b> The cycle closes itself once nothing is left to do. A repeating obligation stays on file, ready for its next cycle.</li>
+<li><b>Finish.</b> The cycle closes itself once nothing is left to do. A repeating workflow stays on file, ready for its next cycle.</li>
 </ol>
 
 <h2>What each kind of step asks of you</h2>
@@ -223,7 +222,7 @@ Good candidates: a property insurance claim, a refinance window, a trust funding
 </ul>
 
 <h2>On Basic</h2>
-<p>Basic doesn't include workflows. You can still track obligations as <b>Tasks</b> with reminders, and bills in <b>Cash Flow</b>
+<p>Basic doesn't include workflows. You can still track these as <b>Tasks</b> with reminders, and bills in <b>Cash Flow</b>
 with email reminders. Upgrade to Core from <b>Billing</b> at any time to start using workflows.</p>
 """))
 
@@ -262,5 +261,5 @@ is arranged with our team after you ask.</p>
 
 DOC = dict(file="ORDANIS_Client_Guide.pdf", kind="Client Guide",
            title="Getting the Most from ORDANIS",
-           subtitle="Your plan, your household portal, CHRIS (the Centralized Household Records Integration Server), and how workflows carry your obligations through to done.",
+           subtitle="Your plan, your household portal, CHRIS (the Centralized Household Records Integration Server), and how workflows carry your household's recurring work through to done.",
            audience="ORDANIS households", classification="For clients", sections=S)

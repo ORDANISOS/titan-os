@@ -14266,7 +14266,7 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
       : sb.from("obligations").update(payload).eq("id",f.id);
     const{error}=await q;
     if(error)toast(error.message,"error");
-    else{toast(modal.isNew?"Obligation added":"Obligation saved");setModal(null);load();}
+    else{toast(modal.isNew?"Workflow added":"Workflow saved");setModal(null);load();}
     setSaving(false);
   };
 
@@ -14317,7 +14317,7 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
   };
   const startCycle=async ob=>{
     const t=tplFor(ob.template_key);
-    if(!t){toast("Choose a playbook on this obligation first","error");return;}
+    if(!t){toast("Choose which workflow this follows first","error");return;}
     if(instances.some(i=>i.obligation_id===ob.id&&i.due_date===ob.due_date)){
       toast("This cycle already exists","error");return;}
     let u=usage;
@@ -14393,7 +14393,7 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
           step with its date; outbound steps wait for your approval.
         </div>
       </div>
-      {canEdit&&<Btn onClick={()=>setModal({row:{...BLANK_OBLIGATION},isNew:true})}>+ New Obligation</Btn>}
+      {canEdit&&<Btn onClick={()=>setModal({row:{...BLANK_OBLIGATION},isNew:true})}>+ New Workflow</Btn>}
     </div>
     <GoldLine/>
 
@@ -14444,7 +14444,7 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
       </div>
     </Modal>}
 
-    {!obs.length&&<Empty text="No obligations on file for this client yet."/>}
+    {!obs.length&&<Empty text="No workflows on file for this household yet."/>}
 
     <div style={{display:"flex",flexDirection:"column",gap:14,marginTop:14}}>
       {obs.map(ob=>{
@@ -14533,7 +14533,7 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
     {review&&<DraftReviewModal step={review} toast={toast} userProfile={userProfile}
       onClose={()=>setReview(null)} onApproved={load}/>}
 
-    {modal&&<Modal wide title={modal.isNew?"New Obligation":`Edit — ${modal.row.name}`} onClose={()=>setModal(null)}>
+    {modal&&<Modal wide title={modal.isNew?"New Workflow":`Edit — ${modal.row.name}`} onClose={()=>setModal(null)}>
       <Field label="Workflow" optional>
         <Sel value={modal.row.template_key||""} onChange={e=>chooseTemplate(e.target.value)}>
           <option value="">— none, track the date only —</option>
@@ -14587,7 +14587,7 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
 
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
         <Btn variant="ghost" onClick={()=>setModal(null)} disabled={saving}>Cancel</Btn>
-        <Btn onClick={save} disabled={saving}>{saving?"Saving…":modal.isNew?"Add obligation":"Save"}</Btn>
+        <Btn onClick={save} disabled={saving}>{saving?"Saving…":modal.isNew?"Add workflow":"Save"}</Btn>
       </div>
     </Modal>}
   </div>;
