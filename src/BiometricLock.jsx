@@ -13,6 +13,7 @@ import { Capacitor } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
 import { NativeBiometric, BiometryType } from "@capgo/capacitor-native-biometric";
 import { pushNavyOverlay } from "./nativeChrome.js";
+import OrdanisLockup from "./OrdanisLockup.jsx";
 
 const PREF = "ordanis_biometric"; // "on" | "off" (unset: not asked yet)
 const RELOCK_AFTER_MS = 60 * 1000;
@@ -138,7 +139,7 @@ export default function BiometricLock({ children }) {
         <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: NAVY, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
           padding: "calc(24px + env(safe-area-inset-top)) 28px calc(24px + env(safe-area-inset-bottom))", fontFamily: "'DM Sans','Helvetica Neue',Arial,sans-serif" }}>
           {ready && <>
-            <img src="/ordanis-logo-reversed.png" alt="ORDANIS" style={{ width: "70%", maxWidth: 300, marginBottom: 36 }} />
+            <OrdanisLockup reversed style={{ width: "70%", maxWidth: 300, marginBottom: 36 }} />
             <button onClick={unlock} style={{ ...btn, maxWidth: 340, background: "#fff", color: NAVY }}>Unlock with {label}</button>
             {msg && <div style={{ maxWidth: 340, fontSize: 13, color: "#F3D7D2", textAlign: "center", marginTop: 14, lineHeight: 1.5 }}>{msg}</div>}
             <button onClick={signInWithPassword} style={{ marginTop: 18, background: "none", border: "none", color: "#C9D3DF", fontSize: 13.5, textDecoration: "underline", fontFamily: "inherit", cursor: "pointer" }}>

@@ -10,6 +10,7 @@ import { Capacitor } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
 import { SplashScreen } from "@capacitor/splash-screen";
 import { pushNavyOverlay } from "./nativeChrome.js";
+import OrdanisLockup from "./OrdanisLockup.jsx";
 
 const KEY = "ordanis_app_access_code";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
@@ -73,7 +74,7 @@ function LogoIntro({ timing, onDone }) {
       opacity: phase === "out" ? 0 : 1, transition: "opacity 0.5s ease", pointerEvents: phase === "out" ? "none" : "auto" }}>
       <OMark style={{ position: "absolute", width: "41%", maxWidth: 200, opacity: phase === "o" && oVisible ? 1 : 0,
         transition: phase === "o" ? `opacity ${timing.oFade}ms linear` : "opacity 0.4s ease" }} />
-      <img src="/ordanis-logo-reversed.png" alt="ORDANIS" style={{ width: "72%", maxWidth: 340, opacity: phase === "o" ? 0 : 1,
+      <OrdanisLockup reversed style={{ width: "72%", maxWidth: 340, opacity: phase === "o" ? 0 : 1,
         transform: phase === "o" ? "scale(0.97)" : "none", transition: "opacity 0.6s ease, transform 1.2s ease" }} />
     </div>
   );
@@ -157,7 +158,7 @@ export default function AppAccessGate({ children }) {
       <form onSubmit={submit} style={{ width: "100%", maxWidth: 380, background: "#fff", borderRadius: 14, boxShadow: "0 8px 30px rgba(10,37,64,0.10)", overflow: "hidden" }}>
         <div style={{ height: 4, background: GOLD }} />
         <div style={{ padding: "28px 26px 26px" }}>
-          <img src="/ordanis-logo.png" alt="ORDANIS" style={{ display: "block", width: 190, margin: "0 auto 18px" }} />
+          <OrdanisLockup style={{ width: 210, margin: "0 auto 18px" }} />
           <div style={{ fontFamily: "Georgia,serif", fontSize: 21, color: NAVY, textAlign: "center", marginBottom: 6 }}>Enter your access code</div>
           <div style={{ fontSize: 13.5, color: "#5a6e84", textAlign: "center", lineHeight: 1.5, marginBottom: 20 }}>
             The ORDANIS app is in private testing. Enter the access code you were given.
