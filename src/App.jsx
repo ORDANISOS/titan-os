@@ -11929,8 +11929,8 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const TABS=[
     {id:"summary",   label:"Summary",    icon:"◈"},
     ...(clientSelfServe||clientPlan==="premier"?[{id:"household",label:"Household",icon:"◎"}]:[]),
-    {id:"portfolio", label:"Portfolio",  icon:"◇"},
     {id:"properties",label:"Properties", icon:"⌂"},
+    {id:"portfolio", label:"Portfolio",  icon:"◇"},
     {id:"loans",     label:"Loans & Lines",icon:"≡"},
     {id:"cashflow",  label:"Cash Flow",  icon:"$"},
     ...(clientHasWorkflows?[{id:"workflows",label:"Workflows",icon:"▦"}]:[]),
