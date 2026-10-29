@@ -190,7 +190,7 @@ Deno.serve(async (req) => {
         .update({ pending_plan: null, pending_plan_effective_at: null, stripe_subscription_schedule_id: null })
         .eq("id", family_id);
       if (clearErr) return json({ error: clearErr.message }, 500);
-      return json({ success: true, message: "Scheduled downgrade cancelled -- staying on current plan.", plan: family.plan, open_work: openWork });
+      return json({ success: true, message: "Scheduled downgrade canceled -- staying on current plan.", plan: family.plan, open_work: openWork });
     }
     return json({ error: "Already on this plan." }, 400);
   }

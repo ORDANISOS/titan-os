@@ -616,7 +616,7 @@ export async function draftCalendarChange(admin: SupabaseClient, userId: string,
       summary = { ...base, title: "Move", new_when: niceWhen(startIso), new_start: startIso, new_end: endIso, overlaps: clash, zoom: !!zid };
       readBack = `Move "${e.subject}" from ${niceWhen(e.start!)} to ${niceWhen(startIso)}${e.attendees ? `; ${e.attendees} attendee${e.attendees === 1 ? "" : "s"} get an update` : ""}${clash.length ? `. The new time overlaps: ${clash.join("; ")}` : ""}`;
     } else if (action === "cancel") {
-      if (!e.is_organizer) return { message: `"${e.subject}" was set up by ${e.organizer || "someone else"}, so it can't be cancelled from here. Offer to decline it instead.` };
+      if (!e.is_organizer) return { message: `"${e.subject}" was set up by ${e.organizer || "someone else"}, so it can't be canceled from here. Offer to decline it instead.` };
       const zid = zoomIdFrom(e.join_url);
       payload = { comment: clean(input.comment, 500), with_attendees: e.attendees > 0, ...(zid ? { zoom_id: zid } : {}) };
       summary = { ...base, title: "Cancel", comment: clean(input.comment, 500) || null, zoom: !!zid };
@@ -696,6 +696,6 @@ export async function runDraft(admin: SupabaseClient, userId: string, draftId: s
     if (!ok) zoomNote = d.kind === "move" ? " The Zoom link still works, but Zoom's own schedule didn't update." : " The Zoom meeting itself wasn't deleted; it may not be on ORDANIS's Zoom.";
   }
   const s = d.summary as Record<string, unknown>;
-  const done = { book: `Booked "${s.subject}".`, move: `Moved "${s.subject}" to ${s.new_when}.`, cancel: `Cancelled "${s.subject}".`, respond: `${s.title === "Accept" ? "Accepted" : s.title === "Tentative" ? "Answered tentative to" : "Declined"} "${s.subject}".` }[d.kind as "book"] ?? "Done.";
+  const done = { book: `Booked "${s.subject}".`, move: `Moved "${s.subject}" to ${s.new_when}.`, cancel: `Canceled "${s.subject}".`, respond: `${s.title === "Accept" ? "Accepted" : s.title === "Tentative" ? "Answered tentative to" : "Declined"} "${s.subject}".` }[d.kind as "book"] ?? "Done.";
   return finish(true, done + (zoomMade ? " The Zoom link is in the invite." : "") + zoomNote);
 }

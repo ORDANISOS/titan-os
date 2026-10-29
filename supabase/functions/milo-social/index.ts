@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
   };
 
   if (denied || !code) {
-    await audit("error", "Sign-in was cancelled on the platform.", String(denied ?? "no code").slice(0, 100));
+    await audit("error", "Sign-in was canceled on the platform.", String(denied ?? "no code").slice(0, 100));
     return back(`social_error=${platform}-cancelled`);
   }
   try {

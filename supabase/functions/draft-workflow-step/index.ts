@@ -69,8 +69,8 @@ function briefFor(recipient: string, kind: string): string {
     case "bank":
       return [
         "Produce a TRANSFER REQUEST addressed to the banking institution, written as a formal instruction the firm submits under its existing authority.",
-        "Structure it as labelled lines: Date, To, From, Source account, Destination account, Amount, Reference, Purpose.",
-        "Then one short paragraph authorising the transfer, and a closing line noting the supporting invoice is attached.",
+        "Structure it as labeled lines: Date, To, From, Source account, Destination account, Amount, Reference, Purpose.",
+        "Then one short paragraph authorizing the transfer, and a closing line noting the supporting invoice is attached.",
         "Do NOT invent account numbers or wire details. Where a detail is not supplied, write [to be completed] so a person fills it in.",
       ].join(" ");
     case "beneficiaries":
@@ -82,9 +82,9 @@ function briefFor(recipient: string, kind: string): string {
       ].join(" ");
     case "trustee":
       return [
-        "Produce an INSTRUCTION TO THE TRUSTEE authorising payment of the premium from trust assets.",
+        "Produce an INSTRUCTION TO THE TRUSTEE authorizing payment of the premium from trust assets.",
         "State the carrier, policy number, amount, due date, and that funds are held in the trust account.",
-        "Where the trust requires a withdrawal window, confirm it has closed before payment is authorised.",
+        "Where the trust requires a withdrawal window, confirm it has closed before payment is authorized.",
         "Close by asking the trustee to confirm once payment has been remitted.",
       ].join(" ");
     case "grantor":
@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
     const firmName = cleanFirmName(body?.brandName) || cleanFirmName(BRAND_NAME_ENV) || FIRM_PLACEHOLDER;
 
     // Read through the caller's own permissions. If RLS hides the step, they get
-    // nothing — a ORDANIS Expert cannot draft against another Expert's client.
+    // nothing — an ORDANIS Expert cannot draft against another Expert's client.
     const { data: step } = await asUser.from("workflow_instance_steps").select("*").eq("id", stepId).maybeSingle();
     if (!step) return json({ error: "Step not found, or not yours to draft." }, 404);
 
@@ -211,6 +211,7 @@ Deno.serve(async (req) => {
 
     const system = [
       `You draft correspondence and instructions for ${firmName}, used by a family office.`,
+      "Write in American English spelling and usage (authorize, organize, labeled, canceled, center, color).",
       briefFor(step.recipient || "", step.kind || ""),
       "",
       "Absolute rules:",

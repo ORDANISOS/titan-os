@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
         }
         if (stillLive) {
           return json({
-            error: `Billing could not be cancelled in Stripe, so the household was not archived (it would keep being charged). Stripe said: ${stripeError}. Try again, or cancel the subscription in Stripe first.`,
+            error: `Billing could not be canceled in Stripe, so the household was not archived (it would keep being charged). Stripe said: ${stripeError}. Try again, or cancel the subscription in Stripe first.`,
           }, 502);
         }
       }

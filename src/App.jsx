@@ -2795,7 +2795,7 @@ function buildFamilySnapshot(family,data){
      ...derivedPropertyEvents].forEach(e=>{
       const key=e.category||"uncategorised";
       const a=acc[key]||(acc[key]={category:key,
-        label:EXPENSE_CATEGORY_LABEL[key]||"Uncategorised",
+        label:EXPENSE_CATEGORY_LABEL[key]||"Uncategorized",
         annualised:0, lines:0, oneOffTotal:0, oneOffCount:0, items:[],
         // Every distinct billing frequency in this group. It is what decides whether a
         // monthly figure is a real payment or a smoothed average.
@@ -3034,7 +3034,7 @@ function buildFamilySnapshot(family,data){
   if(uncategorisedExpenses) notTracked.push(
     `${uncategorisedExpenses.lines} expense line(s) have no category, so they are NOT included in any category total. `+
     `They are listed under expenseByCategory as "uncategorised". If a category total is quoted and this entry exists, `+
-    `say that some spend is uncategorised rather than presenting the total as complete.`);
+    `say that some spend is uncategorized rather than presenting the total as complete.`);
 
   // A vendor on file with no matching spend, and vice versa. Both are common and both
   // produce a confidently wrong answer if the assistant fills the gap by inference —
@@ -3064,7 +3064,7 @@ function buildFamilySnapshot(family,data){
     });
     missing.forEach(m=>notTracked.push(
       `a ${EXPENSE_CATEGORY_LABEL[m.category]||m.category} provider is on file (${m.provider}) but NO expense is `+
-      `categorised as ${EXPENSE_CATEGORY_LABEL[m.category]||m.category}. Say the vendor exists and the cost is not `+
+      `categorized as ${EXPENSE_CATEGORY_LABEL[m.category]||m.category}. Say the vendor exists and the cost is not `+
       `recorded. Do not estimate it, and do not attribute part of another line to it.`));
   }
 
@@ -5624,7 +5624,7 @@ function CashFlowEventForm({initial,onSave,onClose,properties=[],vendors=[],bill
         which is why there is no default value here. */}
     {isExpense&&<Field label="Spend category — what this money is for">
       <Sel value={f.category||""} onChange={set("category")}>
-        <option value="">Not categorised</option>
+        <option value="">Not categorized</option>
         {EXPENSE_CATEGORIES.map(([v,l])=><option key={v} value={v}>{l}</option>)}
       </Sel>
       <div style={{fontSize:10.5,color:B.textMute,marginTop:4}}>
@@ -8441,7 +8441,7 @@ function UserManagementView({userProfile,data={},toast}){
           <div key={key} style={{background:B.white,borderRadius:12,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,overflow:"hidden",marginBottom:18}}>
             <div role="button" tabIndex={0} aria-expanded={!collapsed} onClick={()=>toggleGroup(key)}
               onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();toggleGroup(key);}}}
-              title={collapsed?"Show this group":"Minimise this group"}
+              title={collapsed?"Show this group":"Minimize this group"}
               style={{display:"flex",alignItems:"center",gap:10,padding:"12px 20px",borderBottom:collapsed?"none":`1px solid ${B.borderLight}`,borderLeft:`4px solid ${accent}`,flexWrap:"wrap",cursor:"pointer",userSelect:"none"}}>
               <span aria-hidden="true" style={{display:"inline-block",width:12,color:B.textMute,fontSize:11,transform:collapsed?"rotate(-90deg)":"none",transition:"transform .15s"}}>▼</span>
               <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:700}}>{label}</div>
@@ -8788,7 +8788,7 @@ function PlanRequestsView({data,toast,reload,onChanged}){
         <div style={{fontSize:12.5,color:B.textSoft,marginTop:2}}>Households ask from their Billing tab. Moves to or from Premier are decided here.</div>
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <Sel value={show} onChange={e=>setShow(e.target.value)} style={{width:"auto"}}><option value="pending">Waiting for a decision</option><option value="recent">Decided and cancelled</option></Sel>
+        <Sel value={show} onChange={e=>setShow(e.target.value)} style={{width:"auto"}}><option value="pending">Waiting for a decision</option><option value="recent">Decided and canceled</option></Sel>
         <Sel value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{width:"auto"}}><option value="oldest">{show==="pending"?"Oldest first":"Newest first"}</option><option value="expert">By ORDANIS Expert</option></Sel>
       </div>
     </div>
@@ -9288,7 +9288,7 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
 
         {family.archived_at?<>
           <div style={{fontSize:13,color:B.text,marginBottom:14,lineHeight:1.5}}>
-            Archived {fmtDate(family.archived_at)}{family.archived_by?` by ${family.archived_by}`:""}. Billing is cancelled and their login is disabled. No data has been deleted yet.
+            Archived {fmtDate(family.archived_at)}{family.archived_by?` by ${family.archived_by}`:""}. Billing is canceled and their login is disabled. No data has been deleted yet.
           </div>
           {!showPurgeConfirm?
             <button onClick={()=>{setShowPurgeConfirm(true);setPurgeConfirmText("");setDangerMsg(null);}} style={{background:"#d43030",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Permanently Delete All Data…</button>
@@ -9379,7 +9379,7 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
       <div style={{fontSize:13,fontWeight:700,color:"#8b1a1a",marginBottom:4}}>
         {archivedFamilies.length} archived household{archivedFamilies.length===1?"":"s"} waiting for permanent deletion
       </div>
-      <div style={{fontSize:12,color:B.textSoft,marginBottom:10}}>Billing is cancelled and logins are disabled. Open one to permanently delete it, from Danger Zone at the bottom.</div>
+      <div style={{fontSize:12,color:B.textSoft,marginBottom:10}}>Billing is canceled and logins are disabled. Open one to permanently delete it, from Danger Zone at the bottom.</div>
       <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
         {archivedFamilies.map(f=><span key={f.id} onClick={()=>setDrill({type:"user",familyId:f.id})} role="button" tabIndex={0}
           onKeyDown={e=>{if(e.key==="Enter"||e.key===" ")setDrill({type:"user",familyId:f.id});}}
@@ -11663,7 +11663,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     const{error}=await sb.rpc("cancel_plan_change_request",{p_id:planRequest.id});
     setAskBusy(false);
     if(error){toast(error.message||"Could not cancel your request.","error");return;}
-    toast("Request cancelled.");await loadPlanRequests();
+    toast("Request canceled.");await loadPlanRequests();
   };
   // The button on a plan card the household must ask for, rather than buy directly.
   const askButton=p=>planRequest
@@ -12497,7 +12497,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           <div style={{fontSize:12,color:B.textSoft,marginBottom:workflowPurchases.length?14:0}}>
             {firmPaid
               ? `Extra workflows are $${Number(billingWorkflowUsage.unit_price||0).toFixed(2)}/month each for as long as they stay active, billed to ${firmLabel}. You approve each one when you start it.`
-              : `Extra workflows are $${Number(billingWorkflowUsage.unit_price||0).toFixed(2)}/month each for as long as they stay active. You approve each one when you start it. Completing or cancelling a workflow stops its charge from your next renewal.`}
+              : `Extra workflows are $${Number(billingWorkflowUsage.unit_price||0).toFixed(2)}/month each for as long as they stay active. You approve each one when you start it. Completing or canceling a workflow stops its charge from your next renewal.`}
             {!firmPaid&&expertPriceBilling>0&&` You can also have an ORDANIS Expert work any single workflow for $${expertPriceBilling.toFixed(2)}, one time. It's an option when you start a workflow, and it's charged once to your card with no monthly repeat.`}
           </div>
           {workflowPurchases.length>0&&<div style={{borderTop:`1px solid ${B.borderLight}`,paddingTop:12}}>
@@ -14090,7 +14090,7 @@ function DraftReviewModal({step,onClose,onApproved,toast,userProfile}){
         </div>
         Check these carefully. Draft recipients are drawn partly from uploaded documents,
         so an unexpected address here is worth pausing on. Sending will record that you
-        approved an unrecognised recipient.
+        approved an unrecognized recipient.
         <div style={{marginTop:9,display:"flex",gap:8}}>
           <Btn small variant="gold" onClick={confirmAndSend} disabled={busy}>{busy?"Sending…":"I've checked — send anyway"}</Btn>
           <Btn small variant="ghost" onClick={()=>setUnknownTo(null)} disabled={busy}>Cancel</Btn>
@@ -14420,11 +14420,11 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
       {firmPays
         ? <div style={{fontSize:12.5,color:B.textSoft,lineHeight:1.6,marginTop:10}}>
             <strong>No card is charged.</strong> This is billed to {firmName} on its next monthly invoice (a prorated amount for this month, then ${Number(buyPrompt.u.unit_price).toFixed(2)} each month while it stays active).
-            Completing or cancelling the workflow stops the charge from the next invoice. This approval is recorded with your name and the date.
+            Completing or canceling the workflow stops the charge from the next invoice. This approval is recorded with your name and the date.
           </div>
         : <div style={{fontSize:12.5,color:B.textSoft,lineHeight:1.6,marginTop:10}}>
             You'll be charged a prorated amount now on your card on file, then ${Number(buyPrompt.u.unit_price).toFixed(2)} with each monthly renewal.
-            Completing or cancelling the workflow stops the charge from your next renewal. This approval is recorded with your name and the date.
+            Completing or canceling the workflow stops the charge from your next renewal. This approval is recorded with your name and the date.
           </div>}
       {expertOption}
       <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:20,flexWrap:"wrap"}}>
@@ -15101,7 +15101,7 @@ function BrandDocumentsSection({brands:brandsProp,toast}){
     </div>
     <div style={{fontSize:12,color:"#8a5c00",background:"#fef3e2",border:"1px solid #fcd97d",borderRadius:8,padding:"10px 12px",marginBottom:14,lineHeight:1.55,maxWidth:760}}>
       The Client Services Agreement and ACH Authorization name a legal entity in their body text, not just on the
-      letterhead — the agreement defines the contracting party and the ACH form authorises debits to a named bank.
+      letterhead — the agreement defines the contracting party and the ACH form authorizes debits to a named bank.
       Upload the firm's own lawyer-reviewed versions; don't re-letterhead someone else's.
     </div>
 
@@ -15249,7 +15249,7 @@ function BrandingView({toast}){
       <div>
         <div style={{fontSize:13,color:B.textSoft,maxWidth:620,lineHeight:1.5}}>
           Save a brand for each firm you're pitching and switch the whole platform over in one click —
-          logo, name, colours, and exported reports. Nothing here touches client data.
+          logo, name, colors, and exported reports. Nothing here touches client data.
         </div>
       </div>
       <Btn onClick={()=>setModal({row:{...BLANK_BRAND},isNew:true})}>+ New Brand</Btn>
@@ -15322,7 +15322,7 @@ function BrandingView({toast}){
         Use a logo that reads on a light background — transparent PNG works best. Leave the mark blank to reuse the full logo.
       </div>
 
-      <SectionLabel>Colours</SectionLabel>
+      <SectionLabel>Colors</SectionLabel>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(190px,100%),1fr))",gap:"0 14px"}}>
         {BRAND_COLOR_FIELDS.map(({key,label})=>
           <ColorField key={key} label={label} value={modal.row[key]} onChange={v=>set(key,v)}/>)}
@@ -16588,7 +16588,7 @@ function EntSkin({row,data,toast,onChanged,onOpenBranding}){
   };
   return <div style={entCard}>
     <div style={entLab}>Skin and domain</div>
-    <p style={{fontSize:12.5,color:B.textSoft,margin:"0 0 12px",lineHeight:1.6,maxWidth:640}}>The skin is the firm's look: name, colours, logo. The domain is the web address the firm's households use. Linking them here records the choice; showing the skin by address comes with the domain work.</p>
+    <p style={{fontSize:12.5,color:B.textSoft,margin:"0 0 12px",lineHeight:1.6,maxWidth:640}}>The skin is the firm's look: name, colors, logo. The domain is the web address the firm's households use. Linking them here records the choice; showing the skin by address comes with the domain work.</p>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(260px,100%),1fr))",gap:12,maxWidth:760}}>
       <Field label="Skin"><Sel value={skin} onChange={ev=>setSkin(ev.target.value)}><option value="">None</option>{data.skins.map(s=><option key={s.id} value={s.id}>{s.brand_name}</option>)}</Sel></Field>
       <Field label="Domain"><Inp placeholder="portal.firm.com" value={domain} onChange={ev=>setDomain(ev.target.value)}/></Field>

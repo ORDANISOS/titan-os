@@ -653,7 +653,7 @@ function AccountStep({ planKey, prices, onBack, onDone, onSkin }) {
             ))}
           </div>
         </div>
-        <div style={{ marginTop: 20, fontSize: ".86rem", color: C.muted }}>Change plan, raise your ceiling or cancel at any time. Cancelling leaves your documents in place and available to download.</div>
+        <div style={{ marginTop: 20, fontSize: ".86rem", color: C.muted }}>Change plan, raise your ceiling or cancel at any time. Canceling leaves your documents in place and available to download.</div>
       </div>
     </div>
   );
