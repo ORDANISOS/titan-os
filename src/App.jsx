@@ -11806,6 +11806,28 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     if(error){toast(error.message,"error");return false;}
     toast(m.loan?"Loan updated. All saved.":"Loan added. Your record is looking more complete.");await reload("loans");
   };
+  // Tasks the family keeps itself (every plan; needs "Edit records"). Same rows and rules as the Expert side's tasks:
+  // a recurring task schedules its next occurrence when ticked off.
+  const[taskModalOpen,setTaskModalOpen]=useState(false);
+  const addClientTask=async f=>{
+    const{error}=await sb.from("tasks").insert({family_id:family.id,contact_id:f.contactId||null,title:f.title,due_date:f.dueDate||null,priority:f.priority,reminder_days:reminderDaysOr7(f.reminderDays),done:false,recurrence:f.recurrence||null,recurrence_interval:f.recurrence==="Custom"?(Number(f.recurrenceInterval)||1):null,recurrence_unit:f.recurrence==="Custom"?(f.recurrenceUnit||"week"):null});
+    if(error){toast(error.message,"error");return false;}
+    toast("Task added.");await reload("tasks");
+  };
+  const completeClientTask=async t=>{
+    const{error}=await sb.from("tasks").update({done:true,completed_at:new Date().toISOString(),completed_by:CURRENT_USER_LABEL||null}).eq("id",t.id).eq("family_id",family.id);
+    if(error){toast(error.message,"error");return;}
+    if(t.recurrence){
+      const nd=nextRecurrence(t.dueDate,t.recurrence,t.recurrenceInterval,t.recurrenceUnit);
+      if(nd)await scheduleNextOccurrence(t,family.id,nd,toast);
+    }
+    toast("Task done.");await reload("tasks");
+  };
+  const delClientTask=async t=>{
+    if(!confirm(`Remove "${t.title}"? This can't be undone.`))return;
+    const{error}=await sb.from("tasks").delete().eq("id",t.id).eq("family_id",family.id);
+    if(error)toast(error.message,"error");else{toast("Task removed");await reload("tasks");}
+  };
   const delClientLoan=async l=>{
     if(!confirm(`Remove ${loanTitle(l)}? Its statements stay in CHRIS. This can't be undone.`))return;
     const{error}=await sb.from("loans").delete().eq("id",l.id).eq("family_id",family.id);
@@ -12385,17 +12407,25 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
 
       {/* TASKS */}
       {activeTab==="tasks"&&<div>
-        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:20}}>Tasks & Deadlines</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:20}}>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600}}>Tasks & Deadlines</div>
+          {selfEdit&&<Btn onClick={()=>setTaskModalOpen(true)}>+ New Task</Btn>}
+        </div>
+        {taskModalOpen&&selfEdit&&<Modal title="New Task" onClose={()=>setTaskModalOpen(false)}>
+          <TaskForm contacts={members} onSave={async f=>{const r=await addClientTask(f);if(r!==false)setTaskModalOpen(false);return r;}} onClose={()=>setTaskModalOpen(false)}/>
+        </Modal>}
         {tasks.length===0?<div style={{textAlign:"center",padding:"60px 0",color:B.textMute}}><div style={{fontSize:40,marginBottom:12}}>✅</div>All caught up — no pending tasks.</div>:[...tasks].sort((a,b)=>a.dueDate>b.dueDate?1:-1).map(t=>{
           const isOD=t.dueDate&&dueEnd(t.dueDate)<new Date();
           const isSoon=!isOD&&t.dueDate&&(dueEnd(t.dueDate)-new Date())/(86400000)<=30;
           return <div key={t.id} style={{background:B.white,border:`1px solid ${isOD?"#f5c6c6":B.borderLight}`,borderLeft:`4px solid ${isOD?"#d43030":isSoon?"#d4900a":PRIORITY_COLORS[t.priority]?.dot||B.gold}`,borderRadius:10,padding:"16px 20px",marginBottom:10,boxShadow:B.shadow}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-              <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+              {selfEdit&&<input type="checkbox" checked={false} onChange={()=>completeClientTask(t)} title="Mark done" style={{width:16,height:16,accentColor:B.navy,cursor:"pointer",flexShrink:0,marginTop:2}}/>}
+              <div style={{flex:1,minWidth:0}}>
                 <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{t.title}</div>
                 {t.dueDate&&<div style={{fontSize:12,color:isOD?"#d43030":isSoon?"#d4900a":B.textSoft,marginTop:4,fontWeight:isOD||isSoon?700:400}}>{isOD?"⚠ Overdue · ":isSoon?"⏰ Due soon · ":""}{fmt(t.dueDate)}</div>}
               </div>
               <Badge scheme={PRIORITY_COLORS[t.priority]}>{t.priority}</Badge>
+              {selfEdit&&<button onClick={()=>delClientTask(t)} title="Remove task" style={{background:"none",border:"none",color:B.textMute,cursor:"pointer",fontSize:13,padding:0,flexShrink:0}}>✕</button>}
             </div>
           </div>;
         })}
