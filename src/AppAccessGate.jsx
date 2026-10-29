@@ -36,8 +36,9 @@ function playStartupSound() {
 // 1.5s, has a second phrase from 2.9s to 4.4s, and fades out by 6.2s. The launch screen is plain navy; the white /
 // gold O fades in slowly through the swell (oFade), gives way to the stacked logo on the hit, the logo holds through
 // the second phrase, and everything fades into the first screen as the chime fades. Sound off: a shorter version.
-// The O fades in from the moment the chime starts until 1.0s (Will), holds, and gives way to the logo on the hit.
-const WITH_SOUND = { oStart: 0, oFade: 1000, logoIn: 1400, out: 4400, done: 4900 };
+// The O fades in evenly across the chime's whole first note (to 2.8s), and the logo arrives with the second phrase
+// (2.9s), holds through it, and fades out with the chime (Will).
+const WITH_SOUND = { oStart: 0, oFade: 2700, logoIn: 2850, out: 4400, done: 4900 };
 const QUIET = { oStart: 0, oFade: 600, logoIn: 750, out: 2200, done: 2700 };
 
 // The ORDANIS O (same ring as the app icon): white left half, gold right half.
@@ -71,7 +72,7 @@ function LogoIntro({ timing, onDone }) {
     <div style={{ position: "fixed", inset: 0, zIndex: 10000, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center",
       opacity: phase === "out" ? 0 : 1, transition: "opacity 0.5s ease", pointerEvents: phase === "out" ? "none" : "auto" }}>
       <OMark style={{ position: "absolute", width: "41%", maxWidth: 200, opacity: phase === "o" && oVisible ? 1 : 0,
-        transition: phase === "o" ? `opacity ${timing.oFade}ms cubic-bezier(0.2, 0.6, 0.3, 1)` : "opacity 0.4s ease" }} />
+        transition: phase === "o" ? `opacity ${timing.oFade}ms linear` : "opacity 0.4s ease" }} />
       <img src="/ordanis-logo-reversed.png" alt="ORDANIS" style={{ width: "72%", maxWidth: 340, opacity: phase === "o" ? 0 : 1,
         transform: phase === "o" ? "scale(0.97)" : "none", transition: "opacity 0.6s ease, transform 1.2s ease" }} />
     </div>
