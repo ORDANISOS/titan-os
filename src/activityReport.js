@@ -229,7 +229,7 @@ export async function buildActivityReportPdf({
   // ── Stat band ─────────────────────────────────────────────────────────────
   const s = payload.summary || {};
   const stats = [
-    [fig(s.obligations_closed), "obligations discharged"],
+    [fig(s.obligations_closed), "workflows completed"],
     [fig(s.exposures_raised), "exposures raised"],
     [fig(s.exposures_closed), "exposures closed"],
     [fig(s.approvals), "items approved by your adviser"],
@@ -311,17 +311,17 @@ export async function buildActivityReportPdf({
   {
     const n = obligations.length;
     const claim = n === 0
-      ? "No recurring obligation reached completion inside this period. Any cycle still " +
+      ? "No workflow reached completion inside this period. Any cycle still " +
         "running is listed in section 04."
       : n === 1
         ? `The ${obligations[0].cycle} closed on ${obligations[0].closed}, in sequence.`
-        : `${n} recurring obligations were discharged in this period, each in sequence.`;
+        : `${n} workflows were completed in this period, each in sequence.`;
     const STEP_W = [186, 52, 62, CONTENT - 300];
     // The wording a step has earned. A ticked checkbox is not proof, and this
     // document may end up in a fee conversation.
     const stepRows = o => (o.steps || []).map(st => [st.title, st.due || "—", st.done || "—",
       st.note || (st.evidenced ? "Evidenced in the record." : "Recorded complete.")]);
-    section("01", "Obligations discharged", claim,
+    section("01", "Workflows completed", claim,
       n ? tableNeed(stepRows(obligations[0]), STEP_W) : 0);
     obligations.forEach(o => {
       if (n > 1) {

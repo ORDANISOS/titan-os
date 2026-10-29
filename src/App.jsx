@@ -8887,8 +8887,8 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
       if(stopped)return;
       if(pfErr&&toast)toast(pfErr.message||"Could not load plan pricing","error");
       if(upErr&&toast)toast(upErr.message||"Could not load signup contacts","error");
-      if(wfErr&&toast)toast(wfErr.message||"Could not load workflow activity","error");
-      if(oblErr&&toast)toast(oblErr.message||"Could not load obligation activity","error");
+      if(wfErr&&toast)toast(wfErr.message||"Could not load workflow cycle activity","error");
+      if(oblErr&&toast)toast(oblErr.message||"Could not load workflow activity","error");
       if(actErr&&toast)toast(actErr.message||"Could not load sign-in activity","error");
       setPlanFeatures(pf||[]);
       const byFamily={};
@@ -8981,8 +8981,8 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
     {key:"tasks",label:"Tasks",eligible:families,has:hasFamilyIn(data.tasks)},
     {key:"notes",label:"Notes",eligible:families,has:hasFamilyIn(data.notes)},
     {key:"deals",label:"Deals",eligible:families,has:hasFamilyIn(data.deals)},
-    {key:"workflows",label:"Workflows",gateLabel:"Core & Premier",eligible:families.filter(f=>planAllows(f.plan,"workflows")),has:id=>!!(workflowByFamily[id]&&workflowByFamily[id].total>0)},
-    {key:"obligations",label:"Obligations",gateLabel:"Core & Premier",eligible:families.filter(f=>planAllows(f.plan,"obligations")),has:id=>obligationFamilyIds.has(id)},
+    {key:"workflows",label:"Workflow cycles",gateLabel:"Core & Premier",eligible:families.filter(f=>planAllows(f.plan,"workflows")),has:id=>!!(workflowByFamily[id]&&workflowByFamily[id].total>0)},
+    {key:"obligations",label:"Workflows",gateLabel:"Core & Premier",eligible:families.filter(f=>planAllows(f.plan,"obligations")),has:id=>obligationFamilyIds.has(id)},
     {key:"billpay",label:"Bill Pay",gateLabel:"Premier",eligible:families.filter(f=>planAllows(f.plan,"billPay")),has:hasFamilyIn((data.cash_flow_events||[]).filter(e=>e.pcmResponsible))},
   ].map(a=>{
     const total=a.eligible.length;
@@ -9294,7 +9294,7 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
             <button onClick={()=>{setShowPurgeConfirm(true);setPurgeConfirmText("");setDangerMsg(null);}} style={{background:"#d43030",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Permanently Delete All Data…</button>
           :<div style={{background:B.white,border:"1px solid #f0b8b8",borderRadius:10,padding:16}}>
             <div style={{fontSize:13,color:"#8b1a1a",fontWeight:700,marginBottom:8}}>This cannot be undone.</div>
-            <div style={{fontSize:12.5,color:B.textSoft,marginBottom:12,lineHeight:1.5}}>This permanently erases every record for <strong>{family.name}</strong> — properties, documents, valuables, tasks, notes, deals, workflows, obligations, and their login. Type the household name below to confirm.</div>
+            <div style={{fontSize:12.5,color:B.textSoft,marginBottom:12,lineHeight:1.5}}>This permanently erases every record for <strong>{family.name}</strong> — properties, documents, valuables, tasks, notes, deals, workflows and their cycles, and their login. Type the household name below to confirm.</div>
             <input value={purgeConfirmText} onChange={e=>setPurgeConfirmText(e.target.value)} placeholder={family.name} autoFocus style={{...inp,marginBottom:12,width:"100%"}}/>
             <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
               <button disabled={purging||purgeConfirmText.trim()!==family.name} onClick={()=>purgeFamily(family.id,family.name)} style={{background:"#d43030",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontSize:12.5,fontWeight:700,fontFamily:"inherit",cursor:(purging||purgeConfirmText.trim()!==family.name)?"not-allowed":"pointer",opacity:(purging||purgeConfirmText.trim()!==family.name)?0.5:1}}>{purging?"Deleting…":"Confirm Permanent Deletion"}</button>
@@ -13614,7 +13614,7 @@ function ActivityReportSection({families,toast}){
       <div style={{fontSize:10.5,color:B.textMute,marginBottom:12}}>
         {preview.period?.from} to {preview.period?.to} (exclusive) · {preview.period?.tz}</div>
       <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
-        {[["Obligations discharged",S.obligations_closed],
+        {[["Workflows completed",S.obligations_closed],
           ["Exposures raised",S.exposures_raised],
           ["Exposures closed",S.exposures_closed],
           ["Open at period end",S.exposures_open],
