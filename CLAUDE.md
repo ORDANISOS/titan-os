@@ -105,3 +105,5 @@ The OpenArc intelligence brief and any litigation/competitor content must never 
   each ORDANIS Expert ONE daily summary (task reminders, bills they pay, Client Activity) plus the family emails.
 - Client Activity: `household_activity` (migrations 20261029100000/110000) logs every change a family login makes;
   staff see it on the household's Client Activity tab. Premier families edit the same records as Basic/Core.
+- Tabled until the official launch (Will, 2026-10-29), in this order: Stripe end-to-end test (8b) and live-mode gates;
+  Expert-assist test on Will's card-paid Core household (refund the $25); then reopen sign-up (`SIGNUP_PAUSED_URL` = "").
