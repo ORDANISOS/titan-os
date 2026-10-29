@@ -9,6 +9,7 @@ import { derivePropertyEvents, findProbableDuplicates } from "./propertyCashFlow
 import { validateFolderName, buildFolderRows, folderSummary, canDeleteFolder } from "./vaultFolders.js";
 import { PLANS, PLAN_BLURB, planAllows, planLabel, planIsSelfServe } from "./plans.js";
 import { Capacitor } from "@capacitor/core";
+import { useBiometricSetting } from "./BiometricLock.jsx";
 // PCM Platform v5.0 — build 20260429
 //
 // Nothing PCM-specific is imported here any more, and that is deliberate.
@@ -2037,6 +2038,7 @@ function SecurityModal({onClose,toast,role,optedOut=false,onOptOut=null}){
       <div style={{display:"flex",gap:10}}><Btn variant="danger" onClick={everywhere} disabled={busy}>{busy?"Signing out…":"Sign out everywhere"}</Btn><Btn variant="ghost" onClick={()=>setMode("view")}>Cancel</Btn></div>
     </div>
     :<div>
+      {IS_NATIVE_APP&&<BiometricSettingRow toast={toast}/>}
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
         <span style={{fontSize:13,fontWeight:700,color:B.navy}}>Two-step sign-in</span>
         <span style={{fontSize:11,fontWeight:700,padding:"2px 9px",borderRadius:999,background:on?"#EAF5EE":"#F1F1EE",color:on?"#1E6B3A":B.textSoft}}>{on?"On":"Off"}</span>
@@ -2062,6 +2064,24 @@ function SecurityModal({onClose,toast,role,optedOut=false,onOptOut=null}){
 // A "Security" button that opens SecurityModal; sits next to each Sign Out.
 // For clients (two-step is optional for them) it is flagged, "Set up security" with a dot, until they turn two-step
 // on or choose not to use it; then it goes back to normal. Staff never see the flag (two-step is required for them).
+// Native app only: turn Face ID / fingerprint unlock on or off (BiometricLock.jsx).
+function BiometricSettingRow({toast}){
+  const bio=useBiometricSetting();
+  const[busy,setBusy]=useState(false);
+  if(!bio.available)return null;
+  const flip=async()=>{setBusy(true);try{await bio.setEnabled(!bio.enabled);toast&&toast(bio.enabled?`${bio.label} unlock is off`:`${bio.label} unlock is on`);}catch(_e){}setBusy(false);};
+  return <div style={{paddingBottom:16,marginBottom:16,borderBottom:`1px solid ${B.borderLight}`}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+      <span style={{fontSize:13,fontWeight:700,color:B.navy}}>Unlock with {bio.label}</span>
+      <span style={{fontSize:11,fontWeight:700,padding:"2px 9px",borderRadius:999,background:bio.enabled?"#EAF5EE":"#F1F1EE",color:bio.enabled?"#1E6B3A":B.textSoft}}>{bio.enabled?"On":"Off"}</span>
+    </div>
+    <div style={{fontSize:13,color:B.textSoft,lineHeight:1.55,marginBottom:12}}>{bio.enabled
+      ?`ORDANIS opens with ${bio.label} on this phone, without your password or authenticator code. On a new phone, or after you sign out, you sign in the usual way once.`
+      :`Open ORDANIS with ${bio.label} on this phone instead of typing your password and authenticator code each time.`}</div>
+    <Btn variant={bio.enabled?"ghost":undefined} disabled={busy} onClick={flip}>{bio.enabled?"Turn off":`Turn on ${bio.label}`}</Btn>
+  </div>;
+}
+
 function SecurityButton({role,toast,style,label="🔒 Security"}){
   const[open,setOpen]=useState(false);
   const optional=!MFA_REQUIRED_ROLES.includes(role);
@@ -16870,6 +16890,9 @@ export default function App(){
   const[needsPasswordSetup,setNeedsPasswordSetup]=useState(false);
   // Two-step sign-in: null while checking, false when done or not needed, else what MfaGate should show.
   const[mfaNeed,setMfaNeed]=useState(null);
+  // Sign-in is complete (password, plus the authenticator when the account uses one): the native app may now offer
+  // Face ID for next time (BiometricLock.jsx). Nothing listens on the website.
+  useEffect(()=>{if(authed&&userProfile&&mfaNeed===false)window.dispatchEvent(new window.Event("ordanis:signed-in"));},[authed,userProfile,mfaNeed]);
   useEffect(()=>{
     if(!authed||!userProfile){setMfaNeed(null);return;}
     let stop=false;

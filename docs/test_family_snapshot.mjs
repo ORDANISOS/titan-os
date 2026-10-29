@@ -50,7 +50,7 @@ writeFileSync(join(tmp, "App.jsx"), appSrc);
 // Copy EVERY sibling module, not a hardcoded list. App.jsx gained an import of
 // vaultFolders.js and the hardcoded list silently broke the bundle — the test failed for a
 // reason that had nothing to do with what it was testing.
-for (const f of readdirSync(join(repo, "src")).filter(f => f.endsWith(".js"))) {
+for (const f of readdirSync(join(repo, "src")).filter(f => f.endsWith(".js") || (f.endsWith(".jsx") && f !== "App.jsx"))) {
   writeFileSync(join(tmp, f), readFileSync(join(repo, "src", f), "utf8"));
 }
 execFileSync("npx", ["--yes", "esbuild@0.23", join(tmp, "App.jsx"),

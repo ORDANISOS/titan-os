@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import SignupFlow, { SignupWelcome } from './SignupFlow.jsx'
 import AppAccessGate from './AppAccessGate.jsx'
+import BiometricLock from './BiometricLock.jsx'
 import { Capacitor } from '@capacitor/core'
 
 // Inside the iPhone / Android app: full-screen styling (index.html, html.native-app) instead of a browser page.
@@ -31,7 +32,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     {/* Native app only: asks for a tester's access code first. On the website it renders its child untouched. */}
     <AppAccessGate>
-      {isWelcome ? <SignupWelcome /> : isSignup ? <SignupFlow /> : <App />}
+      {/* Native app only: Face ID / fingerprint lock on the saved sign-in. */}
+      <BiometricLock>
+        {isWelcome ? <SignupWelcome /> : isSignup ? <SignupFlow /> : <App />}
+      </BiometricLock>
     </AppAccessGate>
   </React.StrictMode>
 )
