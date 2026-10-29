@@ -36,8 +36,8 @@ function playStartupSound() {
 // 1.5s, has a second phrase from 2.9s to 4.4s, and fades out by 6.2s. The launch screen is plain navy; the white /
 // gold O fades in slowly through the swell (oFade), gives way to the stacked logo on the hit, the logo holds through
 // the second phrase, and everything fades into the first screen as the chime fades. Sound off: a shorter version.
-// The O fades in from 0.5s to 1.0s into the chime (Will), holds, and gives way to the logo on the hit.
-const WITH_SOUND = { oStart: 500, oFade: 500, logoIn: 1400, out: 4400, done: 4900 };
+// The O fades in from the moment the chime starts until 1.0s (Will), holds, and gives way to the logo on the hit.
+const WITH_SOUND = { oStart: 0, oFade: 1000, logoIn: 1400, out: 4400, done: 4900 };
 const QUIET = { oStart: 0, oFade: 600, logoIn: 750, out: 2200, done: 2700 };
 
 // The ORDANIS O (same ring as the app icon): white left half, gold right half.
@@ -102,14 +102,18 @@ export default function AppAccessGate({ children }) {
   const [introDone, setIntroDone] = useState(!native);
   const [timing] = useState(() => (startupSoundOn() ? WITH_SOUND : QUIET));
   const started = useRef(false);
+  const [introGo, setIntroGo] = useState(false);
 
   // Once the first screen is ready: start the chime and the intro (LogoIntro) on the same clock.
   useEffect(() => {
     if (!native || state === "loading" || started.current) return;
     started.current = true;
-    playStartupSound();
-    // The launch screen is plain navy, so it can go as soon as the navy intro underneath has painted.
-    requestAnimationFrame(() => requestAnimationFrame(() => SplashScreen.hide({ fadeOutDuration: 200 }).catch(() => {})));
+    // Lift the plain-navy launch screen first (a navy cover is underneath), then start the chime and the O together,
+    // so the fade happens where it can be seen rather than behind the launch screen.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const go = () => setTimeout(() => { playStartupSound(); setIntroGo(true); }, 300);
+      SplashScreen.hide({ fadeOutDuration: 200 }).then(go, go);
+    }));
   }, [native, state]);
 
   useEffect(() => {
@@ -142,7 +146,9 @@ export default function AppAccessGate({ children }) {
     setBusy(false);
   };
 
-  const intro = native && !introDone && state !== "loading" ? <LogoIntro timing={timing} onDone={() => setIntroDone(true)} /> : null;
+  const intro = !native || introDone || state === "loading" ? null
+    : introGo ? <LogoIntro timing={timing} onDone={() => setIntroDone(true)} />
+    : <div style={{ position: "fixed", inset: 0, zIndex: 10000, background: NAVY }} />;
   if (state === "open") return <>{children}{intro}</>;
   if (state === "loading") return <div style={{ position: "fixed", inset: 0, background: NAVY }} />;
   return (<>{intro}
