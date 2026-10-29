@@ -3640,6 +3640,44 @@ function useTabEntrance(activeTab,{scrollWindow=false}={}){
   return ref;
 }
 
+// Client Activity (migration 20261029100000): what the family's own logins added, changed or removed, newest first.
+// Only admins and the household's Expert / Analyst / Onboarding Specialist can read it; field names only, no values.
+const ACTIVITY_KIND={properties:"Property",portfolio_accounts:"Account",account_balances:"Account balance",valuables:"Valuable",
+  loans:"Loan or line",cash_flow_events:"Cash flow event",cash_flow_payment_log:"Bill payment",contacts:"Family member",
+  family_contacts:"Contact",property_contacts:"Property vendor",entities:"Entity",entity_members:"Entity member",deals:"Deal",
+  tasks:"Task",notes:"Note",obligations:"Obligation",documents:"Document",document_folders:"Document folder"};
+const activityField=k=>String(k).replace(/_id$/,"").replace(/_/g," ");
+function ClientActivityPanel({familyId,toast}){
+  const[rows,setRows]=useState(null);
+  const[limit,setLimit]=useState(100);
+  useEffect(()=>{let live=true;
+    sb.from("household_activity").select("id,actor_name,actor_email,table_name,action,record_label,fields,created_at")
+      .eq("family_id",familyId).order("created_at",{ascending:false}).limit(limit)
+      .then(({data,error})=>{if(!live)return;if(error){toast&&toast(error.message||"Could not load client activity","error");setRows([]);}else setRows(data||[]);});
+    return()=>{live=false;};
+  },[familyId,limit]);
+  const color={added:"#2e7d4f",changed:B.navy,removed:"#b03a2e"};
+  return <div>
+    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:B.navy,fontWeight:600,marginBottom:4}}>Client Activity</div>
+    <div style={{fontSize:13,color:B.textSoft,marginBottom:16}}>Changes the family made themselves, newest first. Shows which fields changed, not the values; open the record to see it now.</div>
+    {rows===null?<div style={{fontSize:13,color:B.textMute}}>Loading…</div>
+    :rows.length===0?<Empty text="No changes by the family yet."/>
+    :<div style={{background:B.white,border:`1px solid ${B.border}`,borderRadius:10,overflow:"hidden"}}>
+      {rows.map(r=><div key={r.id} style={{display:"flex",gap:12,padding:"10px 14px",borderBottom:`1px solid ${B.borderLight}`,alignItems:"baseline",flexWrap:"wrap"}}>
+        <div style={{fontSize:12,color:B.textMute,width:140,flexShrink:0}}>{new Date(r.created_at).toLocaleString("en-US",{month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit"})}</div>
+        <div style={{flex:"1 1 260px",minWidth:0,fontSize:13,color:B.text}}>
+          <span style={{fontWeight:700}}>{r.actor_name||r.actor_email||"A family user"}</span>{" "}
+          <span style={{color:color[r.action]||B.navy,fontWeight:600}}>{r.action}</span>{" "}
+          {(ACTIVITY_KIND[r.table_name]||activityField(r.table_name)).toLowerCase()}
+          {r.record_label?<> <span style={{fontWeight:600}}>“{r.record_label}”</span></>:null}
+          {r.action==="changed"&&r.fields?.length?<div style={{fontSize:12,color:B.textSoft,marginTop:2}}>Changed: {r.fields.map(activityField).join(", ")}</div>:null}
+        </div>
+      </div>)}
+    </div>}
+    {rows&&rows.length>=limit&&<div style={{marginTop:12}}><Btn small variant="ghost" onClick={()=>setLimit(l=>l+100)}>Show more</Btn></div>}
+  </div>;
+}
+
 function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab}){
   const isMobile=useIsMobile();
   // Partner role: full read access to everything in this dashboard, but no
@@ -3755,7 +3793,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   //
   // Obligations is absent entirely on Core rather than shown disabled. A locked door on every
   // visit is worse than no door, and the tab row is already the tightest thing on this screen.
-  const TABS=["Overview","Properties","Portfolio","Loans & Lines","Cash Flow",...(hasWorkflows?["Workflows"]:[]),"Valuables",...(userProfile?.role==="enterprise_admin"?[]:["Deals"]),"Notes","Tasks","CHRIS",...(canSeePrompts?["Prompts"]:[]),...(userProfile?.role==="enterprise_admin"?[]:["Ask ORDANIS"])];
+  const TABS=["Overview","Properties","Portfolio","Loans & Lines","Cash Flow",...(hasWorkflows?["Workflows"]:[]),"Valuables",...(userProfile?.role==="enterprise_admin"?[]:["Deals"]),"Notes","Tasks",...(["admin","advisor","analyst"].includes(userProfile?.role)?["Client Activity"]:[]),"CHRIS",...(canSeePrompts?["Prompts"]:[]),...(userProfile?.role==="enterprise_admin"?[]:["Ask ORDANIS"])];
   const assistantName=(familyRow.assistantName||"").trim()||"ORDANIS";
   const[showWelcome,setShowWelcome]=useState(false);
   // Carries "attach a document to this property section" from the Properties tab
@@ -4680,6 +4718,10 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
       {activeTab==="vault"&&<div style={{height:"100%",display:"flex",flexDirection:"column",minHeight:0}}>
         <DocumentsView familyId={family.id} readOnly={false} canUpload={userProfile?.role!=="enterprise_admin"} canDelete={canEdit} canScan={canEdit} canEditMetadata={canEdit} toast={toast} reload={reload}
           attachIntent={attachIntent} onAttachHandled={()=>setAttachIntent(null)}/>
+      </div>}
+
+      {activeTab==="clientactivity"&&<div style={{padding:isMobile?"16px 14px":"24px 28px"}}>
+        <ClientActivityPanel familyId={family.id} toast={toast}/>
       </div>}
 
       {activeTab==="askordanis"&&<div style={{padding:isMobile?"16px 14px":"24px 28px"}}>
@@ -11391,8 +11433,10 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const myPerm=(()=>{const prim=userProfile?.household_role!=="member";
     return{edit:prim||userProfile?.perm_edit!==false,upload:prim||userProfile?.perm_upload!==false,
            download:prim||userProfile?.perm_download!==false,manage:prim||userProfile?.perm_manage===true};})();
-  const selfEdit=clientSelfServe&&myPerm.edit;
-  const selfUpload=clientSelfServe&&myPerm.upload;
+  // Every plan edits the same records (Will, 2026-10-29). On Premier, the family's changes are written to the
+  // household's Client Activity log (migration 20261029100000) so the ORDANIS Expert sees what moved.
+  const selfEdit=myPerm.edit;
+  const selfUpload=myPerm.upload;
 
   // ── Billing (upgrade / downgrade) ──────────────────────────────────────
   // Only Basic <-> Core is ever self-serve here (plan_features.self_serve / plans.js
@@ -11791,7 +11835,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const[wizardOpen,setWizardOpen]=useState(false);
   const wizardSeenKey=`ordanis_onboarding_wizard_seen_${family.id}`;
   useEffect(()=>{
-    if(!selfEdit)return;
+    if(!selfEdit||!clientSelfServe)return; // Premier's Expert sets the household up, so the wizard doesn't open on its own there
     // The "name your assistant" prompt goes first on a first/second login; the wizard opens once
     // that has been answered or dismissed, so the two never stack on top of each other.
     if(promptPending||showNamePrompt)return;
@@ -12210,11 +12254,10 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         </div>}
       </div>}
 
-      {/* CASH FLOW -- self-directed (Basic/Core) can add/edit their own events; Premier's
-          assigned Expert manages this for them, so Premier stays read-only here. */}
+      {/* CASH FLOW -- every plan can add and edit its own events; on Premier the Expert sees changes in Client Activity. */}
       {activeTab==="cashflow"&&<div>
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:8}}>Cash Flow Projection</div>
-        <div style={{fontSize:14,color:B.textSoft,marginBottom:20}}>{clientSelfServe?"Add and manage your own income and expense events below.":`Projection of expected cash flow events configured by your ORDANIS Expert.`}</div>
+        <div style={{fontSize:14,color:B.textSoft,marginBottom:20}}>{clientSelfServe?"Add and manage your own income and expense events below.":"Your expected income and expenses. Your ORDANIS Expert keeps this up to date, and you can add or change events too."}</div>
         {/* fam, not the `family` prop, so the bill-pay gate reads the current plan. */}
         <CashFlowView family={fam} events={(data.cash_flow_events||[]).filter(e=>e.familyId===family.id)} paymentLog={(data.cash_flow_payment_log||[]).filter(p=>p.familyId===family.id)} properties={properties} vendors={vendorOptions} reload={reload} toast={toast||(()=>{})} readOnly={!selfEdit}/>
       </div>}
