@@ -171,7 +171,7 @@ function StackedLogo({ width = 220 }) {
               at this exact font-family/size/letter-spacing) so it runs from the P to the n,
               not an arbitrary fixed span. */}
           <line x1="195.8" y1="133" x2="564.2" y2="133" stroke={C.gold} strokeWidth="2" />
-          <text x="380" y="160" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="15.5" letterSpacing="3.35" fill={C.slate} fontWeight="bold">{BRAND_TAGLINE.toUpperCase()}</text>
+          <text x="380" y="160" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="18" letterSpacing="2.2" textLength="368.4" lengthAdjust="spacing" fill={C.slate} fontWeight="bold">{BRAND_TAGLINE.toUpperCase()}</text>
         </>
       )}
     </svg>

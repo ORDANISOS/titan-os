@@ -11,7 +11,7 @@ export default function OrdanisLockup({ reversed = false, style }) {
     <svg viewBox="162 45 436 123" style={{ display: "block", height: "auto", ...style }} xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ORDANIS">
       <text x="380" y="105" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="bold" fontSize="70" letterSpacing="9" fill={word}>ORDANIS</text>
       <line x1="195.8" y1="133" x2="564.2" y2="133" stroke="#C9A961" strokeWidth="2" />
-      <text x="380" y="160" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="15.5" letterSpacing="3.35" fill={tag} fontWeight="bold">PRIVATE WEALTH ADMINISTRATION</text>
+      <text x="380" y="160" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="18" letterSpacing="2.2" textLength="368.4" lengthAdjust="spacing" fill={tag} fontWeight="bold">PRIVATE WEALTH ADMINISTRATION</text>
     </svg>
   );
 }
