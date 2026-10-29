@@ -9,6 +9,8 @@ import { Capacitor } from '@capacitor/core'
 // Inside the iPhone / Android app: full-screen styling (index.html, html.native-app) instead of a browser page.
 if (Capacitor.isNativePlatform()) {
   document.documentElement.classList.add('native-app')
+  // Navy around the app until the portal, with white status-bar text (nativeChrome.js).
+  import('./nativeChrome.js').then(({ initNativeChrome }) => initNativeChrome())
   // The app opens with its own logo sequence (AppAccessGate), so the website's cube intro is skipped.
   try { sessionStorage.setItem('pcmIntroSeen', '1') } catch (_e) {}
   // No grey "previous / next / done" bar above the keyboard: native apps don't have one.

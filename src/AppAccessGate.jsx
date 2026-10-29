@@ -5,10 +5,11 @@
 // app-access-check function; an accepted code is remembered on the device. Every later launch opens straight away
 // and re-checks the code quietly, so a code an admin has revoked locks the app again. Offline, a previously
 // accepted code still opens the app.
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
 import { SplashScreen } from "@capacitor/splash-screen";
+import { pushNavyOverlay } from "./nativeChrome.js";
 
 const KEY = "ordanis_app_access_code";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
@@ -31,20 +32,27 @@ function playStartupSound() {
   } catch (_e) { /* no audio */ }
 }
 
-function LogoIntro({ onDone }) {
+// Timed to the chime (milliseconds from when it starts). intro.m4a is silent to 0.9s, swells to its main hit at
+// 1.5s, has a second phrase from 2.9s to 4.4s, and fades out by 6.2s. So the O holds through the swell, the stacked
+// logo arrives on the hit, holds through the second phrase, and fades into the first screen as the chime fades.
+// With the sound turned off, a shorter version.
+const WITH_SOUND = { splashHide: 1150, logoIn: 1400, out: 4400, done: 4900 };
+const QUIET = { splashHide: 0, logoIn: 250, out: 1900, done: 2400 };
+
+function LogoIntro({ timing, onDone }) {
   const [phase, setPhase] = useState("in"); // in -> shown -> out
   useEffect(() => {
-    playStartupSound();
-    const t1 = setTimeout(() => setPhase("shown"), 60);
-    const t2 = setTimeout(() => setPhase("out"), 1900);
-    const t3 = setTimeout(onDone, 2400);
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+    const release = pushNavyOverlay(); // navy behind the status bar while the logo is up, even over the portal
+    const t1 = setTimeout(() => setPhase("shown"), timing.logoIn);
+    const t2 = setTimeout(() => setPhase("out"), timing.out);
+    const t3 = setTimeout(onDone, timing.done);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); release(); };
   }, []);
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 10000, background: PAPER, display: "flex", alignItems: "center", justifyContent: "center",
+    <div style={{ position: "fixed", inset: 0, zIndex: 10000, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center",
       opacity: phase === "out" ? 0 : 1, transition: "opacity 0.5s ease", pointerEvents: phase === "out" ? "none" : "auto" }}>
-      <img src="/ordanis-logo.png" alt="ORDANIS" style={{ width: "72%", maxWidth: 340, opacity: phase === "in" ? 0 : 1,
-        transform: phase === "in" ? "translateY(6px)" : "none", transition: "opacity 0.7s ease 0.25s, transform 0.9s ease 0.25s" }} />
+      <img src="/ordanis-logo-reversed.png" alt="ORDANIS" style={{ width: "72%", maxWidth: 340, opacity: phase === "in" ? 0 : 1,
+        transform: phase === "in" ? "scale(0.97)" : "none", transition: "opacity 0.6s ease, transform 1.2s ease" }} />
     </div>
   );
 }
@@ -71,12 +79,18 @@ export default function AppAccessGate({ children }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [introDone, setIntroDone] = useState(!native);
+  const [timing] = useState(() => (startupSoundOn() ? WITH_SOUND : QUIET));
+  const started = useRef(false);
 
-  // The ORDANIS launch screen (navy, white / gold O) stays up until the first real screen is ready, then fades.
+  // Once the first screen is ready: start the chime, keep the launch screen (navy, white / gold O) up through its
+  // swell, then fade it into the stacked logo (LogoIntro), all on the same clock.
   useEffect(() => {
-    if (!native || state === "loading") return;
-    // Two animation frames: the screen underneath has painted, so the O fades straight into it (no bare navy).
-    requestAnimationFrame(() => requestAnimationFrame(() => SplashScreen.hide({ fadeOutDuration: 300 }).catch(() => {})));
+    if (!native || state === "loading" || started.current) return;
+    started.current = true;
+    playStartupSound();
+    // Two animation frames after the wait: the logo screen underneath has painted, so the O fades straight into it.
+    setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(() =>
+      SplashScreen.hide({ fadeOutDuration: 300 }).catch(() => {}))), timing.splashHide);
   }, [native, state]);
 
   useEffect(() => {
@@ -109,11 +123,11 @@ export default function AppAccessGate({ children }) {
     setBusy(false);
   };
 
-  const intro = native && !introDone && state !== "loading" ? <LogoIntro onDone={() => setIntroDone(true)} /> : null;
+  const intro = native && !introDone && state !== "loading" ? <LogoIntro timing={timing} onDone={() => setIntroDone(true)} /> : null;
   if (state === "open") return <>{children}{intro}</>;
-  if (state === "loading") return <div style={{ position: "fixed", inset: 0, background: PAPER }} />;
+  if (state === "loading") return <div style={{ position: "fixed", inset: 0, background: NAVY }} />;
   return (<>{intro}
-    <div style={{ position: "fixed", inset: 0, overflowY: "auto", background: PAPER, display: "flex", alignItems: "center", justifyContent: "center", padding: "calc(24px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom))", fontFamily: "'DM Sans','Helvetica Neue',Arial,sans-serif" }}>
+    <div style={{ position: "fixed", inset: 0, overflowY: "auto", background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", padding: "calc(24px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom))", fontFamily: "'DM Sans','Helvetica Neue',Arial,sans-serif" }}>
       <form onSubmit={submit} style={{ width: "100%", maxWidth: 380, background: "#fff", borderRadius: 14, boxShadow: "0 8px 30px rgba(10,37,64,0.10)", overflow: "hidden" }}>
         <div style={{ height: 4, background: GOLD }} />
         <div style={{ padding: "28px 26px 26px" }}>

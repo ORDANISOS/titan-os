@@ -12,6 +12,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
 import { NativeBiometric, BiometryType } from "@capgo/capacitor-native-biometric";
+import { pushNavyOverlay } from "./nativeChrome.js";
 
 const PREF = "ordanis_biometric"; // "on" | "off" (unset: not asked yet)
 const RELOCK_AFTER_MS = 60 * 1000;
@@ -86,6 +87,12 @@ export default function BiometricLock({ children }) {
     })();
   }, [native]);
 
+  // The lock screen is navy, even when it covers the portal.
+  useEffect(() => {
+    if (!native || (ready && !locked)) return;
+    return pushNavyOverlay();
+  }, [native, ready, locked]);
+
   // Coming back after a minute away locks again.
   useEffect(() => {
     if (!native) return;
@@ -127,13 +134,13 @@ export default function BiometricLock({ children }) {
     <>
       {children}
       {(!ready || locked) && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: PAPER, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: NAVY, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
           padding: "calc(24px + env(safe-area-inset-top)) 28px calc(24px + env(safe-area-inset-bottom))", fontFamily: "'DM Sans','Helvetica Neue',Arial,sans-serif" }}>
           {ready && <>
-            <img src="/ordanis-logo.png" alt="ORDANIS" style={{ width: "70%", maxWidth: 300, marginBottom: 36 }} />
-            <button onClick={unlock} style={{ ...btn, maxWidth: 340, background: NAVY, color: "#fff" }}>Unlock with {label}</button>
-            {msg && <div style={{ maxWidth: 340, fontSize: 13, color: "#8b1a1a", textAlign: "center", marginTop: 14, lineHeight: 1.5 }}>{msg}</div>}
-            <button onClick={signInWithPassword} style={{ marginTop: 18, background: "none", border: "none", color: "#5a6e84", fontSize: 13.5, textDecoration: "underline", fontFamily: "inherit", cursor: "pointer" }}>
+            <img src="/ordanis-logo-reversed.png" alt="ORDANIS" style={{ width: "70%", maxWidth: 300, marginBottom: 36 }} />
+            <button onClick={unlock} style={{ ...btn, maxWidth: 340, background: "#fff", color: NAVY }}>Unlock with {label}</button>
+            {msg && <div style={{ maxWidth: 340, fontSize: 13, color: "#F3D7D2", textAlign: "center", marginTop: 14, lineHeight: 1.5 }}>{msg}</div>}
+            <button onClick={signInWithPassword} style={{ marginTop: 18, background: "none", border: "none", color: "#C9D3DF", fontSize: 13.5, textDecoration: "underline", fontFamily: "inherit", cursor: "pointer" }}>
               Sign in with your password instead
             </button>
           </>}

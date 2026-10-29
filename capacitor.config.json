@@ -20,6 +20,10 @@
       "backgroundColor": "#0A2540",
       "showSpinner": false,
       "launchFadeOutDuration": 300
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "overlaysWebView": true
     }
   }
 }

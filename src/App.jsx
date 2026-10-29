@@ -11,6 +11,7 @@ import { PLANS, PLAN_BLURB, planAllows, planLabel, planIsSelfServe } from "./pla
 import { Capacitor } from "@capacitor/core";
 import { useBiometricSetting } from "./BiometricLock.jsx";
 import { STARTUP_SOUND_KEY, startupSoundOn } from "./AppAccessGate.jsx";
+import { setInPortal } from "./nativeChrome.js";
 // PCM Platform v5.0 — build 20260429
 //
 // Nothing PCM-specific is imported here any more, and that is deliberate.
@@ -190,6 +191,9 @@ const HIDE_SIGNUP = String(import.meta.env.VITE_HIDE_SIGNUP||"")==="1"||Capacito
 // storefronts only. Firm-paid households are billed on the firm's invoice, so their in-app approvals stay as they are.
 // The website itself is unchanged: IS_NATIVE_APP is false there.
 const IS_NATIVE_APP = Capacitor.isNativePlatform();
+// In the app, everything before the portal (sign-in, authenticator, set password, loading) sits on navy (Will).
+// A getter, because the brand runtime can change B.bg after load; the website keeps exactly B.bg.
+const preBg = () => (IS_NATIVE_APP ? "#0A2540" : B.bg);
 const WEB_PORTAL_URL = String(import.meta.env.VITE_WEB_PORTAL_URL||"https://portal.ordanisos.com").replace(/\/+$/,"");
 // Opens the website in the phone's browser on the given family-portal tab (?go=billing, ?go=workflows, ?go=household).
 const openOnWeb = go => { window.open(`${WEB_PORTAL_URL}/?go=${encodeURIComponent(go||"")}`, "_blank"); };
@@ -1960,7 +1964,7 @@ function MfaGate({mode,factorId,role,onDone,onSignOut}){
     onDone();
   };
   const signOut=<button type="button" onClick={onSignOut} style={{display:"block",margin:"16px auto 0",background:"none",border:"none",color:B.textSoft,fontSize:12,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>Sign out</button>;
-  return <div style={{minHeight:"100vh",background:B.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",padding:20}}>
+  return <div style={{minHeight:"100vh",background:preBg(),display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",padding:20}}>
     <div style={MFA_CARD}>
       {/* Same stacked lockup as the login screen (and the firm's own logo on a white-label host), so the
           step right after the password still reads as ORDANIS rather than a bare utility page. */}
@@ -2148,7 +2152,7 @@ function SetPasswordGate({onDone}){
     if(err){setError(err.message||"Could not set your password.");return;}
     onDone();
   };
-  return <div style={{minHeight:"100vh",background:B.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"\'DM Sans\',sans-serif",padding:20}}>
+  return <div style={{minHeight:"100vh",background:preBg(),display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"\'DM Sans\',sans-serif",padding:20}}>
     <form onSubmit={submit} style={{background:B.white,borderRadius:16,padding:"32px 34px",maxWidth:400,width:"100%",boxShadow:B.shadowMd,border:`1px solid ${B.borderLight}`}}>
       <div style={{fontFamily:"\'Cormorant Garamond\',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:6}}>Set your password</div>
       <div style={{fontSize:13,color:B.textSoft,marginBottom:20,lineHeight:1.5}}>Choose a password for your new account. You&apos;ll use it to sign in from now on.</div>
@@ -2318,7 +2322,7 @@ function LoginScreen(){
 
   const introDone=introPhase==="done";
   return(
-    <div style={{minHeight:"100vh",background:B.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans','Helvetica Neue',sans-serif"}}>
+    <div style={{minHeight:"100vh",background:preBg(),display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans','Helvetica Neue',sans-serif"}}>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
       <div style={{position:"fixed",inset:0,backgroundImage:`radial-gradient(circle at 20% 80%,rgba(206,182,132,0.16) 0%,transparent 50%)`,pointerEvents:"none"}}/>
       {introPhase==="playing"&&<canvas ref={canvasRef} style={{position:"fixed",inset:0,zIndex:5,pointerEvents:"none"}}/>}
@@ -16910,6 +16914,8 @@ export default function App(){
   // Sign-in is complete (password, plus the authenticator when the account uses one): the native app may now offer
   // Face ID for next time (BiometricLock.jsx). Nothing listens on the website.
   useEffect(()=>{if(authed&&userProfile&&mfaNeed===false)window.dispatchEvent(new window.Event("ordanis:signed-in"));},[authed,userProfile,mfaNeed]);
+  // Native app: navy around the app until the person is inside the portal, white (dark status bar text) once in.
+  useEffect(()=>{if(IS_NATIVE_APP)setInPortal(!!(authed&&userProfile&&mfaNeed===false&&!needsPasswordSetup));},[authed,userProfile,mfaNeed,needsPasswordSetup]);
   useEffect(()=>{
     if(!authed||!userProfile){setMfaNeed(null);return;}
     let stop=false;
@@ -17087,17 +17093,17 @@ export default function App(){
 
   // Hold the first paint until runtime branding has resolved, so the login
   // screen never flashes the previously active tenant's colours or logo.
-  if(!brandReady||authLoading)return <div style={{minHeight:"100vh",background:B.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><Spinner/></div>;
+  if(!brandReady||authLoading)return <div style={{minHeight:"100vh",background:preBg(),display:"flex",alignItems:"center",justifyContent:"center"}}><Spinner/></div>;
   if(!authed||!userProfile)return <LoginScreen/>;
   if(needsPasswordSetup)return <SetPasswordGate onDone={()=>setNeedsPasswordSetup(false)}/>;
-  if(mfaNeed===null)return <div style={{minHeight:"100vh",background:B.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><Spinner/></div>;
+  if(mfaNeed===null)return <div style={{minHeight:"100vh",background:preBg(),display:"flex",alignItems:"center",justifyContent:"center"}}><Spinner/></div>;
   if(mfaNeed)return <MfaGate {...mfaNeed} role={userProfile.role} onDone={()=>setMfaNeed(false)} onSignOut={logout}/>;
   if(userProfile.active===false)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:B.bg,fontFamily:"'DM Sans',sans-serif",color:B.navy,fontSize:16,flexDirection:"column",gap:12}}><div style={{fontSize:40}}>🔒</div>Your account has been deactivated. Contact your administrator.</div>;
 
   // Client role — show read-only family dashboard
   if(userProfile.role==="client"){
     const clientFamily=data.families.find(f=>f.id===userProfile.familyId);
-    if(loading)return <div style={{minHeight:"100vh",background:B.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><Spinner/></div>;
+    if(loading)return <div style={{minHeight:"100vh",background:preBg(),display:"flex",alignItems:"center",justifyContent:"center"}}><Spinner/></div>;
     if(!clientFamily){
       // Fresh from Stripe Checkout and the webhook hasn't created the family yet -- see the
       // polling effect above. Show a normal "getting things ready" screen instead of the
@@ -17110,7 +17116,7 @@ export default function App(){
 
   // Partner role — view-only across their linked family/families; can upload/download documents only
   if(userProfile.role==="partner"){
-    if(loading)return <div style={{minHeight:"100vh",background:B.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><Spinner/></div>;
+    if(loading)return <div style={{minHeight:"100vh",background:preBg(),display:"flex",alignItems:"center",justifyContent:"center"}}><Spinner/></div>;
     return <><PartnerDashboard data={data} userProfile={userProfile} logout={logout} toast={showToast} reload={reload}/><FloatingAssistant families={data.families||[]} data={data} reload={reload} toast={showToast} userProfile={userProfile}/>{toastState&&<Toast msg={toastState.msg} type={toastState.type}/>}<UpdateBanner/></>;
   }
 
