@@ -100,7 +100,8 @@ The OpenArc intelligence brief and any litigation/competitor content must never 
 8. Household decisions pending: TEST PEREZ PHONE (assistant name "sucka"), archived Harrington/Okonkwo/TEST 8b (purge is Will's call), demo junk obligations.
 9. Counsel review of the Expert paragraph refund line and the SMS consent wording. Repo rename off titan-os is parked.
 
-## Go-live checklist (do these when the platform goes live, not before)
-- Switch on the daily task/bill reminders job (production cron job 2, 13:00 UTC). It is ready: the function is
-  deployed and reads its secret from Vault (`cron_secret`, matching function secret `CRON_SECRET`). Will runs in the
-  SQL editor: `select cron.alter_job(2, active := true);` then confirm the next run in `cron.job_run_details`.
+## Go-live (Will, 2026-10-29: "turn everything on")
+- All production cron jobs are active, including daily reminders (job 2, `send-task-reminders`, 13:00 UTC). It sends
+  each ORDANIS Expert ONE daily summary (task reminders, bills they pay, Client Activity) plus the family emails.
+- Client Activity: `household_activity` (migrations 20261029100000/110000) logs every change a family login makes;
+  staff see it on the household's Client Activity tab. Premier families edit the same records as Basic/Core.
