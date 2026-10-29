@@ -47,6 +47,9 @@
          their own safe-area padding. */
       html.native-app, html.native-app body { background: #0A2540; overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
       html.native-app #root { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); box-sizing: border-box; min-height: 100vh; }
+      /* A solid band behind the status bar (same color as the page edge: navy, or white in the portal), so content
+         scrolling up never shows through the clock and battery. Below pop-ups (1000), above page content. */
+      html.native-app body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: env(safe-area-inset-top); background: inherit; z-index: 950; pointer-events: none; }
       html.native-app img, html.native-app a { -webkit-touch-callout: none; }
       html.native-app button, html.native-app a, html.native-app img { -webkit-user-select: none; user-select: none; }
     </style>

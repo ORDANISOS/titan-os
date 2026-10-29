@@ -826,7 +826,7 @@ const fmt=iso=>{
   const d=parseLocalDate(iso);
   return isNaN(d.getTime())?"—":d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
 };
-const fmtMoney=n=>n!=null&&n!==""?`$${Number(n).toLocaleString()}`:"—";
+const fmtMoney=n=>n!=null&&n!==""?`$${Number(n).toLocaleString("en-US",{minimumFractionDigits:Number.isInteger(Math.round(Number(n)*100)/100)?0:2,maximumFractionDigits:2})}`:"—";
 // Report-grade currency: always 2 decimals + thousands separators ($1,324,486.40). Avoids ragged decimals from raw toLocaleString().
 const fmtUSD=n=>n!=null&&n!==""?`$${Number(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`:"—";
 // Smart-abbreviated money for chart axis labels: $5K, $500K, $5M, $1.5M
@@ -4641,8 +4641,8 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
             if(!items.length)return null;
             return <div key={cat} style={{marginBottom:20}}>
               <div style={{fontSize:11,fontWeight:800,color:B.textMute,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>{cat}</div>
-              {items.map(v=><div key={v.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid #8b5cf6`,borderRadius:10,padding:"14px 18px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"flex-start",boxShadow:B.shadow}}>
-                <div>
+              {items.map(v=><div key={v.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid #8b5cf6`,borderRadius:10,padding:"14px 18px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,boxShadow:B.shadow}}>
+                <div style={{flex:1,minWidth:0}}>
                   <div style={{fontWeight:700,color:B.navy,fontSize:13}}>{v.description}</div>
                   {v.makeModel&&<div style={{fontSize:12,color:B.textSoft}}>{v.makeModel}{v.year?` · ${v.year}`:""}</div>}
                   {v.insured?<div style={{fontSize:11,color:"#18a850",fontWeight:600,marginTop:3}}>✓ Insured{v.insuranceCompany?` — ${v.insuranceCompany}`:""}<DocLink doc={valuablesPolicyDoc()} toast={toast} label="📄 policy"/></div>:<div style={{fontSize:11,color:"#b4551f",fontWeight:600,marginTop:3}}>⚠ Not scheduled<DocLink doc={valuablesPolicyDoc()} toast={toast} label="📄 policy"/></div>}
@@ -6397,9 +6397,10 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
         </div>
       </div>
       <GoldLine/>
-      <svg viewBox={`0 0 ${Math.max(720,monthlyData.length*18)} 260`} style={{width:"100%",height:isMobile?200:270,display:"block"}}>
+      <svg viewBox={`0 0 ${isMobile?400:Math.max(720,monthlyData.length*18)} 260`} style={{width:"100%",height:isMobile?200:270,display:"block"}}>
         {(() => {
-          const W=Math.max(720,monthlyData.length*18);const H=260;const padL=60,padR=compareActive?64:54,padT=18,padB=34;
+          const W=isMobile?400:Math.max(720,monthlyData.length*18);const H=260;const padL=isMobile?50:60,padR=isMobile?(compareActive?50:44):(compareActive?64:54),padT=18,padB=34;
+          const axisFont=isMobile?13:9; // the phone drawing is shrunk less, but still needs larger type to read
           const innerW=W-padL-padR;const innerH=H-padT-padB;
           const barW=innerW/monthlyData.length;
           const incomeNetByMonth=monthlyData.map(m=>m.income-m.tax);
@@ -6430,7 +6431,7 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
             {/* Horizontal gridlines + left $ axis */}
             {yTicks.map((v,i)=>{const y=padT+innerH-((v-minOverall)/range)*innerH;return <g key={i}>
               <line x1={padL} x2={W-padR} y1={y} y2={y} stroke={B.borderLight} strokeWidth={Math.abs(v)<0.01?0.9:0.5} strokeDasharray={Math.abs(v)<0.01?"0":"3,3"}/>
-              <text x={padL-8} y={y+3} fontSize="9" fill={B.textMute} textAnchor="end">{fmtMoneyShort(v)}</text>
+              <text x={padL-8} y={y+3} fontSize={axisFont} fill={B.textMute} textAnchor="end">{fmtMoneyShort(v)}</text>
             </g>;})}
             {/* Bars */}
             {monthlyData.map((m,i)=>{
@@ -6451,9 +6452,9 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
             <circle cx={lastX} cy={cumY(cumulative[cumulative.length-1])} r="3" fill={B.navy}/>
             {compareActive&&<circle cx={lastX} cy={cumY(compareCumulative[compareCumulative.length-1])} r="3" fill={B.gold}/>}
             {/* Right axis cumulative ticks */}
-            {cTicks.map((v,i)=><text key={i} x={W-padR+6} y={cumY(v)+3} fontSize="9" fill={B.textMute} textAnchor="start">{fmtMoneyShort(v)}</text>)}
+            {cTicks.map((v,i)=><text key={i} x={W-padR+6} y={cumY(v)+3} fontSize={axisFont} fill={B.textMute} textAnchor="start">{fmtMoneyShort(v)}</text>)}
             {/* X axis labels */}
-            {monthlyData.map((m,i)=>i%stepLabel!==0?null:<text key={i} x={padL+barW*i+barW/2} y={padT+innerH+15} fontSize="9" fill={B.textMute} textAnchor="middle">{m.label}</text>)}
+            {monthlyData.map((m,i)=>i%stepLabel!==0?null:<text key={i} x={padL+barW*i+barW/2} y={padT+innerH+(isMobile?18:15)} fontSize={axisFont} fill={B.textMute} textAnchor="middle">{m.label}</text>)}
             <line x1={padL} x2={W-padR} y1={padT+innerH} y2={padT+innerH} stroke={B.border} strokeWidth="1"/>
           </>;
         })()}
@@ -10195,6 +10196,7 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
   // Backward compat: if readOnly passed, default canUpload=false canDelete=false
   // If canUpload/canDelete passed explicitly, use those
   const allowUpload=canUpload!==undefined?canUpload:!readOnly;
+  const isMobile=useIsMobile();
   const allowDelete=canDelete!==undefined?canDelete:!readOnly;
   const allowScan=canScan!==undefined?canScan:allowUpload; // the manual scan buttons stay advisor-side
   // Extraction at upload is NOT the same permission. A client uploading into their
@@ -10785,8 +10787,10 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
 
   return <div style={{height:"100%",display:"flex",flexDirection:"column",minHeight:0}}>
     <style>{`.pcm-folder-card{transition:transform .15s ease, box-shadow .15s ease;}.pcm-folder-card:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(9,43,73,0.13);}`}</style>
-    <div style={{padding:"14px 24px",borderBottom:`1px solid ${B.borderLight}`,background:B.white,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-      <div style={{flex:1,display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+    <div className={isMobile?"pcm-chris-bar m":"pcm-chris-bar"} style={{padding:isMobile?"0 0 12px":"14px 24px",borderBottom:isMobile?"none":`1px solid ${B.borderLight}`,background:isMobile?"transparent":B.white,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+      {/* On a phone the buttons share the row evenly; the folder name, when one is open, takes its own row. */}
+      {isMobile&&<style>{`.pcm-chris-bar.m>button{flex:1 1 140px;justify-content:center;}`}</style>}
+      {(!isMobile||openFolder)&&<div style={{flex:1,display:"flex",alignItems:"center",gap:10,minWidth:0,flexBasis:isMobile?"100%":undefined}}>
         {openFolder&&<button onClick={()=>setOpenFolder(null)} style={{background:"none",border:`1px solid ${B.border}`,color:B.textSoft,cursor:"pointer",fontSize:13,fontFamily:"inherit",padding:"6px 10px",borderRadius:6,flexShrink:0}}>← CHRIS</button>}
         {openFolder&&<div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{openFolder===PRIVATE_KEY?"🔒 Private":openFolder}</div>}
         {openFolder&&<span style={{fontSize:12,color:B.textMute,flexShrink:0}}>{folderCount(openFolder)} file{folderCount(openFolder)!==1?"s":""}</span>}
@@ -10795,16 +10799,16 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
             style={{background:"none",border:`1px solid ${B.borderLight}`,color:B.textSoft,cursor:"pointer",
               fontSize:11.5,fontFamily:"inherit",padding:"4px 9px",borderRadius:6,flexShrink:0}}>
             Remove folder</button>}
-      </div>
-      {allowUpload&&familyId&&openFolder!==PRIVATE_KEY&&<Btn variant="ghost" onClick={()=>setModal("batch")}>📷 Snap or add several</Btn>}
-      {allowUpload&&openFolder!==PRIVATE_KEY&&<Btn onClick={()=>{setCategory(openFolder||"General");setModal("upload");}}>⬆ Upload Document</Btn>}
+      </div>}
+      {allowUpload&&familyId&&openFolder!==PRIVATE_KEY&&<Btn variant="ghost" onClick={()=>setModal("batch")}>{isMobile?"📷 Snap or add":"📷 Snap or add several"}</Btn>}
+      {allowUpload&&openFolder!==PRIVATE_KEY&&<Btn onClick={()=>{setCategory(openFolder||"General");setModal("upload");}}>{isMobile?"⬆ Upload":"⬆ Upload Document"}</Btn>}
       {privateFolder&&openFolder===PRIVATE_KEY&&<Btn onClick={()=>{setPrivName("");setPrivFile(null);setModal("privateUpload");}}>🔒 Upload to Private</Btn>}
       {allowScan&&unscannedCount>0&&<Btn variant="ghost" onClick={scanAllUnscanned} disabled={!!bulkScan} title="Extract text from existing documents so the AI assistant can read them">{bulkScan?`Scanning ${bulkScan.done}/${bulkScan.total}${scanMsg?" · "+scanMsg:""}…`:`✦ Scan ${unscannedCount} for AI`}</Btn>}
     </div>
-    <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
+    <div style={{flex:1,overflowY:"auto",padding:isMobile?"4px 0 96px":"20px 24px"}}>
       <div style={{position:"relative",marginBottom:16}}>
         <input type="text" value={vaultQuery} onChange={e=>setVaultQuery(e.target.value)}
-          placeholder="Search CHRIS — a word from the document, a name, anything you remember"
+          placeholder={isMobile?"Search CHRIS: a word, a name…":"Search CHRIS — a word from the document, a name, anything you remember"}
           style={{width:"100%",boxSizing:"border-box",padding:"11px 36px 11px 14px",fontSize:13.5,
             fontFamily:"inherit",color:B.text,border:`1px solid ${B.border}`,borderRadius:8,background:B.white}}/>
         {vaultQuery&&<button onClick={()=>setVaultQuery("")} aria-label="Clear search"
@@ -10850,25 +10854,33 @@ function DocumentsView({familyId,readOnly=false,canUpload,canDelete,canScan,canE
               style={{background:"none",border:`1px solid ${B.border}`,color:B.navy,cursor:"pointer",
                 fontSize:12,fontFamily:"inherit",padding:"7px 12px",borderRadius:8}}>+ New folder</button>
           </div>
-          {filled.map(r=><div key={r.name} role="button" tabIndex={0}
-            onClick={()=>setOpenFolder(r.name)}
-            onKeyDown={e=>{if(e.key==="Enter"||e.key===" ")setOpenFolder(r.name);}}
-            style={{display:"flex",alignItems:"center",gap:12,padding:"12px 4px",cursor:"pointer",
-              borderBottom:`1px solid ${B.borderLight}`}}>
-            <div style={{flex:1,minWidth:0}}>
+          {filled.map(r=>{
+            const label=<>
               <span style={{fontSize:14,color:B.navy}}>{r.name}</span>
               {r.name==="Other"&&<span style={{fontSize:11.5,color:"#8a5c00",marginLeft:8}}>needs filing</span>}
               {r.expired>0&&<span style={{fontSize:11.5,color:"#8b1a1a",marginLeft:8}}>{r.expired} expired</span>}
               {r.expiring>0&&<span style={{fontSize:11.5,color:"#8a5c00",marginLeft:8}}>{r.expiring} expiring</span>}
-              {r.custom&&<span style={{fontSize:10.5,color:B.textMute,marginLeft:8,border:`1px solid ${B.borderLight}`,borderRadius:4,padding:"1px 5px"}}>added</span>}
-            </div>
-            <div style={{width:110,height:4,background:B.bg,borderRadius:2,overflow:"hidden",flexShrink:0}}>
+              {r.custom&&<span style={{fontSize:10.5,color:B.textMute,marginLeft:8,border:`1px solid ${B.borderLight}`,borderRadius:4,padding:"1px 5px",whiteSpace:"nowrap"}}>added</span>}
+            </>;
+            const bar=<div style={{flex:isMobile?1:"none",width:isMobile?"auto":110,height:4,background:B.bg,borderRadius:2,overflow:"hidden",flexShrink:0}}>
               <div style={{width:`${Math.round(r.share*100)}%`,height:"100%",
                 background:(r.name==="Other"||r.expiring>0||r.expired>0)?"#d4900a":B.gold}}/>
-            </div>
-            <div style={{fontSize:13,color:B.textSoft,width:56,textAlign:"right",flexShrink:0}}>{r.count} file{r.count===1?"":"s"}</div>
-            <div style={{fontSize:11.5,color:B.textMute,width:64,textAlign:"right",flexShrink:0}}>{fmtDate(r.lastAt)}</div>
-          </div>)}
+            </div>;
+            const count=<div style={{fontSize:13,color:B.textSoft,textAlign:"right",flexShrink:0,whiteSpace:"nowrap",width:isMobile?"auto":56}}>{r.count} file{r.count===1?"":"s"}</div>;
+            const date=<div style={{fontSize:11.5,color:B.textMute,textAlign:"right",flexShrink:0,whiteSpace:"nowrap",width:isMobile?"auto":64}}>{fmtDate(r.lastAt)}</div>;
+            const rowProps={role:"button",tabIndex:0,onClick:()=>setOpenFolder(r.name),
+              onKeyDown:e=>{if(e.key==="Enter"||e.key===" ")setOpenFolder(r.name);}};
+            // On a phone the four columns don't fit side by side, so each folder is two lines:
+            // name and count, then the bar and the last-updated date.
+            return isMobile
+              ?<div key={r.name} {...rowProps} style={{padding:"12px 4px",cursor:"pointer",borderBottom:`1px solid ${B.borderLight}`}}>
+                <div style={{display:"flex",alignItems:"baseline",gap:12}}><div style={{flex:1,minWidth:0,lineHeight:1.5}}>{label}</div>{count}</div>
+                <div style={{display:"flex",alignItems:"center",gap:12,marginTop:6}}>{bar}{date}</div>
+              </div>
+              :<div key={r.name} {...rowProps} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 4px",cursor:"pointer",borderBottom:`1px solid ${B.borderLight}`}}>
+                <div style={{flex:1,minWidth:0}}>{label}</div>{bar}{count}{date}
+              </div>;
+          })}
           {/* Empty folders are demoted, not hidden. Hiding them is tidier but then nobody
               knows Estate Planning exists as a destination. */}
           {empty.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:8,alignItems:"center",padding:"14px 4px 0"}}>
@@ -12484,8 +12496,8 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           if(!items.length)return null;
           return <div key={cat} style={{marginBottom:20}}>
             <div style={{fontSize:12,fontWeight:800,color:B.textMute,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10}}>{cat}</div>
-            {items.map(v=><div key={v.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid #8b5cf6`,borderRadius:10,padding:"16px 20px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:B.shadow}}>
-              <div>
+            {items.map(v=><div key={v.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid #8b5cf6`,borderRadius:10,padding:"16px 20px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,boxShadow:B.shadow}}>
+              <div style={{flex:1,minWidth:0}}>
                 <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{v.description}</div>
                 {v.makeModel&&<div style={{fontSize:12,color:B.textSoft}}>{v.makeModel}{v.year?` · ${v.year}`:""}</div>}
                 {v.insured?<div style={{fontSize:11,color:"#18a850",fontWeight:600,marginTop:3}}>✓ Insured{v.insuranceCompany?` — ${v.insuranceCompany}`:""}<DocLink doc={valuablesPolicyDoc()} toast={toast} label="📄 policy"/></div>:<div style={{fontSize:11,color:"#b4551f",fontWeight:600,marginTop:3}}>⚠ Not scheduled<DocLink doc={valuablesPolicyDoc()} toast={toast} label="📄 policy"/></div>}
@@ -12546,7 +12558,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         </div>
         <WebPurchaseNotice title="Plans, cards and add-ons are managed on the website" go="billing" button="Open Billing on the website">
           Changing your plan, adding or updating a card, extra workflows and other add-ons are handled securely on the
-          ORDANIS website. Everything you change there shows up here straight away.
+          ORDANIS website. Everything you change there shows up here right away.
         </WebPurchaseNotice>
       </div>}
       {activeTab==="billing"&&!IS_NATIVE_APP&&<div style={{maxWidth:640}}>
@@ -15832,7 +15844,7 @@ function FirmMembershipCard({familyRow,toast,reload}){
       {!confirmRemove
         ? <Btn small variant="danger" onClick={()=>setConfirmRemove(true)}>Remove from {nameOf(firmId)}</Btn>
         : <div>
-            <div style={{fontSize:12.5,color:B.text,marginBottom:8}}>Remove this household from {nameOf(firmId)}? The firm loses access straight away. The household keeps its plan and its data.</div>
+            <div style={{fontSize:12.5,color:B.text,marginBottom:8}}>Remove this household from {nameOf(firmId)}? The firm loses access right away. The household keeps its plan and its data.</div>
             <input value={removeNote} onChange={e=>setRemoveNote(e.target.value)} maxLength={300} placeholder="Reason (optional, recorded in the log)"
               style={{width:"100%",maxWidth:520,boxSizing:"border-box",padding:"8px 10px",border:`1px solid ${B.border}`,borderRadius:8,fontSize:12.5,fontFamily:"inherit",color:B.text}}/>
             <div style={{display:"flex",gap:8,marginTop:8}}>
@@ -16649,7 +16661,7 @@ function EntPeople({row,data,toast,onChanged}){
       <div style={{fontSize:11.5,color:B.textSoft,marginTop:10}}>Firm admin accounts are created by an ORDANIS admin from the Users screen.</div>
     </div>
     {removing&&<Modal title="Remove from firm?" onClose={()=>setRemoving(null)}>
-      <div style={{fontSize:14,color:B.text,lineHeight:1.6,marginTop:6}}>Remove <strong>{removing.name}</strong> from {row.name}? The firm loses access straight away. The household keeps its plan and its data.</div>
+      <div style={{fontSize:14,color:B.text,lineHeight:1.6,marginTop:6}}>Remove <strong>{removing.name}</strong> from {row.name}? The firm loses access right away. The household keeps its plan and its data.</div>
       <input value={removeNote} onChange={e=>setRemoveNote(e.target.value)} maxLength={300} placeholder="Reason (optional, recorded in the log)" style={{width:"100%",boxSizing:"border-box",marginTop:12,padding:"8px 10px",border:`1px solid ${B.border}`,borderRadius:8,fontSize:13,fontFamily:"inherit",color:B.text}}/>
       <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:18}}><Btn variant="ghost" onClick={()=>setRemoving(null)}>Cancel</Btn><Btn variant="danger" disabled={busy} onClick={remove}>{busy?"Removing…":"Remove"}</Btn></div>
     </Modal>}
