@@ -1440,7 +1440,7 @@ function PrivateGate({familyId,onBack,children}){
 // Giving "Manage users and billing" (or all four) asks for a second confirmation listing exactly what is given.
 const HOUSEHOLD_PERMS=[
   {key:"edit",label:"Edit records",desc:"Add, change and remove the household's records: properties, accounts, loans, bills, valuables, tasks and notes."},
-  {key:"upload",label:"Upload documents",desc:"Add files to CHRIS, the household's document vault."},
+  {key:"upload",label:"Upload documents",desc:"Add files to CHRIS, the household's Centralized Household Records Integration Server."},
   {key:"download",label:"Download documents",desc:"Open and download files in CHRIS. Without this they see file names only. Their own Private folder is always theirs."},
   {key:"manage",label:"Manage users and billing",desc:"Invite or remove people, change what each person can do, change the plan, and add or change the payment card. This is the same control you have."},
 ];
