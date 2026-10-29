@@ -33,26 +33,47 @@ function playStartupSound() {
 }
 
 // Timed to the chime (milliseconds from when it starts). intro.m4a is silent to 0.9s, swells to its main hit at
-// 1.5s, has a second phrase from 2.9s to 4.4s, and fades out by 6.2s. So the O holds through the swell, the stacked
-// logo arrives on the hit, holds through the second phrase, and fades into the first screen as the chime fades.
-// With the sound turned off, a shorter version.
-const WITH_SOUND = { splashHide: 1150, logoIn: 1400, out: 4400, done: 4900 };
-const QUIET = { splashHide: 0, logoIn: 250, out: 1900, done: 2400 };
+// 1.5s, has a second phrase from 2.9s to 4.4s, and fades out by 6.2s. The launch screen is plain navy; the white /
+// gold O fades in slowly through the swell (oFade), gives way to the stacked logo on the hit, the logo holds through
+// the second phrase, and everything fades into the first screen as the chime fades. Sound off: a shorter version.
+// oStart: the O begins fading in half a second into the chime (Will), and is fully in just before the hit.
+const WITH_SOUND = { oStart: 500, oFade: 900, logoIn: 1400, out: 4400, done: 4900 };
+const QUIET = { oStart: 0, oFade: 600, logoIn: 750, out: 2200, done: 2700 };
+
+// The ORDANIS O (same ring as the app icon): white left half, gold right half.
+function OMark({ style }) {
+  return (
+    <svg viewBox="174 143 676 737" style={style} aria-hidden="true">
+      <defs>
+        <clipPath id="ordanis-o-ring"><path fillRule="evenodd" clipRule="evenodd"
+          d="M512 143a338 368.5 0 1 0 0.01 0zM512 236a215 276 0 1 1 -0.01 0z" /></clipPath>
+      </defs>
+      <g clipPath="url(#ordanis-o-ring)">
+        <rect x="0" y="0" width="512" height="1024" fill="#FFFFFF" />
+        <rect x="512" y="0" width="512" height="1024" fill={GOLD} />
+      </g>
+    </svg>
+  );
+}
 
 function LogoIntro({ timing, onDone }) {
-  const [phase, setPhase] = useState("in"); // in -> shown -> out
+  const [phase, setPhase] = useState("o"); // o (O fading in) -> shown (logo) -> out
+  const [oVisible, setOVisible] = useState(false);
   useEffect(() => {
     const release = pushNavyOverlay(); // navy behind the status bar while the logo is up, even over the portal
+    const t0 = setTimeout(() => setOVisible(true), Math.max(30, timing.oStart));
     const t1 = setTimeout(() => setPhase("shown"), timing.logoIn);
     const t2 = setTimeout(() => setPhase("out"), timing.out);
     const t3 = setTimeout(onDone, timing.done);
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); release(); };
+    return () => { clearTimeout(t0); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); release(); };
   }, []);
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 10000, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center",
       opacity: phase === "out" ? 0 : 1, transition: "opacity 0.5s ease", pointerEvents: phase === "out" ? "none" : "auto" }}>
-      <img src="/ordanis-logo-reversed.png" alt="ORDANIS" style={{ width: "72%", maxWidth: 340, opacity: phase === "in" ? 0 : 1,
-        transform: phase === "in" ? "scale(0.97)" : "none", transition: "opacity 0.6s ease, transform 1.2s ease" }} />
+      <OMark style={{ position: "absolute", width: "41%", maxWidth: 200, opacity: phase === "o" && oVisible ? 1 : 0,
+        transition: phase === "o" ? `opacity ${timing.oFade}ms cubic-bezier(0.2, 0.6, 0.3, 1)` : "opacity 0.4s ease" }} />
+      <img src="/ordanis-logo-reversed.png" alt="ORDANIS" style={{ width: "72%", maxWidth: 340, opacity: phase === "o" ? 0 : 1,
+        transform: phase === "o" ? "scale(0.97)" : "none", transition: "opacity 0.6s ease, transform 1.2s ease" }} />
     </div>
   );
 }
@@ -82,15 +103,13 @@ export default function AppAccessGate({ children }) {
   const [timing] = useState(() => (startupSoundOn() ? WITH_SOUND : QUIET));
   const started = useRef(false);
 
-  // Once the first screen is ready: start the chime, keep the launch screen (navy, white / gold O) up through its
-  // swell, then fade it into the stacked logo (LogoIntro), all on the same clock.
+  // Once the first screen is ready: start the chime and the intro (LogoIntro) on the same clock.
   useEffect(() => {
     if (!native || state === "loading" || started.current) return;
     started.current = true;
     playStartupSound();
-    // Two animation frames after the wait: the logo screen underneath has painted, so the O fades straight into it.
-    setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(() =>
-      SplashScreen.hide({ fadeOutDuration: 300 }).catch(() => {}))), timing.splashHide);
+    // The launch screen is plain navy, so it can go as soon as the navy intro underneath has painted.
+    requestAnimationFrame(() => requestAnimationFrame(() => SplashScreen.hide({ fadeOutDuration: 200 }).catch(() => {})));
   }, [native, state]);
 
   useEffect(() => {
