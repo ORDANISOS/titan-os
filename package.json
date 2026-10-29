@@ -7,15 +7,23 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint:undef": "npx --yes eslint@9 --config eslint.undef.config.mjs src",
-    "test": "npm run lint:undef && node docs/test_family_snapshot.mjs && node docs/test_property_cashflow.mjs && node docs/test_expense_rollup.mjs && node docs/test_activity_report.mjs && node docs/test_vault_folders.mjs && node docs/test_plans.mjs"
+    "test": "npm run lint:undef && node docs/test_family_snapshot.mjs && node docs/test_property_cashflow.mjs && node docs/test_expense_rollup.mjs && node docs/test_activity_report.mjs && node docs/test_vault_folders.mjs && node docs/test_plans.mjs",
+    "build:app": "vite build --mode app-demo",
+    "app:ios": "npm run build:app && npx cap sync ios",
+    "app:android": "npm run build:app && npx cap sync android"
   },
   "dependencies": {
+    "@capacitor/android": "^7.6.10",
+    "@capacitor/core": "^7.6.10",
+    "@capacitor/ios": "^7.6.10",
+    "@capacitor/preferences": "^7.0.4",
     "@supabase/supabase-js": "^2.39.0",
     "pdf-lib": "^1.17.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.6.10",
     "@vitejs/plugin-react": "^4.2.0",
     "docx": "^9.7.1",
     "pptxgenjs": "^4.0.1",

@@ -1,0 +1,7 @@
+{
+  "appId": "com.ordanisos.app",
+  "appName": "ORDANIS",
+  "webDir": "dist",
+  "ios": { "contentInset": "always", "backgroundColor": "#F8F6F1" },
+  "android": { "backgroundColor": "#F8F6F1" }
+}

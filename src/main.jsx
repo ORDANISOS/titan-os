@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import SignupFlow, { SignupWelcome } from './SignupFlow.jsx'
+import AppAccessGate from './AppAccessGate.jsx'
 
 // The public self-serve sign-up flow (Plans -> Account -> Stripe Checkout) lives outside the
 // authenticated app entirely -- it renders before any Supabase session check, so it never runs
@@ -16,6 +17,9 @@ const isWelcome = path === '/welcome'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    {isWelcome ? <SignupWelcome /> : isSignup ? <SignupFlow /> : <App />}
+    {/* Native app only: asks for a tester's access code first. On the website it renders its child untouched. */}
+    <AppAccessGate>
+      {isWelcome ? <SignupWelcome /> : isSignup ? <SignupFlow /> : <App />}
+    </AppAccessGate>
   </React.StrictMode>
 )
