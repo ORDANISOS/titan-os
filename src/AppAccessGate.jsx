@@ -36,8 +36,8 @@ function playStartupSound() {
 // 1.5s, has a second phrase from 2.9s to 4.4s, and fades out by 6.2s. The launch screen is plain navy; the white /
 // gold O fades in slowly through the swell (oFade), gives way to the stacked logo on the hit, the logo holds through
 // the second phrase, and everything fades into the first screen as the chime fades. Sound off: a shorter version.
-// oStart: the O begins fading in half a second into the chime (Will), and is fully in just before the hit.
-const WITH_SOUND = { oStart: 500, oFade: 900, logoIn: 1400, out: 4400, done: 4900 };
+// The O fades in from 0.5s to 1.0s into the chime (Will), holds, and gives way to the logo on the hit.
+const WITH_SOUND = { oStart: 500, oFade: 500, logoIn: 1400, out: 4400, done: 4900 };
 const QUIET = { oStart: 0, oFade: 600, logoIn: 750, out: 2200, done: 2700 };
 
 // The ORDANIS O (same ring as the app icon): white left half, gold right half.
