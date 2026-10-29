@@ -261,5 +261,5 @@ is arranged with our team after you ask.</p>
 
 DOC = dict(file="ORDANIS_Client_Guide.pdf", kind="Client Guide",
            title="Getting the Most from ORDANIS",
-           subtitle="Your plan, your household portal, CHRIS (the Centralized Household Records Integration Server), and how workflows carry your household's recurring work through to done.",
+           subtitle="Your plan, your household portal, CHRIS (the Centralized Household Records Integration Server), and how workflows carry your household's recurring work from start to finish.",
            audience="ORDANIS households", classification="For clients", sections=S)
