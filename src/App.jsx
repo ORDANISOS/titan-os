@@ -817,7 +817,7 @@ const pctChange=(s,c)=>{const sv=Number(s)||0;const cv=Number(c)||0;if(!sv)retur
 
 const toClient=obj=>{
   if(!obj)return obj;
-  const m={family_id:"familyId",contact_id:"contactId",account_id:"accountId",account_period:"accountPeriod",as_of:"asOf",balance_as_of:"balanceAsOf",source_document_id:"sourceDocumentId",balance_source_document_id:"balanceSourceDocumentId",entered_by:"enteredBy",close_date:"closeDate",due_date:"dueDate",created_at:"createdAt",uploaded_at:"uploadedAt",advisor_name:"advisorName",advisor_email:"advisorEmail",owner_name:"ownerName",property_type:"propertyType",property_id:"propertyId",purchase_price:"purchasePrice",purchase_date:"purchaseDate",current_value:"currentValue",loan_balance:"loanBalance",interest_rate:"interestRate",loan_payment:"loanPayment",loan_maturity_date:"loanMaturityDate",loan_type:"loanType",rental_income:"rentalIncome",property_taxes:"propertyTaxes",flood_insurance:"floodInsurance",insurance_company:"insuranceCompany",insurance_premium:"insurancePremium",flood_insurance_company:"floodInsuranceCompany",flood_insurance_premium:"floodInsurancePremium",insurance_expiration:"insuranceExpiration",policy_number:"policyNumber",coverage_amount:"coverageAmount",valuable_id:"valuableId",private_owner_id:"privateOwnerId",loan_id:"loanId",credit_limit:"creditLimit",original_amount:"originalAmount",rate_type:"rateType",payment_amount:"paymentAmount",payment_frequency:"paymentFrequency",origination_date:"originationDate",maturity_date:"maturityDate",flood_insurance_expiration:"floodInsuranceExpiration",account_type:"accountType",starting_balance:"startingBalance",current_balance:"currentBalance",banker_name:"bankerName",account_advisor_name:"accountAdvisorName",account_advisor_phone:"accountAdvisorPhone",account_advisor_email:"accountAdvisorEmail",make_model:"makeModel",estimated_value:"estimatedValue",file_type:"fileType",extracted_text:"extractedText",reminder_days:"reminderDays",reminder_sent:"reminderSent",full_name:"fullName",file_path:"filePath",file_size:"fileSize",uploaded_by:"uploadedBy",event_type:"eventType",start_date:"startDate",end_date:"endDate",tax_treatment:"taxTreatment",filing_status:"filingStatus",state_tax_rate:"stateTaxRate",base_income:"baseIncome",cash_flow_settings:"cashFlowSettings",hoa_fee:"hoaFee",property_management_fee_pct:"propertyManagementFeePct",include_mortgage_in_cashflow:"includeMortgageInCashflow",sort_order:"sortOrder",note_id:"noteId",recurrence_interval:"recurrenceInterval",recurrence_unit:"recurrenceUnit",completed_at:"completedAt",completed_by:"completedBy",item_key:"itemKey",item_label:"itemLabel",item_type:"itemType",occurrence_date:"occurrenceDate",second_mortgage_balance:"secondMortgageBalance",second_mortgage_payment:"secondMortgagePayment",assistant_name:"assistantName",is_advisor:"isAdvisor",is_primary:"isPrimary",updated_at:"updatedAt",is_secondary:"isSecondary",pcm_responsible:"pcmResponsible",invited_at:"invitedAt",partner_kind:"partnerKind",business_partner_seats_stripe_item_id:"businessPartnerSeatsStripeItemId",user_id:"userId",paid_at:"paidAt",paid_by:"paidBy",vendor_family_contact_id:"vendorFamilyContactId",vendor_property_contact_id:"vendorPropertyContactId",event_id:"eventId",document_id:"documentId",downloaded_by:"downloadedBy",downloaded_at:"downloadedAt",owner_user_id:"ownerUserId",owner_email:"ownerEmail",owner_role:"ownerRole",prompt_type:"promptType",template_key:"templateKey",custom_prompt:"customPrompt",schedule_preset:"schedulePreset",schedule_dow:"scheduleDow",schedule_hour_utc:"scheduleHourUtc",last_run_at:"lastRunAt",last_run_status:"lastRunStatus",last_run_error:"lastRunError",data_source:"dataSource",can_run_scheduled_prompts:"canRunScheduledPrompts",property_section:"propertySection",expiry_date:"expiryDate",doc_type:"docType",mime_type:"mimeType"};
+  const m={family_id:"familyId",contact_id:"contactId",account_id:"accountId",account_period:"accountPeriod",as_of:"asOf",balance_as_of:"balanceAsOf",source_document_id:"sourceDocumentId",balance_source_document_id:"balanceSourceDocumentId",entered_by:"enteredBy",close_date:"closeDate",due_date:"dueDate",created_at:"createdAt",uploaded_at:"uploadedAt",advisor_name:"advisorName",advisor_email:"advisorEmail",owner_name:"ownerName",property_type:"propertyType",property_id:"propertyId",purchase_price:"purchasePrice",purchase_date:"purchaseDate",current_value:"currentValue",loan_balance:"loanBalance",interest_rate:"interestRate",loan_payment:"loanPayment",loan_maturity_date:"loanMaturityDate",loan_type:"loanType",rental_income:"rentalIncome",property_taxes:"propertyTaxes",flood_insurance:"floodInsurance",insurance_company:"insuranceCompany",insurance_premium:"insurancePremium",flood_insurance_company:"floodInsuranceCompany",flood_insurance_premium:"floodInsurancePremium",insurance_expiration:"insuranceExpiration",policy_number:"policyNumber",coverage_amount:"coverageAmount",valuable_id:"valuableId",portfolio_account_id:"portfolioAccountId",private_owner_id:"privateOwnerId",loan_id:"loanId",credit_limit:"creditLimit",original_amount:"originalAmount",rate_type:"rateType",payment_amount:"paymentAmount",payment_frequency:"paymentFrequency",origination_date:"originationDate",maturity_date:"maturityDate",flood_insurance_expiration:"floodInsuranceExpiration",account_type:"accountType",starting_balance:"startingBalance",current_balance:"currentBalance",banker_name:"bankerName",account_advisor_name:"accountAdvisorName",account_advisor_phone:"accountAdvisorPhone",account_advisor_email:"accountAdvisorEmail",make_model:"makeModel",estimated_value:"estimatedValue",file_type:"fileType",extracted_text:"extractedText",reminder_days:"reminderDays",reminder_sent:"reminderSent",full_name:"fullName",file_path:"filePath",file_size:"fileSize",uploaded_by:"uploadedBy",event_type:"eventType",start_date:"startDate",end_date:"endDate",tax_treatment:"taxTreatment",filing_status:"filingStatus",state_tax_rate:"stateTaxRate",base_income:"baseIncome",cash_flow_settings:"cashFlowSettings",hoa_fee:"hoaFee",property_management_fee_pct:"propertyManagementFeePct",include_mortgage_in_cashflow:"includeMortgageInCashflow",sort_order:"sortOrder",note_id:"noteId",recurrence_interval:"recurrenceInterval",recurrence_unit:"recurrenceUnit",completed_at:"completedAt",completed_by:"completedBy",item_key:"itemKey",item_label:"itemLabel",item_type:"itemType",occurrence_date:"occurrenceDate",second_mortgage_balance:"secondMortgageBalance",second_mortgage_payment:"secondMortgagePayment",assistant_name:"assistantName",is_advisor:"isAdvisor",is_primary:"isPrimary",updated_at:"updatedAt",is_secondary:"isSecondary",pcm_responsible:"pcmResponsible",invited_at:"invitedAt",partner_kind:"partnerKind",business_partner_seats_stripe_item_id:"businessPartnerSeatsStripeItemId",user_id:"userId",paid_at:"paidAt",paid_by:"paidBy",vendor_family_contact_id:"vendorFamilyContactId",vendor_property_contact_id:"vendorPropertyContactId",event_id:"eventId",document_id:"documentId",downloaded_by:"downloadedBy",downloaded_at:"downloadedAt",owner_user_id:"ownerUserId",owner_email:"ownerEmail",owner_role:"ownerRole",prompt_type:"promptType",template_key:"templateKey",custom_prompt:"customPrompt",schedule_preset:"schedulePreset",schedule_dow:"scheduleDow",schedule_hour_utc:"scheduleHourUtc",last_run_at:"lastRunAt",last_run_status:"lastRunStatus",last_run_error:"lastRunError",data_source:"dataSource",can_run_scheduled_prompts:"canRunScheduledPrompts",property_section:"propertySection",expiry_date:"expiryDate",doc_type:"docType",mime_type:"mimeType"};
   return Object.fromEntries(Object.entries(obj).map(([k,v])=>[m[k]||k,v]));
 };
 
@@ -2626,6 +2626,7 @@ function buildFamilySnapshot(family,data){
     maturityDate:l.maturityDate||null, daysUntilMaturity:daysFromNow(l.maturityDate),
     securedByProperty:l.propertyId?((data.properties||[]).find(p=>p.id===l.propertyId)||{}).address||null:null,
     securedByValuable:l.valuableId?((data.valuables||[]).find(v=>v.id===l.valuableId)||{}).description||null:null,
+    securedByAccount:l.portfolioAccountId?((data.portfolio_accounts||[]).find(a=>a.id===l.portfolioAccountId)||{}).institution||null:null,
   }));
 
   const valuables=(data.valuables||[]).filter(v=>v.familyId===fid).map(v=>({
@@ -4053,6 +4054,11 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   // Loans & Lines: same form and columns as the client side (loanRowFromForm).
   const[loanModal,setLoanModal]=useState(null); // {loan?}
   const saveLoan=async(m,f)=>{
+    if(loanOnListedProperty(m,f)){
+      const e=await mortgageOntoProperty(family.id,properties.find(p=>`p:${p.id}`===f.securedBy),f);
+      if(e){toast(e,"error");return false;}
+      toast("Saved on the property.");reload("properties");return;
+    }
     const row=loanRowFromForm(f);
     const{error}=m.loan?await sb.from("loans").update(row).eq("id",m.loan.id).eq("family_id",family.id)
       :await sb.from("loans").insert({family_id:family.id,...row});
@@ -4390,6 +4396,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
                 </div>)}
               </div>
               {p.notes&&<div style={{marginTop:12,fontSize:13,color:B.textSoft,fontStyle:"italic"}}>{p.notes}</div>}
+              <PropertySecuredLoans loans={loans} propertyId={p.id} onOpen={canEdit?l=>{setActiveTab("loans&lines");setLoanModal({loan:l});}:null}/>
               <div style={{marginTop:14,paddingTop:12,borderTop:`1px solid ${B.borderLight}`}}>
                 {(()=>{
                   const _pc=propContactsFor(p.id);
@@ -4517,13 +4524,13 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
 
         {/* LOANS & LINES TAB */}
         {activeTab==="loans&lines"&&<div style={{padding:isMobile?"16px 14px":"24px 28px"}}>
-          <LoansPanel loans={loans} properties={properties} valuables={valuables} documents={(data.documents||[]).filter(d=>d.familyId===family.id)}
+          <LoansPanel loans={loans} properties={properties} valuables={valuables} accounts={accounts} documents={(data.documents||[]).filter(d=>d.familyId===family.id)}
             locAccounts={accounts.filter(a=>a.accountType==="Line of Credit")} toast={toast}
             onAdd={canEdit?kind=>setLoanModal({kind}):null} onEdit={canEdit?l=>setLoanModal({loan:l}):null} onDelete={canEdit?delLoan:null}
             onEditProperty={canEdit?p=>setModal({type:"editProperty",property:p}):null}
             onAttach={canEdit?l=>{setAttachIntent({loanId:l.id,section:"loan_statement"});setActiveTab("vault");}:null}/>
-          {loanModal&&canEdit&&<Modal title={loanModal.loan?"Edit loan or line":({"Credit Card":"Add a credit card","Auto Loan":"Add a car loan","Line of Credit":"Add a line of credit"}[loanModal.kind]||"Add a loan")} onClose={()=>setLoanModal(null)}>
-            <LoanForm initial={loanModal.loan} defaultType={loanModal.kind||"Auto Loan"} properties={properties} valuables={valuables}
+          {loanModal&&canEdit&&<Modal title={loanModal.loan?"Edit loan or line":({"Credit Card":"Add a credit card","Auto Loan":"Add a car loan","Line of Credit":"Add a line of credit",Mortgage:"Add a mortgage"}[loanModal.kind]||"Add a loan")} onClose={()=>setLoanModal(null)}>
+            <LoanForm initial={loanModal.loan} defaultType={loanModal.kind||"Auto Loan"} properties={properties} valuables={valuables} accounts={accounts}
               statement={loanModal.loan?{familyId:family.id,loanId:loanModal.loan.id,toast,onUploaded:()=>reload("documents"),
                 doc:(data.documents||[]).find(d=>d.loanId===loanModal.loan.id&&d.propertySection==="loan_statement")||null}:null}
               onSave={f=>saveLoan(loanModal,f)} onClose={()=>setLoanModal(null)}/>
@@ -5203,17 +5210,42 @@ function loanRowFromForm(f){
     payment_amount:numOrNull(f.paymentAmount),payment_frequency:f.paymentFrequency||null,
     origination_date:f.originationDate||null,maturity_date:f.maturityDate||null,
     property_id:sec.startsWith("p:")?sec.slice(2):null,valuable_id:sec.startsWith("v:")?sec.slice(2):null,
+    portfolio_account_id:sec.startsWith("a:")?sec.slice(2):null,
     notes:txt(f.notes,4000)};
 }
+
+// A new mortgage or home-equity line picked onto a listed property is saved ON the property (its mortgage, or its
+// second mortgage / HELOC), so Total Debt counts it once. Refuses rather than overwrites one already on file.
+// Returns an error message, or null when saved.
+async function mortgageOntoProperty(familyId,p,f){
+  if(!p)return "That property couldn't be found. Refresh and try again.";
+  const label=p.name||p.address||"That property";
+  const amt=f.paymentAmount===""||f.paymentAmount==null?null:Number(f.paymentAmount);
+  const per=LOAN_FREQ_PER_MONTH[f.paymentFrequency||"Monthly"];
+  const monthly=amt==null||isNaN(amt)?null:per?Math.round(amt*per*100)/100:amt;
+  let row;
+  if(f.loanType==="HELOC"){
+    if((Number(p.secondMortgageBalance)||0)>0)return `${label} already has a second mortgage or home-equity line on file. Use Edit on it under Mortgages & home equity.`;
+    row={second_mortgage_balance:numOrNull(f.currentBalance),second_mortgage_payment:monthly};
+  }else{
+    if((Number(p.loanBalance)||0)>0||String(p.lender||"").trim())return `${label} already has a mortgage on file. Use Edit on it under Mortgages & home equity.`;
+    row={lender:String(f.lender||f.name||"").trim().slice(0,120)||null,loan_balance:numOrNull(f.currentBalance),
+      interest_rate:numOrNull(f.interestRate),loan_payment:monthly,loan_maturity_date:f.maturityDate||null};
+  }
+  const{error}=await sb.from("properties").update(row).eq("id",p.id).eq("family_id",familyId);
+  return error?error.message:null;
+}
+const loanOnListedProperty=(m,f)=>!m.loan&&(f.loanType==="Mortgage"||f.loanType==="HELOC")&&String(f.securedBy||"").startsWith("p:");
 
 // statement (optional, editing an existing loan only): {familyId, loanId, doc, toast, onUploaded}. Snap or pick the
 // latest statement: CHRIS reads it for a name and summary, files it, and links it to this loan.
 // defaultType: the kind a new loan starts as (from the section's own Add button, e.g. "Credit Card").
-function LoanForm({initial,onSave,onClose,properties=[],valuables=[],statement=null,defaultType="Auto Loan"}){
+function LoanForm({initial,onSave,onClose,properties=[],valuables=[],accounts=[],statement=null,defaultType="Auto Loan"}){
   const[f,setF]=useState(()=>initial
-    ?{...initial,securedBy:initial.propertyId?`p:${initial.propertyId}`:initial.valuableId?`v:${initial.valuableId}`:""}
+    ?{...initial,securedBy:initial.propertyId?`p:${initial.propertyId}`:initial.valuableId?`v:${initial.valuableId}`:initial.portfolioAccountId?`a:${initial.portfolioAccountId}`:""}
     :{loanType:defaultType,name:"",lender:"",currentBalance:"",balanceAsOf:"",creditLimit:"",originalAmount:"",interestRate:"",
-      rateType:"",paymentAmount:"",paymentFrequency:"Monthly",originationDate:"",maturityDate:"",securedBy:"",notes:""});
+      rateType:"",paymentAmount:"",paymentFrequency:"Monthly",originationDate:"",maturityDate:"",
+      securedBy:(defaultType==="Mortgage"||defaultType==="HELOC")&&properties.length?`p:${properties[0].id}`:"",notes:""});
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const line=DEBT_LINE_KINDS.has(f.loanType);
   const[saving,setSaving]=useState(false);
@@ -5245,16 +5277,38 @@ function LoanForm({initial,onSave,onClose,properties=[],valuables=[],statement=n
     if(r!==""&&r!=null&&(isNaN(Number(r))||Number(r)<0||Number(r)>100)){setErr("Interest rate must be a percentage between 0 and 100.");return;}
     if(f.originationDate&&f.maturityDate&&f.maturityDate<f.originationDate){setErr("The end date can't be before the start date.");return;}
     // One home for each number: a listed property's mortgage and HELOC live on the property, so they're counted once.
-    if((f.loanType==="Mortgage"||f.loanType==="HELOC")&&String(f.securedBy||"").startsWith("p:")){
+    // A NEW one is saved onto the property by the caller; an existing loan row can't be moved there from here.
+    if(initial&&(f.loanType==="Mortgage"||f.loanType==="HELOC")&&String(f.securedBy||"").startsWith("p:")){
       setErr("A mortgage or home-equity line on a listed property is kept on the property itself, so it's counted once. Close this and use Edit under Mortgages & home equity instead.");return;}
     setErr("");setSaving(true);const ok=await onSave(f);if(ok===false){setSaving(false);return;}onClose();
   };
   const propLabel=p=>p.name||p.address||"Property";
+  const acctLabel=a=>[a.institution||"Account",a.accountType].filter(Boolean).join(" · ");
+  const mortgage=f.loanType==="Mortgage"||f.loanType==="HELOC";
+  // Changing the type to a mortgage points it at a property straight away; away from one, a property pick is kept.
+  const setType=e=>{const t=e.target.value;setF(p=>({...p,loanType:t,
+    securedBy:(t==="Mortgage"||t==="HELOC")&&!String(p.securedBy||"").startsWith("p:")&&properties.length?`p:${properties[0].id}`:p.securedBy}));};
+  const pledgeable=accounts.filter(a=>a.accountType!=="Line of Credit");
   return <div>
     <Grid2>
-      <Field label="Type"><Sel value={f.loanType} onChange={set("loanType")}>{DEBT_KINDS.map(k=><option key={k}>{k}</option>)}</Sel></Field>
+      <Field label="Type"><Sel value={f.loanType} onChange={setType}>{DEBT_KINDS.map(k=><option key={k}>{k}</option>)}</Sel></Field>
       <Field label="Lender"><Inp maxLength={120} placeholder="Chase, Schwab, Toyota Financial…" value={f.lender||""} onChange={set("lender")}/></Field>
     </Grid2>
+    {mortgage
+      ?<Field label="Which property is it on?">
+        <Sel value={f.securedBy||""} onChange={set("securedBy")}>
+          {properties.map(p=><option key={p.id} value={`p:${p.id}`}>{propLabel(p)}</option>)}
+          <option value="">A property that isn't listed</option>
+        </Sel>
+      </Field>
+      :<Field label="Secured by">
+        <Sel value={f.securedBy||""} onChange={set("securedBy")}>
+          <option value="">Unsecured</option>
+          {properties.length>0&&<optgroup label="A property">{properties.map(p=><option key={p.id} value={`p:${p.id}`}>{propLabel(p)}</option>)}</optgroup>}
+          {pledgeable.length>0&&<optgroup label="A portfolio account">{pledgeable.map(a=><option key={a.id} value={`a:${a.id}`}>{acctLabel(a)}</option>)}</optgroup>}
+          {valuables.length>0&&<optgroup label="A valuable">{valuables.map(v=><option key={v.id} value={`v:${v.id}`}>{v.description||v.category||"Valuable"}</option>)}</optgroup>}
+        </Sel>
+      </Field>}
     <Field label="Name" optional><Inp maxLength={120} placeholder={line?"Schwab pledged asset line":"2024 Range Rover loan"} value={f.name||""} onChange={set("name")}/></Field>
     <Grid2>
       <Field label={line?"Balance owed today":"Balance owed"} optional><MoneyInput value={f.currentBalance??""} onChange={set("currentBalance")}/></Field>
@@ -5272,19 +5326,14 @@ function LoanForm({initial,onSave,onClose,properties=[],valuables=[],statement=n
     </Grid2>
     <Grid2>
       <Field label="How often" optional><Sel value={f.paymentFrequency||""} onChange={set("paymentFrequency")}><option value="">—</option>{LOAN_FREQUENCIES.map(x=><option key={x}>{x}</option>)}</Sel></Field>
-      <Field label="Secured by" optional>
-        <Sel value={f.securedBy||""} onChange={set("securedBy")}>
-          <option value="">Nothing / not sure</option>
-          {properties.length>0&&<optgroup label="Properties">{properties.map(p=><option key={p.id} value={`p:${p.id}`}>{propLabel(p)}</option>)}</optgroup>}
-          {valuables.length>0&&<optgroup label="Valuables">{valuables.map(v=><option key={v.id} value={`v:${v.id}`}>{v.description||v.category||"Valuable"}</option>)}</optgroup>}
-        </Sel>
-      </Field>
-    </Grid2>
-    <Grid2>
       <Field label="Start date" optional><Inp type="date" value={f.originationDate||""} onChange={set("originationDate")}/></Field>
-      <Field label={line?"Draw period ends / renews":"Paid off by (maturity)"} optional><Inp type="date" value={f.maturityDate||""} onChange={set("maturityDate")}/></Field>
     </Grid2>
-    {(f.loanType==="Mortgage"||f.loanType==="HELOC")&&<div style={{fontSize:11.5,color:"#8a5c00",marginBottom:12,lineHeight:1.5}}>A mortgage or home-equity line on a property you've added is kept on that property, so it's counted once: use Edit under Mortgages & home equity. Use this form only for one that isn't on a listed property.</div>}
+    <Field label={line?"Draw period ends / renews":"Paid off by (maturity)"} optional><Inp type="date" value={f.maturityDate||""} onChange={set("maturityDate")}/></Field>
+    {mortgage&&String(f.securedBy||"").startsWith("p:")&&<div style={{fontSize:11.5,color:"#8a5c00",marginBottom:12,lineHeight:1.5}}>
+      {initial?"A mortgage or home-equity line on a listed property is kept on the property itself: use Edit under Mortgages & home equity."
+        :f.loanType==="HELOC"?"Saved on the property as its second mortgage / home-equity line, so it's counted once. The property keeps the balance and monthly payment."
+        :"Saved on the property as its mortgage, so it's counted once. You'll find it under Mortgages & home equity, and on the property."}
+    </div>}
     {statement&&<div style={{marginBottom:14,padding:"12px 14px",border:`1px solid ${B.borderLight}`,borderRadius:10,background:B.bg}}>
       <div style={{fontSize:12,fontWeight:700,color:B.navy,marginBottom:4}}>Latest statement</div>
       <div style={{fontSize:12,color:B.textSoft,marginBottom:10,lineHeight:1.5}}>
@@ -5305,10 +5354,24 @@ function LoanForm({initial,onSave,onClose,properties=[],valuables=[],statement=n
   </div>;
 }
 
+// On a property card: the loans and lines from Loans & Lines secured by this property (its own mortgage and second
+// mortgage are already in the card's figures). Hidden when there are none.
+function PropertySecuredLoans({loans=[],propertyId,onOpen=null}){
+  const list=loans.filter(l=>l.propertyId===propertyId);
+  if(!list.length)return null;
+  return <div style={{marginTop:12,paddingTop:10,borderTop:`1px solid ${B.borderLight}`}}>
+    <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:6}}>Also secured by this property</div>
+    {list.map(l=><div key={l.id} style={{display:"flex",justifyContent:"space-between",gap:10,fontSize:13,padding:"3px 0"}}>
+      <span style={{color:B.text}}>{loanTitle(l)} <span style={{color:B.textMute,fontSize:12}}>· {l.loanType}</span></span>
+      <span style={{color:B.navy,fontWeight:600,whiteSpace:"nowrap"}}>{fmtMoney(Number(l.currentBalance)||0)}{onOpen&&<button onClick={()=>onOpen(l)} style={{background:"none",border:"none",color:B.navyMid,fontSize:12,cursor:"pointer",fontFamily:"inherit",fontWeight:600,padding:"0 0 0 8px"}}>Edit</button>}</span>
+    </div>)}
+  </div>;
+}
+
 // The Loans & Lines list with its totals. onAdd/onEdit/onDelete/onAttach are null for read-only viewers.
 // onEditProperty: opens a property's own edit form, where its mortgage and second mortgage / HELOC are kept. Those
 // show here too (one record, two places to reach it) and are never stored as loans, so nothing is counted twice.
-function LoansPanel({loans,properties=[],valuables=[],documents=[],locAccounts=[],toast,onAdd=null,onEdit=null,onDelete=null,onAttach=null,onEditProperty=null}){
+function LoansPanel({loans,properties=[],valuables=[],accounts=[],documents=[],locAccounts=[],toast,onAdd=null,onEdit=null,onDelete=null,onAttach=null,onEditProperty=null}){
   const[mortPick,setMortPick]=useState(false);
   const lines=loans.filter(l=>DEBT_LINE_KINDS.has(l.loanType));
   const propMorts=properties.filter(p=>(Number(p.loanBalance)||0)>0||(Number(p.secondMortgageBalance)||0)>0||String(p.lender||"").trim());
@@ -5322,7 +5385,8 @@ function LoansPanel({loans,properties=[],valuables=[],documents=[],locAccounts=[
   const securedLabel=l=>{
     if(l.propertyId){const p=properties.find(x=>x.id===l.propertyId);return p?`Secured by ${p.name||p.address||"a property"}`:null;}
     if(l.valuableId){const v=valuables.find(x=>x.id===l.valuableId);return v?`Secured by ${v.description||v.category||"a valuable"}`:null;}
-    return null;
+    if(l.portfolioAccountId){const a=accounts.find(x=>x.id===l.portfolioAccountId);return a?`Secured by ${a.institution||"a portfolio account"}${a.accountType?" "+a.accountType:""}`:null;}
+    return DEBT_LINE_KINDS.has(l.loanType)||MORT_KINDS.includes(l.loanType)?null:"Unsecured";
   };
   const card=l=>{
     const line=DEBT_LINE_KINDS.has(l.loanType);
@@ -5419,7 +5483,7 @@ function LoansPanel({loans,properties=[],valuables=[],documents=[],locAccounts=[
       {(propMorts.length>0||loans.some(l=>MORT_KINDS.includes(l.loanType))||onAdd||onEditProperty)&&<div style={{marginBottom:20}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:10}}>
           <div style={{fontSize:12,fontWeight:800,color:B.textMute,letterSpacing:"0.1em",textTransform:"uppercase"}}>Mortgages & home equity</div>
-          {(onEditProperty||onAdd)&&<button onClick={()=>setMortPick(v=>!v)} style={{background:"none",border:`1px solid ${B.border}`,color:B.navy,borderRadius:6,padding:"3px 10px",fontSize:11.5,cursor:"pointer",fontFamily:"inherit"}}>+ Add a mortgage</button>}
+          {(onEditProperty||onAdd)&&<button onClick={()=>onAdd?onAdd("Mortgage"):setMortPick(v=>!v)} style={{background:"none",border:`1px solid ${B.border}`,color:B.navy,borderRadius:6,padding:"3px 10px",fontSize:11.5,cursor:"pointer",fontFamily:"inherit"}}>+ Add a mortgage</button>}
         </div>
         {mortPick&&<div style={{background:B.bg,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"12px 14px",marginBottom:10}}>
           <div style={{fontSize:12.5,color:B.textSoft,marginBottom:8}}>Which property is it on? Its mortgage is kept on the property, so it's counted once.</div>
@@ -11731,6 +11795,11 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   // Loans & Lines, self-serve: add, edit, remove, attach a statement. Same columns as the staff side.
   const[loanModal,setLoanModal]=useState(null); // {loan?}
   const saveClientLoan=async(m,f)=>{
+    if(loanOnListedProperty(m,f)){
+      const e=await mortgageOntoProperty(family.id,properties.find(p=>`p:${p.id}`===f.securedBy),f);
+      if(e){toast(e,"error");return false;}
+      toast("Saved on the property.");await reload("properties");return;
+    }
     const row=loanRowFromForm(f);
     const{error}=m.loan?await sb.from("loans").update(row).eq("id",m.loan.id).eq("family_id",family.id)
       :await sb.from("loans").insert({family_id:family.id,...row});
@@ -12104,13 +12173,13 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
 
       {/* LOANS & LINES -- self-serve households keep their own; Premier households see what their Expert keeps. */}
       {activeTab==="loans"&&<div>
-        <LoansPanel loans={loans} properties={properties} valuables={valuables} documents={(data.documents||[]).filter(d=>d.familyId===family.id)}
+        <LoansPanel loans={loans} properties={properties} valuables={valuables} accounts={accounts} documents={(data.documents||[]).filter(d=>d.familyId===family.id)}
           locAccounts={accounts.filter(a=>a.accountType==="Line of Credit")} toast={toast}
           onAdd={selfEdit?kind=>setLoanModal({kind}):null} onEdit={selfEdit?l=>setLoanModal({loan:l}):null} onDelete={selfEdit?delClientLoan:null}
           onEditProperty={selfEdit?p=>setEditingProperty(p):null}
           onAttach={selfUpload?l=>{setPropAttachIntent({loanId:l.id,section:"loan_statement"});setActiveTab("documents");}:null}/>
-        {loanModal&&selfEdit&&<Modal title={loanModal.loan?"Edit loan or line":({"Credit Card":"Add a credit card","Auto Loan":"Add a car loan","Line of Credit":"Add a line of credit"}[loanModal.kind]||"Add a loan")} onClose={()=>setLoanModal(null)}>
-          <LoanForm initial={loanModal.loan} defaultType={loanModal.kind||"Auto Loan"} properties={properties} valuables={valuables}
+        {loanModal&&selfEdit&&<Modal title={loanModal.loan?"Edit loan or line":({"Credit Card":"Add a credit card","Auto Loan":"Add a car loan","Line of Credit":"Add a line of credit",Mortgage:"Add a mortgage"}[loanModal.kind]||"Add a loan")} onClose={()=>setLoanModal(null)}>
+          <LoanForm initial={loanModal.loan} defaultType={loanModal.kind||"Auto Loan"} properties={properties} valuables={valuables} accounts={accounts}
             statement={loanModal.loan?{familyId:family.id,loanId:loanModal.loan.id,toast,onUploaded:()=>reload("documents"),
               doc:(data.documents||[]).find(d=>d.loanId===loanModal.loan.id&&d.propertySection==="loan_statement")||null}:null}
             onSave={f=>saveClientLoan(loanModal,f)} onClose={()=>setLoanModal(null)}/>
@@ -12160,6 +12229,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
               <div style={{fontSize:13,color:B.text,fontWeight:600}}>{v}</div>
             </div>)}
           </div>
+          <PropertySecuredLoans loans={loans} propertyId={p.id} onOpen={selfEdit?l=>{setActiveTab("loans");setLoanModal({loan:l});}:null}/>
           {(()=>{const vendors=(data.property_contacts||[]).filter(pc=>pc.propertyId===p.id);return <div style={{marginTop:16,paddingTop:12,borderTop:`1px solid ${B.borderLight}`}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8}}>
               <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase"}}>Vendors & Service Providers</div>
