@@ -8,12 +8,12 @@
 // opening the Cash Flow tab and noticing. That is the failure mode that loses a
 // bill-pay client.
 //
-// WHY BILLS ARE DIGESTED AND TASKS ARE NOT
-// Tasks are sporadic; a bill run is not. Six households turning over on the 1st
-// would mean six separate emails to the same Expert on the same morning, which is
-// how a mailbox gets filtered. Bills are therefore grouped into one message per
-// ORDANIS Expert, ordered by due date. Tasks keep their existing one-email-each
-// behaviour so nothing about the current flow changes.
+// ONE EMAIL A DAY PER EXPERT (2026-10-29, Will's decision)
+// Everything for an ORDANIS Expert goes in a single daily summary: the task reminders due today, the bills they pay
+// coming due, and what their families changed in their own records (Client Activity, migration 20261029100000).
+// Nothing is sent to an Expert with nothing in any section. Each item is stamped only after the summary is accepted
+// (tasks.reminder_sent, cash_flow_events.reminder_sent_for, household_activity.digested_at), so a failed send is
+// retried tomorrow. Family emails (below) are unchanged.
 //
 // FAMILY REMINDERS ON SELF-DIRECTED PLANS (migration 20261028140000)
 // On Basic and Core (plan_features.self_serve) the household runs its own records, so task reminders also go to the
@@ -48,6 +48,15 @@ const money = (n: unknown) => {
   if (!isFinite(v)) return "—";
   return "$" + v.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 };
+
+const ACTIVITY_KIND: Record<string, string> = {
+  properties: "property", portfolio_accounts: "account", account_balances: "account balance", valuables: "valuable",
+  loans: "loan or line", cash_flow_events: "cash flow event", cash_flow_payment_log: "bill payment",
+  contacts: "family member", family_contacts: "contact", property_contacts: "property vendor", entities: "entity",
+  entity_members: "entity member", deals: "deal", tasks: "task", notes: "note", obligations: "obligation",
+  documents: "document", document_folders: "document folder",
+};
+const activityField = (k: string) => k.replace(/_id$/, "").replace(/_/g, " ");
 
 const prettyDate = (d: string) =>
   new Date(d + "T12:00:00Z").toLocaleDateString("en-US",
@@ -141,8 +150,8 @@ Deno.serve(async (req) => {
     }), { status: 409, headers: { "Content-Type": "application/json" } });
   }
 
-  const summary = { tasks: { sent: 0, skipped: 0, failed: 0 }, bills: { sent: 0, digests: 0, failed: 0 },
-    family: { taskEmails: 0, billDigests: 0, failed: 0 } };
+  const summary = { tasks: { sent: 0, skipped: 0, failed: 0 }, bills: { sent: 0 },
+    expert: { summaries: 0, activity: 0, failed: 0 }, family: { taskEmails: 0, billDigests: 0, failed: 0 } };
   // Which plans are self-directed, and each household's family recipients (looked up once per household).
   const { data: planRows } = await sb.from("plan_features").select("plan, self_serve");
   const selfServe = new Set((planRows || []).filter((p) => p.self_serve).map((p) => p.plan));
@@ -153,6 +162,17 @@ Deno.serve(async (req) => {
       recipientCache.set(familyId, (data || []) as { email: string; full_name: string | null }[]);
     }
     return recipientCache.get(familyId)!;
+  };
+  // Each Expert's daily summary, filled by the sections below and sent at the end.
+  type TaskItem = { task: Record<string, any>; family: Record<string, any>; daysUntil: number; overdue: boolean };
+  type Box = { name: string; tasks: TaskItem[]; bills: Record<string, unknown>[]; activity: { name: string; rows: Record<string, any>[] }[] };
+  const boxes = new Map<string, Box>();
+  const box = (email: string, name: unknown) => {
+    const k = email.trim().toLowerCase();
+    if (!boxes.has(k)) boxes.set(k, { name: String(name ?? ""), tasks: [], bills: [], activity: [] });
+    const b = boxes.get(k)!;
+    if (!b.name && name) b.name = String(name);
+    return b;
   };
 
   try {
@@ -187,26 +207,10 @@ Deno.serve(async (req) => {
       const tint = overdue ? "#fde8e8" : daysUntil <= 7 ? "#fef3e2" : "#e8f0f8";
       const edge = overdue ? "#d43030" : daysUntil <= 7 ? "#d4900a" : "#293d5c";
 
-      const body = `
-        <p style="font-size:14px;color:#5a6e84;margin:0 0 18px;">
-          Hello ${esc(family.advisor_name || "")},<br><br>
-          This is your ${task.reminder_days}-day reminder for an upcoming task for the
-          <strong>${esc(family.name)}</strong> family.
-        </p>
-        <div style="background:${tint};border-left:4px solid ${edge};border-radius:8px;padding:16px 20px;margin-bottom:20px;">
-          <div style="font-size:11px;font-weight:700;color:${edge};text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">
-            ${overdue ? "Overdue" : `Due in ${daysUntil} day${daysUntil === 1 ? "" : "s"}`}
-          </div>
-          <div style="font-size:19px;color:#092b49;font-weight:600;">${esc(task.title)}</div>
-          <div style="font-size:13px;color:#5a6e84;margin-top:3px;">${esc(prettyDate(task.due_date))}</div>
-        </div>
-        <div style="font-size:13px;color:#5a6e84;">Priority: <strong style="color:#092b49;">${esc(task.priority)}</strong></div>
-        ${appUrl ? `<a href="${esc(appUrl)}" style="display:inline-block;background:#092b49;color:#fff;padding:11px 26px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;margin-top:22px;">Open the platform →</a>` : ""}`;
-
-      const html = shell(brand, family.name, "Task Reminder", body, overdue);
-      const subject = `Reminder: "${task.title}" — ${family.name} (${overdue ? "OVERDUE" : `due in ${daysUntil} days`})`;
+      // The Expert's reminder goes in their daily summary.
       let r = { ok: false, detail: "" };
-      if (family.advisor_email) r = await sendEmail(family.advisor_email, subject, html, brand, from);
+      const expertTo = String(family.advisor_email ?? "").trim();
+      if (expertTo) box(expertTo, family.advisor_name).tasks.push({ task, family, daysUntil, overdue });
 
       // The family's own reminder, worded for them.
       for (const person of famPeople) {
@@ -232,6 +236,8 @@ Deno.serve(async (req) => {
       if (r.ok) {
         await sb.from("tasks").update({ reminder_sent: true }).eq("id", task.id);
         summary.tasks.sent++;
+      } else if (expertTo) {
+        // Stamped when the Expert's summary goes out.
       } else {
         summary.tasks.failed++;
         console.error("task reminder failed", task.id, r.detail);
@@ -245,75 +251,10 @@ Deno.serve(async (req) => {
     const { data: bills, error: billErr } = await sb.rpc("bills_due_for_reminder");
     if (billErr) throw billErr;
 
-    // One digest per ORDANIS Expert rather than one email per bill.
-    const byExpert = new Map<string, { name: string; rows: Record<string, unknown>[] }>();
+    // Into each Expert's daily summary.
     for (const b of bills || []) {
       const to = String(b.expert_email ?? "").trim();
-      if (!to) continue;
-      if (!byExpert.has(to)) byExpert.set(to, { name: String(b.expert_name ?? ""), rows: [] });
-      byExpert.get(to)!.rows.push(b);
-    }
-
-    for (const [expertEmail, group] of byExpert) {
-      const rows = group.rows;
-      const total = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
-      const soonest = Math.min(...rows.map((r) => Number(r.days_until) || 0));
-
-      const lines = rows.map((r) => {
-        const d = Number(r.days_until) || 0;
-        const edge = d <= 2 ? "#d43030" : d <= 5 ? "#d4900a" : "#293d5c";
-        return `<tr>
-          <td style="padding:10px 0;border-bottom:1px solid #ede8de;">
-            <div style="font-size:14px;color:#092b49;font-weight:600;">${esc(r.description || r.event_type)}</div>
-            <div style="font-size:12px;color:#8fa0b2;margin-top:2px;">${esc(r.family_name)}${r.category ? " · " + esc(r.category) : ""} · ${esc(r.frequency)}</div>
-          </td>
-          <td style="padding:10px 0;border-bottom:1px solid #ede8de;text-align:right;white-space:nowrap;">
-            <div style="font-size:14px;color:#092b49;font-weight:700;">${money(r.amount)}</div>
-            <div style="font-size:12px;color:${edge};font-weight:600;margin-top:2px;">
-              ${d === 0 ? "Due today" : `in ${d} day${d === 1 ? "" : "s"}`} · ${esc(String(r.due_date))}
-            </div>
-          </td>
-        </tr>`;
-      }).join("");
-
-      const body = `
-        <p style="font-size:14px;color:#5a6e84;margin:0 0 18px;">
-          Hello ${esc(group.name || "")},<br><br>
-          ${rows.length} bill${rows.length === 1 ? "" : "s"} you are responsible for
-          ${rows.length === 1 ? "is" : "are"} coming due.
-        </p>
-        <div style="background:#e8f0f8;border-left:4px solid #293d5c;border-radius:8px;padding:14px 18px;margin-bottom:18px;">
-          <div style="font-size:11px;font-weight:700;color:#293d5c;text-transform:uppercase;letter-spacing:0.08em;">Total outstanding</div>
-          <div style="font-size:22px;color:#092b49;font-weight:700;margin-top:3px;">${money(total)}</div>
-        </div>
-        <table style="width:100%;border-collapse:collapse;">${lines}</table>
-        ${appUrl ? `<a href="${esc(appUrl)}" style="display:inline-block;background:#092b49;color:#fff;padding:11px 26px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;margin-top:22px;">Review and pay →</a>` : ""}
-        <p style="font-size:11px;color:#8fa0b2;margin-top:20px;">Mark each bill paid in the platform once settled, so it drops off this list.</p>`;
-
-      const headline = rows.length === 1
-        ? String(rows[0].family_name)
-        : `${rows.length} bills · ${money(total)}`;
-      const html = shell(brand, headline, "Bills Due", body, soonest <= 2);
-      const subject = rows.length === 1
-        ? `Bill due ${soonest === 0 ? "today" : `in ${soonest} days`}: ${rows[0].description || rows[0].event_type} — ${rows[0].family_name}`
-        : `${rows.length} bills due — ${money(total)} (soonest ${soonest === 0 ? "today" : `in ${soonest} days`})`;
-
-      const r = await sendEmail(expertEmail, subject, html, brand, from);
-
-      if (r.ok) {
-        summary.bills.digests++;
-        // Stamp each occurrence only after the message is accepted, so a provider
-        // failure leaves the bill outstanding and it is retried tomorrow rather
-        // than being silently marked as handled.
-        for (const b of rows) {
-          const { error } = await sb.from("cash_flow_events")
-            .update({ reminder_sent_for: b.due_date }).eq("id", b.event_id);
-          if (!error) summary.bills.sent++;
-        }
-      } else {
-        summary.bills.failed += rows.length;
-        console.error("bill digest failed", expertEmail, r.detail);
-      }
+      if (to) box(to, b.expert_name).bills.push(b);
     }
 
     // ── 3. FAMILY BILL REMINDERS (Basic / Core) ──────────────────────────
@@ -371,6 +312,100 @@ Deno.serve(async (req) => {
       if (anyOk) {
         for (const b of rows) await sb.from("cash_flow_events").update({ reminder_sent_for: b.due_date }).eq("id", b.event_id);
       }
+    }
+
+    // ── 4. CLIENT ACTIVITY ───────────────────────────────────────────────
+    // What families changed in their own records, not yet sent; last 3 days only, so an Expert named later doesn't get
+    // a backlog. Households with no Expert, or archived, are left out.
+    const since = new Date(Date.now() - 3 * 86400000).toISOString();
+    const { data: acts, error: actErr } = await sb.from("household_activity")
+      .select("id, family_id, actor_name, actor_email, table_name, action, record_label, fields, created_at")
+      .is("digested_at", null).gte("created_at", since).order("created_at", { ascending: false }).limit(5000);
+    if (actErr) console.error("client activity not loaded", actErr.message);
+    if (acts?.length) {
+      const { data: fams } = await sb.from("families").select("id, name, advisor_email, advisor_name, archived_at")
+        .in("id", [...new Set(acts.map((a) => a.family_id))]);
+      for (const f of (fams || []).sort((a, b) => String(a.name).localeCompare(String(b.name)))) {
+        const to = String(f.advisor_email ?? "").trim();
+        if (!to || f.archived_at) continue;
+        const rows = acts.filter((a) => a.family_id === f.id);
+        if (rows.length) box(to, f.advisor_name).activity.push({ name: String(f.name ?? "A household"), rows });
+      }
+    }
+
+    // ── 5. ONE SUMMARY PER EXPERT ────────────────────────────────────────
+    const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+    const h2 = (t: string) => `<div style="font-size:11px;font-weight:700;color:#293d5c;text-transform:uppercase;letter-spacing:0.1em;margin:26px 0 8px;">${esc(t)}</div>`;
+    const btn = (label: string) => appUrl ? `<a href="${esc(appUrl)}" style="display:inline-block;background:#092b49;color:#fff;padding:11px 26px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;margin-top:24px;">${esc(label)}</a>` : "";
+    for (const [to, b] of boxes) {
+      const actCount = b.activity.reduce((n, h) => n + h.rows.length, 0);
+      if (!b.tasks.length && !b.bills.length && !actCount) continue;
+      let body = `<p style="font-size:14px;color:#5a6e84;margin:0;">Hello ${esc(b.name.split(/\s+/)[0] || "")},<br><br>Here's your summary for today.</p>`;
+
+      if (b.tasks.length) {
+        body += h2("Task reminders") + `<table style="width:100%;border-collapse:collapse;">` + b.tasks.map(({ task, family, daysUntil, overdue }) => {
+          const edge = overdue ? "#d43030" : daysUntil <= 7 ? "#d4900a" : "#293d5c";
+          return `<tr><td style="padding:10px 0;border-bottom:1px solid #ede8de;">
+            <div style="font-size:14px;color:#092b49;font-weight:600;">${esc(task.title)}</div>
+            <div style="font-size:12px;color:#8fa0b2;margin-top:2px;">${esc(family.name)}${task.priority ? " · " + esc(task.priority) + " priority" : ""}</div></td>
+            <td style="padding:10px 0;border-bottom:1px solid #ede8de;text-align:right;white-space:nowrap;">
+            <div style="font-size:12px;color:${edge};font-weight:700;">${overdue ? "Overdue" : daysUntil === 0 ? "Due today" : `Due in ${plural(daysUntil, "day")}`}</div>
+            <div style="font-size:12px;color:#8fa0b2;margin-top:2px;">${esc(prettyDate(task.due_date))}</div></td></tr>`;
+        }).join("") + `</table>`;
+      }
+
+      if (b.bills.length) {
+        const total = b.bills.reduce((t, r) => t + (Number(r.amount) || 0), 0);
+        body += h2(`Bills you pay coming due · ${money(total)}`) + `<table style="width:100%;border-collapse:collapse;">` + b.bills.map((r) => {
+          const d = Number(r.days_until) || 0;
+          const edge = d <= 2 ? "#d43030" : d <= 5 ? "#d4900a" : "#293d5c";
+          return `<tr><td style="padding:10px 0;border-bottom:1px solid #ede8de;">
+            <div style="font-size:14px;color:#092b49;font-weight:600;">${esc(r.description || r.event_type)}</div>
+            <div style="font-size:12px;color:#8fa0b2;margin-top:2px;">${esc(r.family_name)}${r.category ? " · " + esc(r.category) : ""} · ${esc(r.frequency)}</div></td>
+            <td style="padding:10px 0;border-bottom:1px solid #ede8de;text-align:right;white-space:nowrap;">
+            <div style="font-size:14px;color:#092b49;font-weight:700;">${money(r.amount)}</div>
+            <div style="font-size:12px;color:${edge};font-weight:600;margin-top:2px;">${d === 0 ? "Due today" : `in ${plural(d, "day")}`} · ${esc(String(r.due_date))}</div></td></tr>`;
+        }).join("") + `</table><p style="font-size:11px;color:#8fa0b2;margin:8px 0 0;">Mark each bill paid in the platform once settled, so it drops off this list.</p>`;
+      }
+
+      if (actCount) {
+        body += h2("What your families changed");
+        for (const h of b.activity) {
+          const shown = h.rows.slice(0, 25);
+          body += `<div style="font-size:14px;color:#092b49;font-weight:700;margin:12px 0 2px;">${esc(h.name)} <span style="font-weight:400;color:#8fa0b2;font-size:12px;">${plural(h.rows.length, "change")}</span></div>` +
+            `<table style="width:100%;border-collapse:collapse;">` + shown.map((a) => {
+              const colour = a.action === "added" ? "#2e7d4f" : a.action === "removed" ? "#b03a2e" : "#092b49";
+              const kind = ACTIVITY_KIND[a.table_name] ?? activityField(a.table_name);
+              const when = new Date(a.created_at).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+              return `<tr><td style="padding:6px 0;border-bottom:1px solid #ede8de;font-size:12px;color:#8fa0b2;white-space:nowrap;vertical-align:top;width:105px;">${esc(when)}</td>
+                <td style="padding:6px 0 6px 10px;border-bottom:1px solid #ede8de;font-size:13px;color:#092b49;">${esc(a.actor_name || a.actor_email || "A family user")} <span style="color:${colour};font-weight:700;">${esc(a.action)}</span> ${esc(kind)}${a.record_label ? ` <strong>“${esc(a.record_label)}”</strong>` : ""}${a.action === "changed" && a.fields?.length ? `<div style="font-size:12px;color:#5a6e84;margin-top:2px;">Changed: ${esc(a.fields.map(activityField).join(", "))}</div>` : ""}</td></tr>`;
+            }).join("") + `</table>` +
+            (h.rows.length > shown.length ? `<div style="font-size:12px;color:#5a6e84;margin-top:4px;">and ${plural(h.rows.length - shown.length, "earlier change")}; see the household's Client Activity tab.</div>` : "");
+        }
+        body += `<p style="font-size:11px;color:#8fa0b2;margin:8px 0 0;">Shows which fields changed, not the values. Open the household to see the record as it is now.</p>`;
+      }
+      body += btn("Open the platform →");
+
+      const parts = [b.tasks.length ? plural(b.tasks.length, "task reminder") : "", b.bills.length ? `${plural(b.bills.length, "bill")} due` : "",
+        actCount ? plural(actCount, "client change") : ""].filter(Boolean);
+      const urgent = b.tasks.some((t) => t.overdue) || b.bills.some((r) => (Number(r.days_until) || 0) <= 2);
+      const r = await sendEmail(to, `Your daily summary: ${parts.join(", ")}`, shell(brand, "Your daily summary", "Daily Summary", body, urgent), brand, from);
+      if (!r.ok) { summary.expert.failed++; console.error("expert summary failed", to, r.detail); continue; }
+      summary.expert.summaries++;
+      // Stamp only what this summary carried.
+      for (const t of b.tasks) {
+        const { error } = await sb.from("tasks").update({ reminder_sent: true }).eq("id", t.task.id);
+        if (!error) summary.tasks.sent++;
+      }
+      for (const bill of b.bills) {
+        const { error } = await sb.from("cash_flow_events").update({ reminder_sent_for: bill.due_date }).eq("id", bill.event_id);
+        if (!error) summary.bills.sent++;
+      }
+      const actIds = b.activity.flatMap((h) => h.rows.map((a) => a.id));
+      for (let i = 0; i < actIds.length; i += 500) {
+        await sb.from("household_activity").update({ digested_at: new Date().toISOString() }).in("id", actIds.slice(i, i + 500));
+      }
+      summary.expert.activity += actIds.length;
     }
 
     return new Response(JSON.stringify({ success: true, ...summary }), {
