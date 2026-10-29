@@ -9,6 +9,9 @@ import { Capacitor } from '@capacitor/core'
 // Inside the iPhone / Android app: full-screen styling (index.html, html.native-app) instead of a browser page.
 if (Capacitor.isNativePlatform()) {
   document.documentElement.classList.add('native-app')
+  // Native apps don't zoom: no pinch zoom, and no iOS auto-zoom when tapping into a small text field (which could
+  // leave the whole portal enlarged and pushed off the right edge).
+  try { document.querySelector('meta[name=viewport]').setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover') } catch (_e) {}
   // Navy around the app until the portal, with white status-bar text (nativeChrome.js).
   import('./nativeChrome.js').then(({ initNativeChrome }) => initNativeChrome())
   // The app opens with its own logo sequence (AppAccessGate), so the website's cube intro is skipped.

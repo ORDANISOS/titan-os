@@ -129,7 +129,7 @@ export default function BiometricLock({ children }) {
   const signInWithPassword = () => { clearSession(); window.location.reload(); };
 
   if (!native) return children;
-  const btn = { width: "100%", minHeight: 48, border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" };
+  const btn = { width: "100%", boxSizing: "border-box", minHeight: 48, border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" };
   return (
     <>
       {children}
@@ -148,7 +148,7 @@ export default function BiometricLock({ children }) {
       )}
       {offer && (
         <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(9,43,73,0.45)", display: "flex", alignItems: "flex-end", fontFamily: "'DM Sans','Helvetica Neue',Arial,sans-serif" }}>
-          <div style={{ width: "100%", background: "#fff", borderRadius: "16px 16px 0 0", padding: "26px 22px calc(26px + env(safe-area-inset-bottom))" }}>
+          <div style={{ width: "100%", boxSizing: "border-box", background: "#fff", borderRadius: "16px 16px 0 0", padding: "26px 22px calc(26px + env(safe-area-inset-bottom))" }}>
             <div style={{ fontFamily: "Georgia,serif", fontSize: 21, color: NAVY, marginBottom: 8 }}>Use {label} to unlock ORDANIS?</div>
             <div style={{ fontSize: 14, color: "#3d4f63", lineHeight: 1.55, marginBottom: 20 }}>
               Next time you open the app, {label} unlocks it, so there's no password to type. On a new phone, or after you

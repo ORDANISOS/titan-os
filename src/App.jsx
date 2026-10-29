@@ -194,6 +194,10 @@ const IS_NATIVE_APP = Capacitor.isNativePlatform();
 // In the app, everything before the portal (sign-in, authenticator, set password, loading) sits on navy (Will).
 // A getter, because the brand runtime can change B.bg after load; the website keeps exactly B.bg.
 const preBg = () => (IS_NATIVE_APP ? "#0A2540" : B.bg);
+// Full-height layouts (the staff portal and the partner / firm views). In the app the page already leaves room for
+// the notch and the home indicator (#root padding in index.html), so they fill the space between, not 100vh; a
+// 100vh layout made the page taller than the screen and it could scroll up under the status bar.
+const FULL_H = IS_NATIVE_APP ? "calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))" : "100vh";
 const WEB_PORTAL_URL = String(import.meta.env.VITE_WEB_PORTAL_URL||"https://portal.ordanisos.com").replace(/\/+$/,"");
 // Opens the website in the phone's browser on the given family-portal tab (?go=billing, ?go=workflows, ?go=household).
 const openOnWeb = go => { window.open(`${WEB_PORTAL_URL}/?go=${encodeURIComponent(go||"")}`, "_blank"); };
@@ -12833,7 +12837,7 @@ function FirmDashboard({userProfile,logout,toast}){
 
   const selected=fams.find(x=>x.id===selectedId);
   if(selected&&fdata){
-    return <div style={{height:"100vh",display:"flex",flexDirection:"column",background:B.bg,fontFamily:"'DM Sans','Helvetica Neue',sans-serif"}}>
+    return <div style={{height:FULL_H,display:"flex",flexDirection:"column",background:B.bg,fontFamily:"'DM Sans','Helvetica Neue',sans-serif"}}>
       <Header/>
       <div style={{flex:1,minHeight:0}}>
         <ViewErrorBoundary label="the household" onBack={back}>
@@ -12939,7 +12943,7 @@ function PartnerDashboard({data,userProfile,logout,toast,reload}){
   </div>;
 
   if(selected){
-    return <div style={{height:"100vh",display:"flex",flexDirection:"column",background:B.bg,fontFamily:"'DM Sans','Helvetica Neue',sans-serif"}}>
+    return <div style={{height:FULL_H,display:"flex",flexDirection:"column",background:B.bg,fontFamily:"'DM Sans','Helvetica Neue',sans-serif"}}>
       <HeaderBar>
         {myFamilies.length>1&&<button onClick={()=>setSelectedId(null)} style={{background:"none",border:`1px solid ${B.border}`,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontFamily:"inherit",fontSize:12,color:B.navy,fontWeight:600}}>← Switch Family</button>}
       </HeaderBar>
@@ -16915,7 +16919,12 @@ export default function App(){
   // Face ID for next time (BiometricLock.jsx). Nothing listens on the website.
   useEffect(()=>{if(authed&&userProfile&&mfaNeed===false)window.dispatchEvent(new window.Event("ordanis:signed-in"));},[authed,userProfile,mfaNeed]);
   // Native app: navy around the app until the person is inside the portal, white (dark status bar text) once in.
-  useEffect(()=>{if(IS_NATIVE_APP)setInPortal(!!(authed&&userProfile&&mfaNeed===false&&!needsPasswordSetup));},[authed,userProfile,mfaNeed,needsPasswordSetup]);
+  useEffect(()=>{if(!IS_NATIVE_APP)return;
+    const inPortal=!!(authed&&userProfile&&mfaNeed===false&&!needsPasswordSetup);
+    setInPortal(inPortal);
+    // The sign-in keyboard can leave the page scrolled; start the portal at the top, below the status bar.
+    if(inPortal)window.scrollTo(0,0);
+  },[authed,userProfile,mfaNeed,needsPasswordSetup]);
   useEffect(()=>{
     if(!authed||!userProfile){setMfaNeed(null);return;}
     let stop=false;
@@ -17129,7 +17138,7 @@ export default function App(){
   // For families tab, header shows differently when inside a family dashboard
   const isFamiliesTab=tab==="families";
 
-  return <div style={{display:"flex",height:"100vh",background:B.bg,fontFamily:"'DM Sans','Helvetica Neue',sans-serif",color:B.text,overflow:"hidden",flexDirection:"row"}}>
+  return <div style={{display:"flex",height:FULL_H,background:B.bg,fontFamily:"'DM Sans','Helvetica Neue',sans-serif",color:B.text,overflow:"hidden",flexDirection:"row"}}>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 
     {/* Mobile backdrop */}
