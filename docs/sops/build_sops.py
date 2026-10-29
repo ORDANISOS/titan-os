@@ -36,7 +36,9 @@ h1 { font-size: 22pt; margin: 0 0 4pt; padding-bottom: 6pt; border-bottom: 2px s
 h1 .num { color: #C9A961; margin-right: 8pt; }
 h2 { font-size: 14pt; margin: 18pt 0 6pt; break-after: avoid; }
 h3 { font-size: 11.5pt; margin: 12pt 0 4pt; font-family: Arial, sans-serif; font-weight: bold; color: #0A2540; break-after: avoid; }
-p { margin: 0 0 7pt; }
+p { margin: 0 0 7pt; orphans: 3; widows: 3; }
+li { orphans: 2; widows: 2; }
+.lede { break-inside: avoid; }
 ul, ol { margin: 0 0 8pt; padding-left: 18pt; }
 li { margin: 0 0 3pt; }
 ol li::marker { color: #9a7b34; font-weight: bold; }
@@ -48,7 +50,13 @@ th { background: #0A2540; color: #fff; text-align: left; font-weight: bold; padd
 td { padding: 5pt 7pt; border-bottom: 1px solid #E6E0D2; vertical-align: top; }
 tr:nth-child(even) td { background: #FBFAF6; }
 tr { break-inside: avoid; }
-.section { break-before: page; }
+thead { display: table-header-group; break-after: avoid; }
+thead + tr, tbody > tr:first-child { break-before: avoid; }
+.section { margin-top: 30pt; padding-top: 4pt; }
+.section:first-of-type { margin-top: 0; }
+.section h1 { break-after: avoid; }
+.section > h1 + * , .section > h1 + * + * { break-before: avoid; }
+h2 + *, h3 + * { break-before: avoid; }
 .lede { font-size: 11.5pt; color: #3d4f63; margin-bottom: 12pt; }
 .box { border-left: 4px solid #C9A961; background: #F8F6F1; padding: 8pt 12pt; margin: 8pt 0 12pt; border-radius: 0 6pt 6pt 0; break-inside: avoid; }
 .box.warn { border-left-color: #b03a2e; background: #FDF4F2; }
@@ -92,6 +100,8 @@ def render(doc):
         f'<div class="section"><h1><span class="num">{i:02d}</span>{html.escape(t)}</h1>{h}</div>'
         for i, (t, _, h) in enumerate(doc["sections"], 1))
     body = body.replace("__MARK__", MARK)
+    # Header rows become <thead>: they repeat on a new page and are never left alone at the bottom of one.
+    body = re.sub(r"<table>\s*(<tr>\s*<th.*?</tr>)", lambda m: "<table><thead>" + m.group(1) + "</thead>", body, flags=re.S)
     return f"""<!doctype html><html><head><meta charset="utf-8"><title>{html.escape(doc['title'])}</title><style>{CSS.replace("__TITLE__", doc["title"].replace('"', "")).replace("__CLASS__", doc["classification"])}</style></head><body>
 <div class="cover">
   <div class="logo"><img src="{LOGO}"></div>
