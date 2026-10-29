@@ -83,7 +83,8 @@ export default function BiometricLock({ children }) {
       const lock = value === "on" && !!a.isAvailable && hasSession();
       setLocked(lock);
       setReady(true);
-      if (lock) unlock();
+      // No automatic scan: the Face ID prompt pauses the app, which cut off the opening and its chime (Will). The
+      // lock screen waits for a tap on "Unlock with Face ID".
     })();
   }, [native]);
 
@@ -99,7 +100,7 @@ export default function BiometricLock({ children }) {
     const onVis = () => {
       if (document.hidden) { hiddenAt.current = Date.now(); return; }
       if (shared.enabled && hasSession() && hiddenAt.current && Date.now() - hiddenAt.current > RELOCK_AFTER_MS) {
-        setLocked(true); unlock();
+        setLocked(true);
       }
     };
     document.addEventListener("visibilitychange", onVis);
