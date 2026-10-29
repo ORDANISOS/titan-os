@@ -6714,6 +6714,7 @@ function printAdvisorReport(adv,data){
 }
 
 function FamiliesView({data,reload,toast,userProfile,navIntent,onNavConsumed}){
+  const isMobile=useIsMobile();
   const{families}=data;
   const[advisors,setAdvisors]=useState([]);
   useEffect(()=>{
@@ -6793,7 +6794,8 @@ function FamiliesView({data,reload,toast,userProfile,navIntent,onNavConsumed}){
   });
 
   return <div style={{height:"100%",display:"flex",flexDirection:"column",minHeight:0}}>
-    <div style={{padding:"14px 24px",borderBottom:`1px solid ${B.borderLight}`,background:B.white,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+    {/* On phones the floating menu button sits at the top left of this view, so the header starts to its right. */}
+    <div style={{padding:isMobile?"14px 16px 14px 72px":"14px 24px",borderBottom:`1px solid ${B.borderLight}`,background:B.white,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
       {isAdmin&&<div style={{display:"flex",background:B.bg,borderRadius:8,padding:3,border:`1px solid ${B.borderLight}`}}>
         {[{k:"families",l:"Families"},{k:"advisors",l:"By ORDANIS Expert"}].map(t=><button key={t.k} onClick={()=>setViewMode(t.k)} style={{border:"none",borderRadius:6,padding:"7px 14px",fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",background:viewMode===t.k?B.navy:"transparent",color:viewMode===t.k?B.white:B.textSoft}}>{t.l}</button>)}
       </div>}
@@ -17199,7 +17201,7 @@ export default function App(){
       </>}
 
       {/* Mobile-only floating hamburger when in families tab (which has its own header) */}
-      {isMobile&&tab==="families"&&<button onClick={()=>setSidebarOpen(true)} style={{position:"fixed",top:14,left:14,zIndex:50,background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:8,padding:"8px 10px",fontSize:18,color:B.navy,cursor:"pointer",boxShadow:B.shadow,display:"flex",alignItems:"center"}} aria-label="Open menu">☰</button>}
+      {isMobile&&tab==="families"&&<button onClick={()=>setSidebarOpen(true)} style={{position:"fixed",top:"calc(14px + env(safe-area-inset-top))",left:14,zIndex:50,background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:8,padding:"8px 10px",fontSize:18,color:B.navy,cursor:"pointer",boxShadow:B.shadow,display:"flex",alignItems:"center"}} aria-label="Open menu">☰</button>}
 
       <div style={{flex:1,minHeight:0,overflow:"hidden",background:B.bg,paddingBottom:"0"}}>
         {loading&&tab!=="families"&&tab!=="users"?<Spinner/>:<>
