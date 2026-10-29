@@ -188,7 +188,7 @@ end $$;</pre>
 S.append(("CHRIS: how it works under the hood", "Centralized Household Records Integration Server, end to end", """
 <div class="chris"><div class="head"><img src="__MARK__"><span>CHRIS in one paragraph</span></div>
 CHRIS, the Centralized Household Records Integration Server, is not a folder of files. Every document is stored privately, read by AI (including scans and phone photos), named and
-summarised, filed into the right folder, searchable by what is <i>inside</i> it, and pinned to the exact figure it supports:
+summarized, filed into the right folder, searchable by what is <i>inside</i> it, and pinned to the exact figure it supports:
 a property's tax bill, a valuable's policy, a loan's statement, an account's balance. The assistant answers from it. Every
 download is logged.</div>
 <h2>The pieces</h2>

@@ -3,7 +3,7 @@
 S = []
 
 S.append(("Your role on the platform", "Expert, Analyst, Onboarding Specialist, and the line you never cross", """
-<p class="lede">ORDANIS gives each household one private, organised place for everything it owns, owes, pays and keeps, and
+<p class="lede">ORDANIS gives each household one private, organized place for everything it owns, owes, pays and keeps, and
 gives you the tools to run that administration well. This guide walks through the platform the way you'll use it.</p>
 <table>
 <tr><th style="width:26%">Seat</th><th>What it means</th><th style="width:30%">What you see</th></tr>
@@ -66,7 +66,7 @@ S.append(("Working a household", "Every tab on the household screen, and what it
 <tr><td>Loans &amp; Lines</td><td>All debt. Adding a mortgage asks which property it's on and saves it on that property. Other loans and lines record what secures them: unsecured, a property, a portfolio account or a valuable.</td></tr>
 <tr><td>Cash Flow</td><td>Income and bills with recurrence and tax treatment; projections; mark bills paid (who paid and when is recorded).</td></tr>
 <tr><td>Workflows</td><td>Each workflow, laid out step by step against real dates (Core and Premier).</td></tr>
-<tr><td>Valuables</td><td>Art, jewellery, vehicles and the policy that covers each.</td></tr>
+<tr><td>Valuables</td><td>Art, jewelry, vehicles and the policy that covers each.</td></tr>
 <tr><td>Deals, Notes, Tasks</td><td>Pipeline items, running notes (with attachments) and tasks with reminders.</td></tr>
 <tr><td><b>Client Activity</b></td><td>Everything the family changed themselves, newest first (section 07).</td></tr>
 <tr><td><b>CHRIS</b></td><td>The household's documents (section 05).</td></tr>

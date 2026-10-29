@@ -4,13 +4,13 @@ FULL = "Centralized Household Records Integration Server"
 S = []
 
 S.append(("Welcome to ORDANIS", "One private place for your household", f"""
-<p class="lede">ORDANIS brings everything your household owns, owes, pays and keeps into one private, organised place:
+<p class="lede">ORDANIS brings everything your household owns, owes, pays and keeps into one private, organized place:
 your properties, accounts, loans, bills, valuables and important documents, with an assistant that knows your records
 and workflows that carry your household's recurring responsibilities through to done.</p>
 <table>
 <tr><th style="width:30%">You can</th><th>For example</th></tr>
 <tr><td>See the whole picture</td><td>Net worth, what's coming due, and everything in one place.</td></tr>
-<tr><td>Keep documents organised and findable</td><td>Policies, statements, deeds and tax bills in CHRIS ({FULL}).</td></tr>
+<tr><td>Keep documents organized and findable</td><td>Policies, statements, deeds and tax bills in CHRIS ({FULL}).</td></tr>
 <tr><td>Get recurring work done on time</td><td>An insurance renewal, an estimated tax payment or a capital call, laid out step by step with dates.</td></tr>
 <tr><td>Stay ahead of deadlines</td><td>Bills, renewals and tasks, with reminders.</td></tr>
 <tr><td>Ask questions in plain English</td><td>"When does our home insurance renew?"</td></tr>
@@ -24,7 +24,7 @@ much the platform does for you, and whether an ORDANIS Expert works alongside yo
 <table>
 <tr><th style="width:28%"></th><th style="width:22%">Basic</th><th style="width:25%">Core</th><th>Premier</th></tr>
 <tr><td><b>Monthly</b></td><td>$15</td><td>$100</td><td>$500</td></tr>
-<tr><td><b>Best for</b></td><td>Getting organised</td><td>Running your own household administration</td><td>Having it run for you</td></tr>
+<tr><td><b>Best for</b></td><td>Getting organized</td><td>Running your own household administration</td><td>Having it run for you</td></tr>
 <tr><td>Household record (properties, accounts, loans, bills, valuables, tasks)</td><td>✓</td><td>✓</td><td>✓</td></tr>
 <tr><td>CHRIS document storage</td><td>5 GB</td><td>15 GB</td><td>25 GB</td></tr>
 <tr><td>AI assistant</td><td>✓</td><td>✓</td><td>✓</td></tr>
@@ -39,7 +39,7 @@ much the platform does for you, and whether an ORDANIS Expert works alongside yo
 <p style="font-size:9pt;color:#5a6e84">Prices as of this guide's date. Outside costs, such as a bill-payment provider's fees, are separate from your plan.</p>
 <h2>Which plan is right for you?</h2>
 <ul>
-<li><b>Basic</b> if you want everything in one organised, searchable place and reminders so nothing is missed.</li>
+<li><b>Basic</b> if you want everything in one organized, searchable place and reminders so nothing is missed.</li>
 <li><b>Core</b> if you want ORDANIS to lay out and prepare your recurring workflows (renewals, tax payments, trust and estate
 tasks) while you stay in control, with an Expert available on any single workflow for <b>$25</b>.</li>
 <li><b>Premier</b> if you want a named ORDANIS Expert to run your household administration, pay bills and work every workflow.</li>
@@ -69,7 +69,7 @@ S.append(("Your portal", "What each tab is for", """
 <tr><td>Loans &amp; Lines</td><td>Every loan, line of credit and card. When you add one, choose what secures it: a property, an account, or nothing (unsecured). A mortgage is added straight onto its property.</td></tr>
 <tr><td>Cash Flow</td><td>Income and bills, with a projection of what's ahead. Tick a bill once it's paid.</td></tr>
 <tr><td><b>Workflows</b></td><td>Your workflows, each laid out step by step with dates (Core and Premier; section 06).</td></tr>
-<tr><td>Valuables</td><td>Art, jewellery, vehicles and the insurance that covers them.</td></tr>
+<tr><td>Valuables</td><td>Art, jewelry, vehicles and the insurance that covers them.</td></tr>
 <tr><td>Tasks</td><td>Your to-do list, with reminders.</td></tr>
 <tr><td><b>CHRIS</b></td><td>Your documents (section 05).</td></tr>
 <tr><td>Billing</td><td>Your plan, payment card, extra workflows, and requests to change plan.</td></tr>
@@ -184,7 +184,7 @@ S.append(("Workflows in practice", "A worked example, the safeguards, the $25 Ex
 <tr><td>April 12</td><td>Shop the market (draft email to brokers)</td><td>You, or your Expert</td></tr>
 <tr><td>April 17</td><td>Review the changes with the family or your adviser</td><td>You, or your Expert</td></tr>
 <tr><td>April 22</td><td>Query the agent on any gaps or changes</td><td>You, or your Expert</td></tr>
-<tr><td>May 12</td><td>Authorise the renewal and arrange payment</td><td>You, or your Expert</td></tr>
+<tr><td>May 12</td><td>Authorize the renewal and arrange payment</td><td>You, or your Expert</td></tr>
 <tr><td>May 27</td><td>Binder or new policy received</td><td>Your insurer</td></tr>
 <tr><td>June 3</td><td>File the new policy in CHRIS and update the renewal date</td><td>ORDANIS</td></tr>
 </table>
