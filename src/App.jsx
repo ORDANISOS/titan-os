@@ -8,6 +8,7 @@ import { buildActivityReportPdf, AR_PERIODS, fig as arFig } from "./activityRepo
 import { derivePropertyEvents, findProbableDuplicates } from "./propertyCashFlow.js";
 import { validateFolderName, buildFolderRows, folderSummary, canDeleteFolder } from "./vaultFolders.js";
 import { PLANS, PLAN_BLURB, planAllows, planLabel, planIsSelfServe } from "./plans.js";
+import { Capacitor } from "@capacitor/core";
 // PCM Platform v5.0 — build 20260429
 //
 // Nothing PCM-specific is imported here any more, and that is deliberate.
@@ -179,7 +180,24 @@ const RUNTIME_BRAND = String(import.meta.env.VITE_BRAND_RUNTIME||"")==="1";
 const BRAND_ADMIN = String(import.meta.env.VITE_BRAND_ADMIN||"")==="1";
 // Set VITE_HIDE_SIGNUP=1 on the demo only: the login screen drops its "Create an Account" link, and
 // main.jsx sends /signup to the login screen. Unset (the default, and production) changes nothing.
-const HIDE_SIGNUP = String(import.meta.env.VITE_HIDE_SIGNUP||"")==="1";
+const HIDE_SIGNUP = String(import.meta.env.VITE_HIDE_SIGNUP||"")==="1"||Capacitor.isNativePlatform();
+// INSIDE THE IPHONE / ANDROID APP (Capacitor), nothing is bought (Will, 2026-10-29). Apple and Google take 15-30% of
+// digital purchases made inside an app, so every paid action (plan changes, adding a card, extra workflows, the $25
+// Expert, professional seats) sends the person to the ORDANIS website in their browser, where Stripe handles it as it
+// does today. Linking out to web checkout is allowed in the US App Store and Google Play; the app is meant for the US
+// storefronts only. Firm-paid households are billed on the firm's invoice, so their in-app approvals stay as they are.
+// The website itself is unchanged: IS_NATIVE_APP is false there.
+const IS_NATIVE_APP = Capacitor.isNativePlatform();
+const WEB_PORTAL_URL = String(import.meta.env.VITE_WEB_PORTAL_URL||"https://portal.ordanisos.com").replace(/\/+$/,"");
+// Opens the website in the phone's browser on the given family-portal tab (?go=billing, ?go=workflows, ?go=household).
+const openOnWeb = go => { window.open(`${WEB_PORTAL_URL}/?go=${encodeURIComponent(go||"")}`, "_blank"); };
+function WebPurchaseNotice({title,children,go,button="Continue on the website",style}){
+  return <div style={{background:"rgba(206,182,132,0.12)",border:`1px solid ${"#C9A961"}`,borderRadius:12,padding:"14px 16px",...style}}>
+    {title&&<div style={{fontWeight:700,color:"#0A2540",fontSize:14,marginBottom:4}}>{title}</div>}
+    <div style={{fontSize:13,color:"#3d4f63",lineHeight:1.55}}>{children}</div>
+    <button onClick={()=>openOnWeb(go)} style={{marginTop:12,background:"#0A2540",color:"#fff",border:"none",borderRadius:8,padding:"10px 16px",fontSize:13,fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>{button} ↗</button>
+  </div>;
+}
 // New sign-ups are paused. While this is set, the login screen's "Create an Account" link goes to the
 // maintenance page on the marketing site instead of /signup. Set it to "" to send people to /signup again.
 const SIGNUP_PAUSED_URL = "https://ordanisos.com/signup-maintenance.html";
@@ -860,7 +878,7 @@ function Badge({children,scheme,onClick}){
 }
 function GoldLine(){return <div style={{height:1,background:`linear-gradient(90deg,transparent,${B.gold},transparent)`,margin:"0 0 16px"}}/>;}
 function Spinner({size=34}){return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",flexDirection:"column",gap:14}}><div style={{width:size,height:size,border:`3px solid ${B.borderLight}`,borderTop:`3px solid ${B.gold}`,borderRadius:"50%",animation:"pcmspin 0.8s linear infinite"}}/><style>{`@keyframes pcmspin{to{transform:rotate(360deg)}}`}</style></div>;}
-function Toast({msg,type}){return <div style={{position:"fixed",bottom:24,right:24,zIndex:9000,background:type==="error"?"#fde8e8":B.navy,color:type==="error"?"#8b1a1a":B.white,padding:"12px 20px",borderRadius:10,fontSize:13,fontWeight:600,boxShadow:B.shadowMd,border:`1px solid ${type==="error"?"#f5c6c6":"rgba(206,182,132,0.3)"}`}}>{type==="error"?"⚠ ":"✓ "}{msg}</div>;}
+function Toast({msg,type}){return <div style={{position:"fixed",bottom:"calc(24px + env(safe-area-inset-bottom))",right:24,zIndex:9000,background:type==="error"?"#fde8e8":B.navy,color:type==="error"?"#8b1a1a":B.white,padding:"12px 20px",borderRadius:10,fontSize:13,fontWeight:600,boxShadow:B.shadowMd,border:`1px solid ${type==="error"?"#f5c6c6":"rgba(206,182,132,0.3)"}`}}>{type==="error"?"⚠ ":"✓ "}{msg}</div>;}
 
 // Rendered into <body> (a portal), so it is always placed against the screen and opens centred at eye level, even when
 // the button that opened it sits inside a scrolled or animated panel (an animated ancestor would otherwise pin a fixed
@@ -868,7 +886,7 @@ function Toast({msg,type}){return <div style={{position:"fixed",bottom:24,right:
 function Modal({title,onClose,wide,children}){
   const mobile=useIsMobile(640);
   return createPortal(<div style={{position:"fixed",inset:0,background:"rgba(9,43,73,0.45)",zIndex:1000,fontFamily:"'DM Sans','Helvetica Neue',sans-serif",display:"flex",alignItems:mobile?"flex-end":"center",justifyContent:"center",backdropFilter:"blur(3px)",padding:mobile?0:20,overflowY:"auto"}} onClick={onClose}>
-    <div onClick={e=>e.stopPropagation()} style={{background:B.white,borderRadius:mobile?"16px 16px 0 0":16,padding:mobile?"24px 20px 32px":36,width:"100%",maxWidth:mobile?"100%":wide?780:540,boxShadow:B.shadowMd,border:`1px solid ${B.borderLight}`,margin:mobile?0:"auto",maxHeight:mobile?"90vh":"none",overflowY:"auto"}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:B.white,borderRadius:mobile?"16px 16px 0 0":16,padding:mobile?"24px 20px calc(32px + env(safe-area-inset-bottom))":36,width:"100%",maxWidth:mobile?"100%":wide?780:540,boxShadow:B.shadowMd,border:`1px solid ${B.borderLight}`,margin:mobile?0:"auto",maxHeight:mobile?"90vh":"none",overflowY:"auto"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600}}>{title}</span>
         <button onClick={onClose} style={{background:"none",border:"none",color:B.textMute,fontSize:20,cursor:"pointer"}}>✕</button>
@@ -3440,7 +3458,7 @@ function FloatingAssistant({family,families,data,reload,toast,userProfile}){
 
   return <>
     <button onClick={()=>setOpen(true)} title={`Ask ${assistantName}`} aria-label={`Ask ${assistantName}`}
-      style={{position:"fixed",bottom:isMobile?18:26,right:isMobile?18:26,zIndex:900,width:isMobile?54:60,height:isMobile?54:60,
+      style={{position:"fixed",bottom:isMobile?"calc(18px + env(safe-area-inset-bottom))":26,right:isMobile?18:26,zIndex:900,width:isMobile?54:60,height:isMobile?54:60,
         borderRadius:"22%",border:"none",background:B.navy,cursor:"pointer",padding:0,overflow:"hidden",
         boxShadow:"0 6px 22px rgba(0,0,0,0.28)",display:"flex",alignItems:"center",justifyContent:"center",transition:"transform .15s ease"}}
       onMouseEnter={e=>e.currentTarget.style.transform="scale(1.07)"}
@@ -11375,7 +11393,7 @@ function OnboardingWizard({userProfile=null,onClose,addMember,addProfessional,ad
   if(step==="professional")return shell(
     "Add your professional network",
     "CPA, attorney, physician — anyone outside the household you work with. Entirely optional.",
-    <>{list("professional")}<ProfessionalQuickForm saving={saving} allowPortalGrant={true} partnerSeatFree={false} onSave={f=>save("professional",f)}/></>,
+    <>{list("professional")}<ProfessionalQuickForm saving={saving} allowPortalGrant={!IS_NATIVE_APP} partnerSeatFree={false} onSave={f=>save("professional",f)}/></>,
     <>
       <button onClick={back} style={{background:"none",border:"none",color:B.textSoft,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>← Back</button>
       <Btn variant="ghost" onClick={next}>{professionals.length?"Next":"Skip"}</Btn>
@@ -11459,7 +11477,12 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   // the picker never opens here — but the prop still has to resolve, and an undefined
   // identifier would take the whole dashboard down rather than degrade.
   const vendorOptions=buildVendorOptions(data,family.id);
-  const[activeTab,setActiveTab]=useState("summary");
+  // ?go=<tab> (sent by the native app's "Continue on the website" buttons) opens that tab once, then is cleared.
+  const[activeTab,setActiveTab]=useState(()=>{
+    try{const g=new URLSearchParams(window.location.search).get("go");
+      if(g&&["billing","workflows","household"].includes(g)){window.history.replaceState(null,"",window.location.pathname);return g;}}catch(_e){}
+    return "summary";
+  });
   const tabPanelRef=useTabEntrance(activeTab,{scrollWindow:true});
   const[emailAdvisorOpen,setEmailAdvisorOpen]=useState(false);
   const fam=(data.families||[]).find(x=>x.id===family.id)||family;
@@ -12071,7 +12094,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     {/* Mobile nav drawer (replaces the old fixed bottom tab bar) -- backdrop + slide-in panel
         from the left, opened by the hamburger in the header above. */}
     {isMobile&&navOpen&&<div onClick={()=>setNavOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:199,backdropFilter:"blur(2px)"}}/>}
-    {isMobile&&<div style={{position:"fixed",top:0,bottom:0,left:navOpen?0:-280,width:260,background:B.white,borderRight:`1px solid ${B.borderLight}`,zIndex:200,transition:"left 0.25s ease",boxShadow:navOpen?"4px 0 24px rgba(0,0,0,0.15)":"none",display:"flex",flexDirection:"column",overflowY:"auto"}}>
+    {isMobile&&<div style={{position:"fixed",top:0,bottom:0,left:navOpen?0:-280,width:260,paddingTop:"env(safe-area-inset-top)",paddingBottom:"env(safe-area-inset-bottom)",boxSizing:"border-box",background:B.white,borderRight:`1px solid ${B.borderLight}`,zIndex:200,transition:"left 0.25s ease",boxShadow:navOpen?"4px 0 24px rgba(0,0,0,0.15)":"none",display:"flex",flexDirection:"column",overflowY:"auto"}}>
       <div style={{padding:"18px 18px 14px",borderBottom:`1px solid ${B.borderLight}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
         <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Menu</span>
         <button onClick={()=>setNavOpen(false)} style={{background:"none",border:"none",fontSize:20,color:B.textSoft,cursor:"pointer",padding:4,lineHeight:1}} aria-label="Close menu">✕</button>
@@ -12099,7 +12122,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           {(()=>{const p=billingPlans.find(x=>x.plan===clientPlan);return p?<> ({fmtMoney(p.monthly_price)}/month)</>:null;})()}.
           {" "}It takes a minute on Stripe's secure page. Have a promotion code? You can enter it there.
         </div>
-        <Btn disabled={cardCheckoutBusy} onClick={startCardCheckout}>{cardCheckoutBusy?"Opening…":"Add a card"}</Btn>
+        {IS_NATIVE_APP?<Btn onClick={()=>openOnWeb("billing")}>Add a card on the website ↗</Btn>:<Btn disabled={cardCheckoutBusy} onClick={startCardCheckout}>{cardCheckoutBusy?"Opening…":"Add a card"}</Btn>}
       </div>}
 
       {/* SUMMARY */}
@@ -12308,7 +12331,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           {myPerm.edit&&<Btn small onClick={()=>setAddProfessionalOpen(true)}>+ Add Contact</Btn>}
         </div>
         {addProfessionalOpen&&<Modal title="Add a professional contact" onClose={()=>setAddProfessionalOpen(false)}>
-          <ProfessionalQuickForm saving={savingQuickAdd} allowPortalGrant={true} partnerSeatFree={clientPlan==="premier"} onCancel={()=>setAddProfessionalOpen(false)} onSave={async f=>{setSavingQuickAdd(true);try{const r=await addProfessional(f);if(r===false)return r;if(f.grantPortalAccess)await addBusinessPartner(f.email,f.name,f.phone);setAddProfessionalOpen(false);}finally{setSavingQuickAdd(false);}}}/>
+          <ProfessionalQuickForm saving={savingQuickAdd} allowPortalGrant={!IS_NATIVE_APP||clientPlan==="premier"||fam.paid_by==="enterprise"} partnerSeatFree={clientPlan==="premier"} onCancel={()=>setAddProfessionalOpen(false)} onSave={async f=>{setSavingQuickAdd(true);try{const r=await addProfessional(f);if(r===false)return r;if(f.grantPortalAccess)await addBusinessPartner(f.email,f.name,f.phone);setAddProfessionalOpen(false);}finally{setSavingQuickAdd(false);}}}/>
         </Modal>}
         {professionals.length===0?<Empty text="No professional contacts on file yet."/>:<div style={{marginBottom:28}}>
           {professionals.map(p=><div key={p.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"14px 18px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:B.shadow,gap:12,flexWrap:"wrap"}}>
@@ -12329,7 +12352,9 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600}}>Business Partner Portal Access</div>
             <div style={{fontSize:12,color:B.textSoft,marginTop:2}}>Read-only logins to this household's portal{clientPlan==="premier"?" — included free with Premier.":" — $5.00/month each."} Add one with the button at right, or from the Professional Network form above.</div>
           </div>
-          {myPerm.manage&&<Btn small onClick={()=>setAddPartnerOpen(true)}>+ Add Business Partner</Btn>}
+          {myPerm.manage&&(IS_NATIVE_APP&&clientPlan!=="premier"&&fam.paid_by!=="enterprise"
+            ?<Btn small onClick={()=>openOnWeb("household")}>Add on the website ↗</Btn>
+            :<Btn small onClick={()=>setAddPartnerOpen(true)}>+ Add Business Partner</Btn>)}
         </div>
         {addPartnerOpen&&<Modal title="Add a Business Partner" onClose={()=>setAddPartnerOpen(false)}>
           <BusinessPartnerQuickForm saving={savingQuickAdd} seatFree={clientPlan==="premier"} onCancel={()=>setAddPartnerOpen(false)} onSave={async f=>{setSavingQuickAdd(true);try{const ok=await addBusinessPartner(f.email.trim(),f.name.trim(),f.phone);if(ok)setAddPartnerOpen(false);return ok?undefined:false;}finally{setSavingQuickAdd(false);}}}/>
@@ -12439,7 +12464,18 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
       </div>}
 
       {/* BILLING */}
-      {activeTab==="billing"&&<div style={{maxWidth:640}}>
+      {activeTab==="billing"&&IS_NATIVE_APP&&<div style={{maxWidth:640}}>
+        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600,marginBottom:8}}>Billing & Plan</div>
+        <div style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:12,padding:"16px 18px",marginBottom:14}}>
+          <div style={{fontSize:12,color:B.textMute,textTransform:"uppercase",letterSpacing:"0.08em",fontWeight:700}}>Your plan</div>
+          <div style={{fontSize:20,color:B.navy,fontWeight:700,marginTop:4}}>{planLabel(clientPlan)}</div>
+        </div>
+        <WebPurchaseNotice title="Plans, cards and add-ons are managed on the website" go="billing" button="Open Billing on the website">
+          Changing your plan, adding or updating a card, extra workflows and other add-ons are handled securely on the
+          ORDANIS website. Everything you change there shows up here straight away.
+        </WebPurchaseNotice>
+      </div>}
+      {activeTab==="billing"&&!IS_NATIVE_APP&&<div style={{maxWidth:640}}>
         {/* Billing changes need "Manage users and billing" (migration 20261028100000); the server refuses them too. */}
         {!myPerm.manage&&<div style={{fontSize:13,color:B.textSoft,background:B.bg,border:`1px solid ${B.borderLight}`,borderRadius:10,padding:"10px 14px",marginBottom:14,lineHeight:1.5}}>You can see your household's plan. Only your household's primary user, or someone they allow, can change the plan or payment details.</div>}
         <fieldset disabled={!myPerm.manage} style={{border:0,padding:0,margin:0,minWidth:0}}>
@@ -14181,7 +14217,8 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
   },[family.id]);
   const firmPays=payer?.paid_by==="enterprise";
   const firmName=payer?.firm_name||"your firm";
-  const expertOffered=expertPrice>0&&!firmPays;
+  const expertOffered=expertPrice>0&&!firmPays&&!IS_NATIVE_APP; // in the app, offered on the website instead
+  const expertOnWeb=expertPrice>0&&!firmPays&&IS_NATIVE_APP;
   const expertFeeText=`$${expertPrice.toFixed(2)}`;
 
   const load=async()=>{
@@ -14329,7 +14366,7 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
         return;
       }
       setWantExpert(false);
-      setBuyPrompt({ob,u});
+      setBuyPrompt({ob,u,web:IS_NATIVE_APP&&!firmPays});
       return;
     }
     if(expertOffered){setWantExpert(false);setStartPrompt({ob});return;}
@@ -14396,6 +14433,9 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
       {canEdit&&<Btn onClick={()=>setModal({row:{...BLANK_OBLIGATION},isNew:true})}>+ New Workflow</Btn>}
     </div>
     <GoldLine/>
+    {canEdit&&expertOnWeb&&<WebPurchaseNotice title={`Want an ORDANIS Expert on a workflow? ${expertFeeText} one time`} go="workflows" button="Add an Expert on the website" style={{marginBottom:14}}>
+      An Expert can work any one workflow for you. It's added on the ORDANIS website, where your card is on file.
+    </WebPurchaseNotice>}
 
     {/* Workflow allowance -- only meaningful for a plan that meters (workflows_included not
         null; Premier's is null so this renders nothing for them). Active, not monthly-started:
@@ -14412,7 +14452,14 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
       {expertOffered&&` Want help? An ORDANIS Expert can work any single workflow for ${expertFeeText}, one time.`}
     </div>;})()}
 
-    {buyPrompt&&<Modal title="Add another workflow?" onClose={()=>!buying&&setBuyPrompt(null)}>
+    {buyPrompt&&buyPrompt.web&&<Modal title="Add another workflow?" onClose={()=>setBuyPrompt(null)}>
+      <div style={{fontSize:14,color:B.text,lineHeight:1.6,marginTop:6,marginBottom:14}}>
+        You have used {buyPrompt.u.active_count} of {buyPrompt.u.included} included workflows. Another one is
+        <strong> ${Number(buyPrompt.u.unit_price).toFixed(2)} a month</strong> while it stays active, and is added on the ORDANIS website.
+      </div>
+      <WebPurchaseNotice go="workflows" button="Add it on the website">Add the extra workflow there, then come back and press Start cycle.</WebPurchaseNotice>
+    </Modal>}
+    {buyPrompt&&!buyPrompt.web&&<Modal title="Add another workflow?" onClose={()=>!buying&&setBuyPrompt(null)}>
       <div style={{fontSize:14,color:B.text,lineHeight:1.6,marginTop:6}}>
         You have used {buyPrompt.u.active_count} of {buyPrompt.u.included} included workflows.
         Add another for <strong>${Number(buyPrompt.u.unit_price).toFixed(2)} a month</strong> while it stays active?
@@ -17043,7 +17090,7 @@ export default function App(){
     {isMobile&&sidebarOpen&&<div onClick={()=>setSidebarOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:99,backdropFilter:"blur(2px)"}}/>}
 
     {/* Sidebar */}
-    <div style={{width:isMobile?260:232,background:B.white,borderRight:`1px solid ${B.borderLight}`,display:"flex",flexDirection:"column",flexShrink:0,position:isMobile?"fixed":"relative",top:0,bottom:0,left:isMobile?(sidebarOpen?0:-280):0,zIndex:100,transition:isMobile?"left 0.25s ease":"none",boxShadow:isMobile&&sidebarOpen?"4px 0 24px rgba(0,0,0,0.15)":"none"}}>
+    <div style={{width:isMobile?260:232,background:B.white,borderRight:`1px solid ${B.borderLight}`,display:"flex",flexDirection:"column",flexShrink:0,position:isMobile?"fixed":"relative",top:0,bottom:0,left:isMobile?(sidebarOpen?0:-280):0,zIndex:100,paddingTop:isMobile?"env(safe-area-inset-top)":0,boxSizing:"border-box",transition:isMobile?"left 0.25s ease":"none",boxShadow:isMobile&&sidebarOpen?"4px 0 24px rgba(0,0,0,0.15)":"none"}}>
       <div style={{padding:"14px 16px 12px",borderBottom:`1px solid ${B.borderLight}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
         <div style={{flex:1}}>
           <PCMLogo compact/>

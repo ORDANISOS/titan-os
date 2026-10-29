@@ -3,6 +3,14 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import SignupFlow, { SignupWelcome } from './SignupFlow.jsx'
 import AppAccessGate from './AppAccessGate.jsx'
+import { Capacitor } from '@capacitor/core'
+
+// Inside the iPhone / Android app: full-screen styling (index.html, html.native-app) instead of a browser page.
+if (Capacitor.isNativePlatform()) {
+  document.documentElement.classList.add('native-app')
+  // No grey "previous / next / done" bar above the keyboard: native apps don't have one.
+  import('@capacitor/keyboard').then(({ Keyboard }) => Keyboard.setAccessoryBarVisible({ isVisible: false })).catch(() => {})
+}
 
 // The public self-serve sign-up flow (Plans -> Account -> Stripe Checkout) lives outside the
 // authenticated app entirely -- it renders before any Supabase session check, so it never runs

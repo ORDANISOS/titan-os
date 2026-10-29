@@ -2,6 +2,18 @@
   "appId": "com.ordanisos.app",
   "appName": "ORDANIS",
   "webDir": "dist",
-  "ios": { "contentInset": "always", "backgroundColor": "#F8F6F1" },
-  "android": { "backgroundColor": "#F8F6F1" }
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#FFFFFF",
+    "scrollEnabled": true
+  },
+  "android": {
+    "backgroundColor": "#FFFFFF"
+  },
+  "plugins": {
+    "Keyboard": {
+      "resize": "native",
+      "resizeOnFullScreen": true
+    }
+  }
 }

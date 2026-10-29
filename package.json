@@ -16,6 +16,7 @@
     "@capacitor/android": "^7.6.10",
     "@capacitor/core": "^7.6.10",
     "@capacitor/ios": "^7.6.10",
+    "@capacitor/keyboard": "^7.0.6",
     "@capacitor/preferences": "^7.0.4",
     "@supabase/supabase-js": "^2.39.0",
     "pdf-lib": "^1.17.1",

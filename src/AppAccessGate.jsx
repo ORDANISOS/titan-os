@@ -67,9 +67,9 @@ export default function AppAccessGate({ children }) {
   };
 
   if (state === "open") return children;
-  if (state === "loading") return <div style={{ minHeight: "100vh", background: PAPER }} />;
+  if (state === "loading") return <div style={{ position: "fixed", inset: 0, background: PAPER }} />;
   return (
-    <div style={{ minHeight: "100vh", background: PAPER, display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 20px", fontFamily: "'DM Sans','Helvetica Neue',Arial,sans-serif" }}>
+    <div style={{ position: "fixed", inset: 0, overflowY: "auto", background: PAPER, display: "flex", alignItems: "center", justifyContent: "center", padding: "calc(24px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom))", fontFamily: "'DM Sans','Helvetica Neue',Arial,sans-serif" }}>
       <form onSubmit={submit} style={{ width: "100%", maxWidth: 380, background: "#fff", borderRadius: 14, boxShadow: "0 8px 30px rgba(10,37,64,0.10)", overflow: "hidden" }}>
         <div style={{ height: 4, background: GOLD }} />
         <div style={{ padding: "28px 26px 26px" }}>
