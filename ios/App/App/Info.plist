@@ -25,7 +25,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSFaceIDUsageDescription</key>
-	<string>ORDANIS uses Face ID to unlock the app, so you don't have to type your password and authenticator code each time.</string>
+	<string>ORDANIS uses Face ID to unlock the app, so you don't have to type your password each time.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

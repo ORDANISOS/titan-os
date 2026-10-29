@@ -1,8 +1,9 @@
 // Face ID / Touch ID / fingerprint unlock for the iPhone / Android app (Will, 2026-10-29).
 //
-// How it keeps two-factor protection intact: the first sign-in on a phone is the normal one (password, plus the
-// authenticator code when the account uses one). Only after that full sign-in does the app offer "Use Face ID to
-// unlock ORDANIS?". The signed-in session (still two-factor) stays saved on the phone as it already does; with Face ID
+// Clients sign in with their password once per phone, then Face ID (Will, 2026-10-29: the authenticator is required for
+// employees and optional for clients; the client app goes by biometrics). Employees, and clients who chose the
+// authenticator, still enter it on that first sign-in, so two-factor accounts keep two-factor. Only after that full
+// sign-in does the app offer "Use Face ID to unlock ORDANIS?". The signed-in session (still two-factor) stays saved on the phone as it already does; with Face ID
 // on, the app is locked behind Face ID every time it opens, and again when it comes back after a minute away. Face ID
 // never replaces the server's check: a new phone, a sign-out, or "Sign in with password" means the full sign-in again.
 //
@@ -143,8 +144,8 @@ export default function BiometricLock({ children }) {
           <div style={{ width: "100%", background: "#fff", borderRadius: "16px 16px 0 0", padding: "26px 22px calc(26px + env(safe-area-inset-bottom))" }}>
             <div style={{ fontFamily: "Georgia,serif", fontSize: 21, color: NAVY, marginBottom: 8 }}>Use {label} to unlock ORDANIS?</div>
             <div style={{ fontSize: 14, color: "#3d4f63", lineHeight: 1.55, marginBottom: 20 }}>
-              Next time you open the app, {label} unlocks it: no password or authenticator code. On a new phone, or after you
-              sign out, you'll sign in the usual way once. You can turn this off any time in Security.
+              Next time you open the app, {label} unlocks it, so there's no password to type. On a new phone, or after you
+              sign out, you'll sign in with your password once. You can turn this off any time in Security.
             </div>
             <button onClick={() => answerOffer(true)} style={{ ...btn, background: NAVY, color: "#fff" }}>Use {label}</button>
             <button onClick={() => answerOffer(false)} style={{ ...btn, marginTop: 10, background: "#fff", color: NAVY, border: "1.5px solid #d8cdb8" }}>Not now</button>

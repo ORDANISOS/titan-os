@@ -2076,8 +2076,8 @@ function BiometricSettingRow({toast}){
       <span style={{fontSize:11,fontWeight:700,padding:"2px 9px",borderRadius:999,background:bio.enabled?"#EAF5EE":"#F1F1EE",color:bio.enabled?"#1E6B3A":B.textSoft}}>{bio.enabled?"On":"Off"}</span>
     </div>
     <div style={{fontSize:13,color:B.textSoft,lineHeight:1.55,marginBottom:12}}>{bio.enabled
-      ?`ORDANIS opens with ${bio.label} on this phone, without your password or authenticator code. On a new phone, or after you sign out, you sign in the usual way once.`
-      :`Open ORDANIS with ${bio.label} on this phone instead of typing your password and authenticator code each time.`}</div>
+      ?`ORDANIS opens with ${bio.label} on this phone, so you don't type your password each time. On a new phone, or after you sign out, you sign in with your password once.`
+      :`Open ORDANIS with ${bio.label} on this phone instead of typing your password each time.`}</div>
     <Btn variant={bio.enabled?"ghost":undefined} disabled={busy} onClick={flip}>{bio.enabled?"Turn off":`Turn on ${bio.label}`}</Btn>
   </div>;
 }
@@ -2102,7 +2102,9 @@ function SecurityButton({role,toast,style,label="🔒 Security"}){
     if(error){toast(error.message,"error");return;}
     setSt(x=>x?{...x,optedOut:v}:x);
   };
-  const flagged=optional&&st&&!st.on&&!st.optedOut;
+  // Clients in the native app sign in with Face ID / fingerprint (BiometricLock.jsx), so the app doesn't nag them to
+  // set up an authenticator; it stays available in Security for anyone who wants it. Employees always need it.
+  const flagged=optional&&st&&!st.on&&!st.optedOut&&!IS_NATIVE_APP;
   const iconOnly=String(label).trim()==="🔒";
   const flagStyle=flagged?{...style,background:"#fef3e2",border:"1px solid #e8b04a",color:"#8a5c00",fontWeight:700,position:"relative"}:style;
   return <><button onClick={()=>setOpen(true)} title={flagged?"Two-step sign-in isn't set up yet. Recommended.":"Two-step sign-in and sign out everywhere"}
