@@ -15,6 +15,26 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 const NAVY = "#0A2540", GOLD = "#C9A961", PAPER = "#F8F6F1";
 
+// The opening sequence (Will, 2026-10-29): the navy launch screen with the white / gold O fades into the stacked
+// ORDANIS logo on cream, which then fades into the first real screen (sign-in, or the access code while testing).
+// The website's own cube animation is skipped in the app (main.jsx), so the logo is shown once.
+function LogoIntro({ onDone }) {
+  const [phase, setPhase] = useState("in"); // in -> shown -> out
+  useEffect(() => {
+    const t1 = setTimeout(() => setPhase("shown"), 60);
+    const t2 = setTimeout(() => setPhase("out"), 1900);
+    const t3 = setTimeout(onDone, 2400);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, []);
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 10000, background: PAPER, display: "flex", alignItems: "center", justifyContent: "center",
+      opacity: phase === "out" ? 0 : 1, transition: "opacity 0.5s ease", pointerEvents: phase === "out" ? "none" : "auto" }}>
+      <img src="/ordanis-logo.png" alt="ORDANIS" style={{ width: "72%", maxWidth: 340, opacity: phase === "in" ? 0 : 1,
+        transform: phase === "in" ? "translateY(6px)" : "none", transition: "opacity 0.7s ease 0.25s, transform 0.9s ease 0.25s" }} />
+    </div>
+  );
+}
+
 // "ok" | "refused" | "offline"
 async function checkCode(code) {
   try {
@@ -36,6 +56,7 @@ export default function AppAccessGate({ children }) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [introDone, setIntroDone] = useState(!native);
 
   // The ORDANIS launch screen (navy, white / gold O) stays up until the first real screen is ready, then fades.
   useEffect(() => {
@@ -74,9 +95,10 @@ export default function AppAccessGate({ children }) {
     setBusy(false);
   };
 
-  if (state === "open") return children;
+  const intro = native && !introDone && state !== "loading" ? <LogoIntro onDone={() => setIntroDone(true)} /> : null;
+  if (state === "open") return <>{children}{intro}</>;
   if (state === "loading") return <div style={{ position: "fixed", inset: 0, background: PAPER }} />;
-  return (
+  return (<>{intro}
     <div style={{ position: "fixed", inset: 0, overflowY: "auto", background: PAPER, display: "flex", alignItems: "center", justifyContent: "center", padding: "calc(24px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom))", fontFamily: "'DM Sans','Helvetica Neue',Arial,sans-serif" }}>
       <form onSubmit={submit} style={{ width: "100%", maxWidth: 380, background: "#fff", borderRadius: 14, boxShadow: "0 8px 30px rgba(10,37,64,0.10)", overflow: "hidden" }}>
         <div style={{ height: 4, background: GOLD }} />
@@ -98,5 +120,5 @@ export default function AppAccessGate({ children }) {
         </div>
       </form>
     </div>
-  );
+  </>);
 }

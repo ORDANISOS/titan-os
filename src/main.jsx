@@ -8,6 +8,8 @@ import { Capacitor } from '@capacitor/core'
 // Inside the iPhone / Android app: full-screen styling (index.html, html.native-app) instead of a browser page.
 if (Capacitor.isNativePlatform()) {
   document.documentElement.classList.add('native-app')
+  // The app opens with its own logo sequence (AppAccessGate), so the website's cube intro is skipped.
+  try { sessionStorage.setItem('pcmIntroSeen', '1') } catch (_e) {}
   // No grey "previous / next / done" bar above the keyboard: native apps don't have one.
   // Never leave the launch screen up if something goes wrong before the first screen draws.
   setTimeout(() => import('@capacitor/splash-screen').then(({ SplashScreen }) => SplashScreen.hide()).catch(() => {}), 6000)
