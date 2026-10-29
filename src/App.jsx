@@ -3742,6 +3742,31 @@ function ClientActivityPanel({familyId,toast}){
   </div>;
 }
 
+// Phones: the household's sections as a menu (a button showing the current one, opening the full list) rather than
+// a tab row you swipe through. Tab ids follow the same rule as the desktop row.
+// items: [{id,label,assistant}] (the family portal's tabs), or the staff household's tab names via `tabs`.
+function HouseholdSectionMenu({tabs,items,activeTab,onPick,assistantName}){
+  const[open,setOpen]=useState(false);
+  const list=items||(tabs||[]).map(t=>({id:t==="CHRIS"?"vault":t.toLowerCase().replace(/\s+/g,""),
+    label:t==="Ask ORDANIS"?("Ask "+assistantName):t,assistant:t==="Ask ORDANIS"}));
+  const current=list.find(t=>t.id===activeTab)||list[0]||{label:""};
+  return <div style={{background:B.bg,padding:"8px 12px",borderBottom:`1px solid ${B.border}`}}>
+    <button onClick={()=>setOpen(true)} aria-haspopup="dialog" style={{width:"100%",boxSizing:"border-box",display:"flex",alignItems:"center",gap:10,background:B.white,border:`1px solid ${B.border}`,borderTop:`2px solid ${B.gold}`,borderRadius:10,padding:"11px 14px",fontFamily:"inherit",fontSize:15,fontWeight:600,color:B.navy,cursor:"pointer",textAlign:"left"}}>
+      <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{current.label}</span>
+      <span aria-hidden="true" style={{color:B.textSoft,fontSize:13}}>▾</span>
+    </button>
+    {open&&<Modal title="Go to" onClose={()=>setOpen(false)}>
+      <div style={{display:"flex",flexDirection:"column",gap:2}}>
+        {list.map(t=>{const id=t.id,on=id===activeTab,ai=!!t.assistant;
+          return <button key={id} onClick={()=>{onPick(id);setOpen(false);}} aria-current={on?"page":undefined}
+            style={{display:"flex",alignItems:"center",gap:10,width:"100%",boxSizing:"border-box",textAlign:"left",padding:"13px 14px",borderRadius:8,border:"none",borderLeft:on?`3px solid ${B.gold}`:"3px solid transparent",background:on?"rgba(206,182,132,0.14)":"transparent",color:on?B.navy:B.text,fontFamily:"inherit",fontSize:15,fontWeight:on?700:500,cursor:"pointer"}}>
+            {ai&&<span aria-hidden="true" style={{color:B.gold}}>✦</span>}{t.label}
+          </button>;})}
+      </div>
+    </Modal>}
+  </div>;
+}
+
 function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab}){
   const isMobile=useIsMobile();
   // Partner role: full read access to everything in this dashboard, but no
@@ -4207,7 +4232,9 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
       {/* The baseline is an inset shadow, not a border: the row scrolls sideways (overflow-x), and a scrolling
           box clips anything outside its padding, so the active tab could never overlap a real border and a line
           showed under it. An inset shadow is painted beneath the tabs, so the active tab's white bottom covers it. */}
-      <div style={{boxShadow:`inset 0 -1px 0 ${B.border}`,background:B.bg,padding:isMobile?"6px 8px 0":"8px 28px 0",display:"flex",gap:2,alignItems:"flex-end",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+      {/* Phones: one menu button for the household's sections instead of a sideways-scrolling tab row. */}
+      {isMobile&&<HouseholdSectionMenu tabs={TABS} activeTab={activeTab} onPick={setActiveTab} assistantName={assistantName}/>}
+      {!isMobile&&<div style={{boxShadow:`inset 0 -1px 0 ${B.border}`,background:B.bg,padding:isMobile?"6px 8px 0":"8px 28px 0",display:"flex",gap:2,alignItems:"flex-end",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
         {TABS.map(t=>{
           const id=t==="CHRIS"?"vault":t.toLowerCase().replace(/\s+/g,"");
           const on=activeTab===id;
@@ -4248,7 +4275,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
             }}>✦</span>}
             {label}</button>;
         })}
-      </div>
+      </div>}
 
       {/* Content */}
       <style>{TAB_MOTION_CSS}</style>
@@ -12076,7 +12103,6 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     <div style={{background:B.white,padding:isMobile?"0 16px":"0 32px",borderBottom:`1px solid ${B.borderLight}`}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:isMobile?"12px 0":"16px 0",gap:10,flexWrap:isMobile?"wrap":"nowrap"}}>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
-          {isMobile&&<button onClick={()=>setNavOpen(true)} style={{background:"none",border:"none",cursor:"pointer",padding:"6px 4px 6px 0",fontSize:22,color:B.navy,flexShrink:0,display:"flex",alignItems:"center"}} aria-label="Open menu">☰</button>}
           <PCMLogo compact/>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:isMobile?8:16,flex:isMobile?"1 1 auto":"none",justifyContent:isMobile?"flex-end":"flex-start"}}>
@@ -12105,6 +12131,8 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
 
     {/* Gold accent line */}
     <div style={{height:2,background:`linear-gradient(90deg,${B.gold},${B.goldLight}55,transparent)`}}/>
+    {/* Phones: the sections as one menu button (same as the team's household view). */}
+    {isMobile&&<HouseholdSectionMenu items={TABS} activeTab={activeTab} onPick={setActiveTab}/>}
 
     {/* Top Tabs (desktop only) — folder tabs, matching the advisor view.
         The active tab's bottom border is the page colour, so it merges into the content
