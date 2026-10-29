@@ -18,9 +18,23 @@ const NAVY = "#0A2540", GOLD = "#C9A961", PAPER = "#F8F6F1";
 // The opening sequence (Will, 2026-10-29): the navy launch screen with the white / gold O fades into the stacked
 // ORDANIS logo on cream, which then fades into the first real screen (sign-in, or the access code while testing).
 // The website's own cube animation is skipped in the app (main.jsx), so the logo is shown once.
+// The same startup sound the Email Portal plays at sign-in (public/intro.m4a, setting "ordanis-startup-sound"),
+// played once as the app opens. Turned off in Security, or by the phone's silent switch.
+export const STARTUP_SOUND_KEY = "ordanis-startup-sound";
+export const startupSoundOn = () => { try { return localStorage.getItem(STARTUP_SOUND_KEY) !== "off"; } catch (_e) { return true; } };
+function playStartupSound() {
+  if (!startupSoundOn()) return;
+  try {
+    try { if (navigator.audioSession) navigator.audioSession.type = "ambient"; } catch (_e) { /* older iOS */ }
+    const a = new window.Audio("/intro.m4a");
+    a.play().catch(() => {});
+  } catch (_e) { /* no audio */ }
+}
+
 function LogoIntro({ onDone }) {
   const [phase, setPhase] = useState("in"); // in -> shown -> out
   useEffect(() => {
+    playStartupSound();
     const t1 = setTimeout(() => setPhase("shown"), 60);
     const t2 = setTimeout(() => setPhase("out"), 1900);
     const t3 = setTimeout(onDone, 2400);

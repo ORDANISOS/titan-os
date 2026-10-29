@@ -10,6 +10,7 @@ import { validateFolderName, buildFolderRows, folderSummary, canDeleteFolder } f
 import { PLANS, PLAN_BLURB, planAllows, planLabel, planIsSelfServe } from "./plans.js";
 import { Capacitor } from "@capacitor/core";
 import { useBiometricSetting } from "./BiometricLock.jsx";
+import { STARTUP_SOUND_KEY, startupSoundOn } from "./AppAccessGate.jsx";
 // PCM Platform v5.0 — build 20260429
 //
 // Nothing PCM-specific is imported here any more, and that is deliberate.
@@ -2039,6 +2040,7 @@ function SecurityModal({onClose,toast,role,optedOut=false,onOptOut=null}){
     </div>
     :<div>
       {IS_NATIVE_APP&&<BiometricSettingRow toast={toast}/>}
+      {IS_NATIVE_APP&&<StartupSoundRow/>}
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
         <span style={{fontSize:13,fontWeight:700,color:B.navy}}>Two-step sign-in</span>
         <span style={{fontSize:11,fontWeight:700,padding:"2px 9px",borderRadius:999,background:on?"#EAF5EE":"#F1F1EE",color:on?"#1E6B3A":B.textSoft}}>{on?"On":"Off"}</span>
@@ -2079,6 +2081,19 @@ function BiometricSettingRow({toast}){
       ?`ORDANIS opens with ${bio.label} on this phone, so you don't type your password each time. On a new phone, or after you sign out, you sign in with your password once.`
       :`Open ORDANIS with ${bio.label} on this phone instead of typing your password each time.`}</div>
     <Btn variant={bio.enabled?"ghost":undefined} disabled={busy} onClick={flip}>{bio.enabled?"Turn off":`Turn on ${bio.label}`}</Btn>
+  </div>;
+}
+
+// Native app only: the ORDANIS startup sound when the app opens (same sound and setting as the Email Portal).
+function StartupSoundRow(){
+  const[on,setOn]=useState(startupSoundOn());
+  const flip=()=>{const v=!on;try{localStorage.setItem(STARTUP_SOUND_KEY,v?"on":"off");}catch(_e){}setOn(v);};
+  return <div style={{paddingBottom:16,marginBottom:16,borderBottom:`1px solid ${B.borderLight}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+    <div>
+      <div style={{fontSize:13,fontWeight:700,color:B.navy}}>Sound when the app opens</div>
+      <div style={{fontSize:12.5,color:B.textSoft,marginTop:2}}>The ORDANIS chime. Your phone's silent switch also mutes it.</div>
+    </div>
+    <Btn small variant={on?"ghost":undefined} onClick={flip}>{on?"Turn off":"Turn on"}</Btn>
   </div>;
 }
 
