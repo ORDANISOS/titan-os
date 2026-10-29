@@ -8,6 +8,7 @@
 import React, { useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
+import { SplashScreen } from "@capacitor/splash-screen";
 
 const KEY = "ordanis_app_access_code";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
@@ -35,6 +36,13 @@ export default function AppAccessGate({ children }) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+
+  // The ORDANIS launch screen (navy, white / gold O) stays up until the first real screen is ready, then fades.
+  useEffect(() => {
+    if (!native || state === "loading") return;
+    // Two animation frames: the screen underneath has painted, so the O fades straight into it (no bare navy).
+    requestAnimationFrame(() => requestAnimationFrame(() => SplashScreen.hide({ fadeOutDuration: 300 }).catch(() => {})));
+  }, [native, state]);
 
   useEffect(() => {
     if (!native) return;

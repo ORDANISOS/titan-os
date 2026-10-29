@@ -9,6 +9,8 @@ import { Capacitor } from '@capacitor/core'
 if (Capacitor.isNativePlatform()) {
   document.documentElement.classList.add('native-app')
   // No grey "previous / next / done" bar above the keyboard: native apps don't have one.
+  // Never leave the launch screen up if something goes wrong before the first screen draws.
+  setTimeout(() => import('@capacitor/splash-screen').then(({ SplashScreen }) => SplashScreen.hide()).catch(() => {}), 6000)
   import('@capacitor/keyboard').then(({ Keyboard }) => Keyboard.setAccessoryBarVisible({ isVisible: false })).catch(() => {})
 }
 

@@ -4,16 +4,22 @@
   "webDir": "dist",
   "ios": {
     "contentInset": "never",
-    "backgroundColor": "#FFFFFF",
+    "backgroundColor": "#0A2540",
     "scrollEnabled": true
   },
   "android": {
-    "backgroundColor": "#FFFFFF"
+    "backgroundColor": "#0A2540"
   },
   "plugins": {
     "Keyboard": {
       "resize": "native",
       "resizeOnFullScreen": true
+    },
+    "SplashScreen": {
+      "launchAutoHide": false,
+      "backgroundColor": "#0A2540",
+      "showSpinner": false,
+      "launchFadeOutDuration": 300
     }
   }
 }
