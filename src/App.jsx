@@ -3882,7 +3882,7 @@ function FamilyDashboard({family,data,reload,toast,onBack,userProfile,initialTab
   //
   // Obligations is absent entirely on Core rather than shown disabled. A locked door on every
   // visit is worse than no door, and the tab row is already the tightest thing on this screen.
-  const TABS=["Overview","Properties","Portfolio","Loans & Lines","Cash Flow",...(hasWorkflows?["Workflows"]:[]),"Valuables",...(userProfile?.role==="enterprise_admin"?[]:["Deals"]),"Notes","Tasks",...(["admin","advisor","analyst"].includes(userProfile?.role)?["Client Activity"]:[]),"CHRIS",...(canSeePrompts?["Prompts"]:[]),...(userProfile?.role==="enterprise_admin"?[]:["Ask ORDANIS"])];
+  const TABS=["Overview","Properties","Portfolio","Loans & Lines","Cash Flow",...(hasWorkflows?["Workflows"]:[]),"Valuables","Notes","Tasks",...(["admin","advisor","analyst"].includes(userProfile?.role)?["Client Activity"]:[]),"CHRIS",...(canSeePrompts?["Prompts"]:[]),...(userProfile?.role==="enterprise_admin"?[]:["Ask ORDANIS"])];
   const assistantName=(familyRow.assistantName||"").trim()||"ORDANIS";
   const[showWelcome,setShowWelcome]=useState(false);
   // Carries "attach a document to this property section" from the Properties tab
@@ -9072,7 +9072,6 @@ function SignupsRevenueView({data,toast,userProfile,reload}){
     {key:"documents",label:"CHRIS Documents",eligible:families,has:hasFamilyIn(data.documents)},
     {key:"tasks",label:"Tasks",eligible:families,has:hasFamilyIn(data.tasks)},
     {key:"notes",label:"Notes",eligible:families,has:hasFamilyIn(data.notes)},
-    {key:"deals",label:"Deals",eligible:families,has:hasFamilyIn(data.deals)},
     {key:"workflows",label:"Workflow cycles",gateLabel:"Core & Premier",eligible:families.filter(f=>planAllows(f.plan,"workflows")),has:id=>!!(workflowByFamily[id]&&workflowByFamily[id].total>0)},
     {key:"obligations",label:"Workflows",gateLabel:"Core & Premier",eligible:families.filter(f=>planAllows(f.plan,"obligations")),has:id=>obligationFamilyIds.has(id)},
     {key:"billpay",label:"Bill Pay",gateLabel:"Premier",eligible:families.filter(f=>planAllows(f.plan,"billPay")),has:hasFamilyIn((data.cash_flow_events||[]).filter(e=>e.pcmResponsible))},

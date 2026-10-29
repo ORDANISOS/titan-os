@@ -67,7 +67,7 @@ S.append(("Working a household", "Every tab on the household screen, and what it
 <tr><td>Cash Flow</td><td>Income and bills with recurrence and tax treatment; projections; mark bills paid (who paid and when is recorded).</td></tr>
 <tr><td>Workflows</td><td>Each workflow, laid out step by step against real dates (Core and Premier).</td></tr>
 <tr><td>Valuables</td><td>Art, jewelry, vehicles and the policy that covers each.</td></tr>
-<tr><td>Deals, Notes, Tasks</td><td>Pipeline items, running notes (with attachments) and tasks with reminders.</td></tr>
+<tr><td>Notes, Tasks</td><td>Running notes (with attachments) and tasks with reminders.</td></tr>
 <tr><td><b>Client Activity</b></td><td>Everything the family changed themselves, newest first (section 07).</td></tr>
 <tr><td><b>CHRIS</b></td><td>The household's documents (section 05).</td></tr>
 <tr><td>Prompts</td><td>Scheduled reports the assistant writes on a cadence.</td></tr>
