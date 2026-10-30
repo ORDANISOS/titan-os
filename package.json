@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@capacitor/android": "^7.6.10",
+    "@capacitor/app-launcher": "7.0.4",
     "@capacitor/core": "^7.6.10",
     "@capacitor/ios": "^7.6.10",
     "@capacitor/keyboard": "^7.0.6",

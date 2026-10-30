@@ -210,6 +210,11 @@ const openOnWeb = async go => {
     const{data,error}=await sb.functions.invoke("app-web-handoff",{body:{}});
     if(!error&&data&&typeof data.token_hash==="string"&&data.token_hash)url=`${base}#handoff=${encodeURIComponent(data.token_hash)}`;
   }catch(_e){/* open signed out */}
+  // iOS drops everything after "#" when a page asks to open a new window, so the pass would never arrive. The App
+  // Launcher plugin hands Safari the full address. Older app builds without the plugin open signed out, as before.
+  if(IS_NATIVE_APP){
+    try{const{AppLauncher}=await import("@capacitor/app-launcher");await AppLauncher.openUrl({url});return;}catch(_e){/* fall back */}
+  }
   window.open(url,"_blank");
 };
 // Website side of the handoff: run before the first session check. Takes the pass out of the address bar at once
