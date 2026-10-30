@@ -16034,6 +16034,8 @@ function PayerCard({familyRow,userProfile,toast,reload}){
   const save=async()=>{
     const p=Number(pct)||0;
     if(payer==="enterprise"&&!(p>=0&&p<=100)){toast("The discount must be between 0 and 100 percent","error");return;}
+    // A code with 0% used to be dropped without a word (the code is only a label for the percent on the firm's invoice).
+    if(payer==="enterprise"&&code.trim()&&!(p>0)){toast(`Enter the percent off for ${code.trim().toUpperCase()}, or clear the code`,"error");return;}
     if(cap!==""&&!(Number(cap)>=0)){toast("The monthly limit must be a number","error");return;}
     setSaving(true);
     const firm=payer==="enterprise";
@@ -16077,7 +16079,7 @@ function PayerCard({familyRow,userProfile,toast,reload}){
         })}
       </div>
       {payer==="enterprise"&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(180px,100%),1fr))",gap:12}}>
-        <Field label="Discount code"><Inp placeholder="e.g. ACC10" value={code} onChange={e=>setCode(e.target.value)}/></Field>
+        <Field label="Discount code"><Inp placeholder="e.g. FOUNDERS" value={code} onChange={e=>setCode(e.target.value)}/></Field>
         <Field label="Percent off plan fee"><Inp type="number" min="0" max="100" step="0.5" value={pct} onChange={e=>setPct(e.target.value)}/></Field>
       </div>}
       <Field label="Monthly limit for extra workflows ($)">
