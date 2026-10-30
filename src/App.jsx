@@ -11694,8 +11694,11 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const[activeTab,setActiveTab]=useState(()=>{
     try{const g=new URLSearchParams(window.location.search).get("go");
       if(g&&["billing","workflows","household"].includes(g)){CAME_FROM_APP=true;window.history.replaceState(null,"",window.location.pathname);return g;}}catch(_e){}
+    // In the app, a live update reloads the screens while the client is away; come back to the same section.
+    if(IS_NATIVE_APP){try{const t=sessionStorage.getItem("ordanis-client-tab");if(t&&["summary","household","properties","portfolio","loans","cashflow","workflows","valuables","tasks","documents","assistant","billing"].includes(t))return t;}catch(_e){}}
     return "summary";
   });
+  useEffect(()=>{if(IS_NATIVE_APP){try{sessionStorage.setItem("ordanis-client-tab",activeTab);}catch(_e){}}},[activeTab]);
   const tabPanelRef=useTabEntrance(activeTab,{scrollWindow:true});
   const[emailAdvisorOpen,setEmailAdvisorOpen]=useState(false);
   const fam=(data.families||[]).find(x=>x.id===family.id)||family;

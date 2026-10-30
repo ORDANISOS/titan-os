@@ -23,6 +23,11 @@ const NAVY = "#0A2540", GOLD = "#C9A961", PAPER = "#F8F6F1";
 // The same startup sound the Email Portal plays at sign-in (public/intro.m4a, setting "ordanis-startup-sound"),
 // played once as the app opens. Turned off in Security, or by the phone's silent switch.
 export const STARTUP_SOUND_KEY = "ordanis-startup-sound";
+// The opening plays once per real launch. A live update switches in while the app is in the background (for example
+// while the client is paying on the website) and reloads the screens; sessionStorage survives that reload but not a
+// real launch, so the reload skips the opening and its chime (Will, 2026-10-30).
+const INTRO_PLAYED_KEY = "ordanis-intro-played";
+const introPlayed = () => { try { return sessionStorage.getItem(INTRO_PLAYED_KEY) === "1"; } catch (_e) { return false; } };
 export const startupSoundOn = () => { try { return localStorage.getItem(STARTUP_SOUND_KEY) !== "off"; } catch (_e) { return true; } };
 function playStartupSound() {
   if (!startupSoundOn()) return;
@@ -101,7 +106,7 @@ export default function AppAccessGate({ children }) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [introDone, setIntroDone] = useState(!native);
+  const [introDone, setIntroDone] = useState(!native || introPlayed());
   const [timing] = useState(() => (startupSoundOn() ? WITH_SOUND : QUIET));
   const started = useRef(false);
   const [introGo, setIntroGo] = useState(false);
@@ -112,8 +117,12 @@ export default function AppAccessGate({ children }) {
     started.current = true;
     // Lift the plain-navy launch screen first (a navy cover is underneath), then start the chime and the O together,
     // so the fade happens where it can be seen rather than behind the launch screen.
+    if (introPlayed()) { SplashScreen.hide({ fadeOutDuration: 200 }).catch(() => {}); return; }
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      const go = () => setTimeout(() => { playStartupSound(); setIntroGo(true); }, 300);
+      const go = () => setTimeout(() => {
+        try { sessionStorage.setItem(INTRO_PLAYED_KEY, "1"); } catch (_e) { /* no storage */ }
+        playStartupSound(); setIntroGo(true);
+      }, 300);
       SplashScreen.hide({ fadeOutDuration: 200 }).then(go, go);
     }));
   }, [native, state]);

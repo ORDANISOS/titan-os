@@ -17,6 +17,10 @@ import OrdanisLockup from "./OrdanisLockup.jsx";
 
 const PREF = "ordanis_biometric"; // "on" | "off" (unset: not asked yet)
 const RELOCK_AFTER_MS = 60 * 1000;
+// Set when the app goes to the background while unlocked. A live update reloads the screens in the background; if
+// the person is back within RELOCK_AFTER_MS that reload doesn't lock them (the same rule as coming back without one).
+// Only written while unlocked, so a reload can never skip a lock that was showing.
+const AWAY_KEY = "ordanis-left-unlocked-at";
 const NAVY = "#0A2540", PAPER = "#F8F6F1";
 
 const isSessionKey = (k) => /^sb-.*-auth-token$/.test(k || "");
@@ -58,6 +62,8 @@ export default function BiometricLock({ children }) {
   const typeRef = useRef(null);
   const prefRef = useRef(null);
   const hiddenAt = useRef(0);
+  const lockedRef = useRef(false);
+  lockedRef.current = !ready || locked;
   const label = biometryLabel(typeRef.current);
 
   const unlock = async () => {
@@ -81,7 +87,13 @@ export default function BiometricLock({ children }) {
       typeRef.current = a.biometryType;
       prefRef.current = value || null;
       publish({ available: !!a.isAvailable, label: biometryLabel(a.biometryType), enabled: value === "on" });
-      const lock = value === "on" && !!a.isAvailable && hasSession();
+      let recentlyUnlocked = false;
+      try {
+        const t = Number(sessionStorage.getItem(AWAY_KEY) || 0);
+        recentlyUnlocked = t > 0 && Date.now() - t < RELOCK_AFTER_MS;
+        sessionStorage.removeItem(AWAY_KEY);
+      } catch (_e) { /* no storage */ }
+      const lock = value === "on" && !!a.isAvailable && hasSession() && !recentlyUnlocked;
       setLocked(lock);
       setReady(true);
       // No automatic scan: the Face ID prompt pauses the app, which cut off the opening and its chime (Will). The
@@ -99,7 +111,12 @@ export default function BiometricLock({ children }) {
   useEffect(() => {
     if (!native) return;
     const onVis = () => {
-      if (document.hidden) { hiddenAt.current = Date.now(); return; }
+      if (document.hidden) {
+        hiddenAt.current = Date.now();
+        try { if (!lockedRef.current) sessionStorage.setItem(AWAY_KEY, String(hiddenAt.current)); else sessionStorage.removeItem(AWAY_KEY); } catch (_e) { /* none */ }
+        return;
+      }
+      try { sessionStorage.removeItem(AWAY_KEY); } catch (_e) { /* none */ }
       if (shared.enabled && hasSession() && hiddenAt.current && Date.now() - hiddenAt.current > RELOCK_AFTER_MS) {
         setLocked(true);
       }
