@@ -88,6 +88,15 @@ for (const k of Object.keys(files)) {
   }
   seen.set(low, k);
 }
+// The product's old name must never reach a phone (it did once, from demo's Vercel brand settings). Any trace of it
+// in the screens means a setting is wrong somewhere: publish nothing until it is fixed.
+for (const [k, v] of Object.entries(files)) {
+  if (!/\.(html|js|css|json|txt|svg)$/i.test(k)) continue;
+  if (/titan/i.test(Buffer.from(v).toString("utf8"))) {
+    console.error(`app-update: the old product name appears in ${k}; phone update skipped`);
+    process.exit(0);
+  }
+}
 if (!files["index.html"]) {
   console.error("app-update: dist-app has no index.html; skipped");
   process.exit(0);
