@@ -3178,7 +3178,6 @@ const ASSISTANT_SUGGESTIONS=[
   "Do I have any tasks overdue or due in the next 30 days?",
   "List my properties with their current value and loan balance.",
   "Which properties have flood insurance, and with which carrier?",
-  "What are my total annual property insurance premiums?",
   "Which loans mature within the next 12 months?",
 ];
 
@@ -3743,6 +3742,20 @@ function ClientActivityPanel({familyId,toast}){
     </div>}
     {rows&&rows.length>=limit&&<div style={{marginTop:12}}><Btn small variant="ghost" onClick={()=>setLimit(l=>l+100)}>Show more</Btn></div>}
   </div>;
+}
+
+// Collapsible cards (Will, 2026-10-30): properties, portfolio accounts, cash-flow settings and events, workflows and
+// valuables open closed, showing just their name and key figure. Tapping the top row opens or closes the details.
+// Which cards are open is kept per screen visit, not saved.
+function useOpenSet(){
+  const[open,setOpen]=useState(()=>new Set());
+  return[id=>open.has(id),id=>setOpen(prev=>{const s=new Set(prev);s.has(id)?s.delete(id):s.add(id);return s;})];
+}
+// Props for a card's clickable top row: works with a tap, Enter or Space, and tells screen readers it expands.
+const collapseRow=(open,toggle)=>({role:"button",tabIndex:0,"aria-expanded":open,onClick:toggle,
+  onKeyDown:e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();toggle();}},style:{cursor:"pointer"}});
+function Chevron({open}){
+  return <span aria-hidden="true" style={{display:"inline-block",color:B.textSoft,fontSize:12,marginLeft:8,transition:"transform .2s ease",transform:open?"rotate(180deg)":"none"}}>▾</span>;
 }
 
 // Phones: the household's sections as a menu rather than a tab row you swipe through. The button shows the current
@@ -6026,6 +6039,7 @@ function CashFlowReport({family,projectionMonths,projectionMode,filingStatus,bas
 // ── CASH FLOW VIEW (the tab content) ──────────────────────────────────────────
 function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,toast,readOnly=false}){
   const isMobile=useIsMobile();
+  const[isCfOpen,toggleCf]=useOpenSet();
   // Bill pay is a Premier-plan feature. The database refuses pcm_responsible on a Core household
   // and refuses the downgrade of a household that already has such expenses, so on Core no row can
   // carry the flag and the badges below are inert anyway. This const is belt as well as braces: it
@@ -6332,8 +6346,11 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
   return <div style={{padding:readOnly?0:(isMobile?"16px 14px":"24px 28px")}}>
     {/* Settings Bar */}
     <div style={{background:B.white,border:`1px solid ${B.borderLight}`,borderRadius:12,padding:isMobile?14:18,marginBottom:18,boxShadow:B.shadow}}>
-      <div style={{fontSize:11,fontWeight:800,color:B.textMute,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12}}>Projection Settings{readOnly?" (read-only)":""}</div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(160px,100%),1fr))",gap:12}}>
+      {(()=>{const open=isCfOpen("settings"),cr=collapseRow(open,()=>toggleCf("settings"));return <div {...cr} style={{...cr.style,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:open?12:0}}>
+        <div style={{fontSize:11,fontWeight:800,color:B.textMute,letterSpacing:"0.1em",textTransform:"uppercase"}}>Projection Settings{readOnly?" (read-only)":""}</div>
+        <div style={{fontSize:12,color:B.textSoft,whiteSpace:"nowrap"}}>{!open&&(settings.projectionMode==="year"?`Current year`:(CF_PROJECTION_OPTIONS.find(o=>o.value===settings.projectionMonths)?.label||""))}<Chevron open={open}/></div>
+      </div>;})()}
+      {isCfOpen("settings")&&<><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(160px,100%),1fr))",gap:12}}>
         <Field label="Projection Window">
           <Sel value={settings.projectionMode==="year"?"year":String(settings.projectionMonths)} disabled={readOnly} onChange={e=>{const v=e.target.value;if(v==="year")updateSettings({projectionMode:"year"});else updateSettings({projectionMode:"rolling",projectionMonths:Number(v)});}}>
             <option value="year">Current Year ({new Date().getFullYear()})</option>
@@ -6391,7 +6408,7 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
           <Inp type="number" min="0" max="20" step="0.01" disabled={readOnly} value={settings.compareLocalTaxRate||""} onChange={e=>updateSetting("compareLocalTaxRate",Number(e.target.value)||0)} placeholder="0 (no city tax)"/>
         </Field>}
         {compareActive&&<div style={{fontSize:11,color:B.textSoft}}>Models the identical inputs as if the client were taxed in {compareState.name}{compareLocalRate>0?` + ${compareLocalRate}% local`:" with no city tax"}.</div>}
-      </div>
+      </div></>}
     </div>
 
     {/* Comparison summary */}
@@ -6556,8 +6573,9 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
       const canMoveUp=reorderable&&myReorderIdx>0;
       const canMoveDown=reorderable&&myReorderIdx<reorderableEvents.length-1;
       const accentColor=isExpense?"#d43030":(e._synthetic?(isNegative?"#d43030":B.navyMid):B.gold);
+      const open=isCfOpen("ev-"+e.id),cr=collapseRow(open,()=>toggleCf("ev-"+e.id));
       return <div key={e.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid ${accentColor}`,borderRadius:10,padding:isMobile?14:16,marginBottom:8,boxShadow:B.shadow,opacity:e._excluded?0.55:1}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
+        <div {...cr} style={{...cr.style,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
           <div style={{flex:1,minWidth:0}}>
             <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:4}}>
               <span style={{fontWeight:700,color:B.navy,fontSize:14}}>{e.eventType}</span>
@@ -6572,19 +6590,19 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
               {isExpense&&billPay&&e.pcmResponsible&&!e._synthetic&&isRegisterFreq(e)&&<Badge scheme={{bg:"#e8f0f8",text:B.navy,dot:B.navy}}>{BRAND.short} Pays · {e.frequency}</Badge>}
               {isExpense&&!billPay&&tracksPaid(e)&&!isRegisterFreq(e)&&e.paid&&<Badge scheme={{bg:"#e0f5e9",text:"#0d5c2b",dot:"#18a850"}}>✓ Paid</Badge>}
             </div>
-            {e.description&&<div style={{fontSize:13,color:B.textMid,marginBottom:4}}>{e.description}</div>}
-            <div style={{fontSize:11,color:B.textSoft}}>{fmt(e.startDate)}{e.endDate?` → ${fmt(e.endDate)}`:""}{!isExpense?` · ${treatLabel}`:""}</div>
-            {isExpense&&tracksPaid(e)&&!isRegisterFreq(e)&&e.paid&&e.paidAt&&<div style={{fontSize:11,color:"#0d5c2b",marginTop:3,fontWeight:600}}>✓ Paid {fmt(e.paidAt)}{e.paidBy?` · by ${e.paidBy}`:""}</div>}
+            {open&&e.description&&<div style={{fontSize:13,color:B.textMid,marginBottom:4}}>{e.description}</div>}
+            {open&&<div style={{fontSize:11,color:B.textSoft}}>{fmt(e.startDate)}{e.endDate?` → ${fmt(e.endDate)}`:""}{!isExpense?` · ${treatLabel}`:""}</div>}
+            {open&&isExpense&&tracksPaid(e)&&!isRegisterFreq(e)&&e.paid&&e.paidAt&&<div style={{fontSize:11,color:"#0d5c2b",marginTop:3,fontWeight:600}}>✓ Paid {fmt(e.paidAt)}{e.paidBy?` · by ${e.paidBy}`:""}</div>}
           </div>
           <div style={{textAlign:"right",flexShrink:0}}>
             <div style={{fontSize:12,color:B.textSoft}}>{e.frequency==="once"?"Amount":"Per occurrence"}</div>
-            <div style={{fontSize:16,fontWeight:700,color:isExpense||isNegative?"#8b1a1a":B.navy}}>{isExpense?"−":(isNegative?"−":"")}{fmtMoney(Math.abs(e.amount))}</div>
-            <div style={{fontSize:11,color:B.textSoft,marginTop:6}}>Projected ({CF_PROJECTION_OPTIONS.find(o=>o.value===settings.projectionMonths)?.label||""})</div>
-            <div style={{fontSize:13,fontWeight:700,color:e.projectedNet>=0?"#0d5c2b":"#8b1a1a"}}>{e.projectedNet<0?"−":""}{fmtMoney(Math.abs(e.projectedNet||0))} <span style={{fontSize:10,color:B.textSoft,fontWeight:400}}>{isExpense?"total":"net"}</span></div>
+            <div style={{fontSize:16,fontWeight:700,color:isExpense||isNegative?"#8b1a1a":B.navy}}>{isExpense?"−":(isNegative?"−":"")}{fmtMoney(Math.abs(e.amount))}<Chevron open={open}/></div>
+            {open&&<><div style={{fontSize:11,color:B.textSoft,marginTop:6}}>Projected ({CF_PROJECTION_OPTIONS.find(o=>o.value===settings.projectionMonths)?.label||""})</div>
+            <div style={{fontSize:13,fontWeight:700,color:e.projectedNet>=0?"#0d5c2b":"#8b1a1a"}}>{e.projectedNet<0?"−":""}{fmtMoney(Math.abs(e.projectedNet||0))} <span style={{fontSize:10,color:B.textSoft,fontWeight:400}}>{isExpense?"total":"net"}</span></div></>}
           </div>
         </div>
         {/* Breakdown for synthetic rental events */}
-        {e._synthetic&&bd&&<div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${B.borderLight}`}}>
+        {open&&e._synthetic&&bd&&<div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${B.borderLight}`}}>
           <button onClick={()=>toggleBreakdown(e.id)} style={{background:"none",border:"none",color:B.navyMid,fontSize:12,fontWeight:600,cursor:"pointer",padding:0,fontFamily:"inherit"}}>
             {isExpanded?"▼ Hide calculation":"▶ Show calculation"}
           </button>
@@ -6604,7 +6622,7 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
           </div>}
         </div>}
         {/* Monthly/quarterly/annual payment register for PCM-responsible recurring expenses */}
-        {isExpense&&tracksPaid(e)&&isRegisterFreq(e)&&(()=>{
+        {open&&isExpense&&tracksPaid(e)&&isRegisterFreq(e)&&(()=>{
           const periods=getRegisterPeriods(e);
           const paidCount=periods.filter(p=>p.paid).length;
           const overdueCount=periods.filter(p=>p.overdue).length;
@@ -6629,7 +6647,7 @@ function CashFlowView({family,events,paymentLog=[],properties,vendors=[],reload,
           </div>;
         })()}
         {/* Action row: reorder + edit + delete (only for non-synthetic, non-readOnly) */}
-        {reorderable&&<div style={{display:"flex",gap:6,marginTop:10,paddingTop:10,borderTop:`1px solid ${B.borderLight}`,justifyContent:"space-between",alignItems:"center"}}>
+        {open&&reorderable&&<div style={{display:"flex",gap:6,marginTop:10,paddingTop:10,borderTop:`1px solid ${B.borderLight}`,justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",gap:4}}>
             <button onClick={()=>moveEvent(e.id,"up")} disabled={!canMoveUp} title="Move up" style={{background:"none",border:`1px solid ${B.border}`,borderRadius:6,padding:"4px 10px",cursor:canMoveUp?"pointer":"not-allowed",color:canMoveUp?B.navy:B.textMute,fontSize:13,fontFamily:"inherit",opacity:canMoveUp?1:0.4}}>↑</button>
             <button onClick={()=>moveEvent(e.id,"down")} disabled={!canMoveDown} title="Move down" style={{background:"none",border:`1px solid ${B.border}`,borderRadius:6,padding:"4px 10px",cursor:canMoveDown?"pointer":"not-allowed",color:canMoveDown?B.navy:B.textMute,fontSize:13,fontFamily:"inherit",opacity:canMoveDown?1:0.4}}>↓</button>
@@ -11629,6 +11647,7 @@ function HouseholdTeamCard({familyId}){
 
 function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const isMobile=useIsMobile();
+  const[isCardOpen,toggleCard]=useOpenSet();
   // Needed because this view renders CashFlowView too. The client view is read-only, so
   // the picker never opens here — but the prop still has to resolve, and an undefined
   // identifier would take the whole dashboard down rather than degrade.
@@ -12350,15 +12369,16 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         {accounts.length===0?<Empty text="No portfolio accounts on file yet."/>:accounts.map(a=>{
           const pct=pctChange(a.startingBalance,a.currentBalance);
           const gain=(Number(a.currentBalance)||0)-(Number(a.startingBalance)||0);
-          return <div key={a.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid ${B.gold}`,borderRadius:12,padding:24,marginBottom:16,boxShadow:B.shadow}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
-              <div><div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:B.navy,fontWeight:600}}>{a.institution}</div><div style={{fontSize:13,color:B.textSoft}}>{a.accountType}{a.bankerName?` · ${a.bankerName}`:""}</div></div>
-              <div style={{textAlign:"right"}}>
-                <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:28,color:B.navy,fontWeight:600}}>{fmtMoney(a.currentBalance)}</div>
+          const open=isCardOpen("acct-"+a.id),cr=collapseRow(open,()=>toggleCard("acct-"+a.id));
+          return <div key={a.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid ${B.gold}`,borderRadius:12,padding:isMobile?18:24,marginBottom:isMobile?12:16,boxShadow:B.shadow}}>
+            <div {...cr} style={{...cr.style,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:open&&pct!==null?16:0}}>
+              <div style={{minWidth:0}}><div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:B.navy,fontWeight:600}}>{a.institution}</div><div style={{fontSize:13,color:B.textSoft}}>{a.accountType}{a.bankerName?` · ${a.bankerName}`:""}</div></div>
+              <div style={{textAlign:"right",flexShrink:0}}>
+                <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:28,color:B.navy,fontWeight:600}}>{fmtMoney(a.currentBalance)}<Chevron open={open}/></div>
                 {pct!==null&&<div style={{fontSize:13,fontWeight:700,color:Number(pct)>=0?"#18a850":"#d43030"}}>{Number(pct)>=0?"+":""}{pct}% ({Number(gain)>=0?"+":"-"}{fmtMoney(Math.abs(gain))})</div>}
               </div>
             </div>
-            {pct!==null&&<div style={{background:Number(pct)>=0?"#e0f5e9":"#fde8e8",borderRadius:10,padding:"14px 18px",display:"flex",alignItems:"center",gap:16}}>
+            {open&&pct!==null&&<div style={{background:Number(pct)>=0?"#e0f5e9":"#fde8e8",borderRadius:10,padding:"14px 18px",display:"flex",alignItems:"center",gap:16}}>
               <div style={{fontSize:32}}>{Number(pct)>=0?"📈":"📉"}</div>
               <div>
                 <div style={{fontSize:11,color:B.textMute,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Performance Since Inception</div>
@@ -12412,14 +12432,15 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
         {properties.length===0?<Empty text="No properties on file yet."/>:(()=>{
           const bySort=(a,b)=>((Number.isFinite(Number(a.sortOrder))?Number(a.sortOrder):1e9)-(Number.isFinite(Number(b.sortOrder))?Number(b.sortOrder):1e9))||(new Date(a.createdAt||0)-new Date(b.createdAt||0));
           const groups=[...PROP_TYPES,"Other"].map(type=>({type,list:properties.filter(p=>type==="Other"?!PROP_TYPES.includes(p.propertyType):p.propertyType===type).sort(bySort)})).filter(g=>g.list.length>0);
-          const card=p=><div key={p.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid ${B.gold}`,borderRadius:12,padding:24,marginBottom:16,boxShadow:B.shadow}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12,gap:12,flexWrap:"wrap"}}>
-            <div><div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600}}>{p.address}</div>{p.ownerName&&<div style={{fontSize:13,color:B.textSoft,marginTop:2}}>{p.ownerName}</div>}</div>
-            <div style={{textAlign:"right"}}>
-              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600}}>{fmtMoney(p.currentValue||p.purchasePrice)}</div>
+          const card=p=>{const open=isCardOpen("prop-"+p.id),cr=collapseRow(open,()=>toggleCard("prop-"+p.id));return <div key={p.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid ${B.gold}`,borderRadius:12,padding:isMobile?18:24,marginBottom:isMobile?12:16,boxShadow:B.shadow}}>
+          <div {...cr} style={{...cr.style,display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:open?12:0,gap:12}}>
+            <div style={{minWidth:0}}><div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600}}>{p.address}</div>{p.ownerName&&<div style={{fontSize:13,color:B.textSoft,marginTop:2}}>{p.ownerName}</div>}</div>
+            <div style={{textAlign:"right",flexShrink:0}}>
+              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:B.navy,fontWeight:600}}>{fmtMoney(p.currentValue||p.purchasePrice)}<Chevron open={open}/></div>
               <div style={{fontSize:12,color:B.textSoft}}>Current Value</div>
             </div>
           </div>
+          {open&&<>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
             <Btn small variant="ghost" onClick={()=>window.open(`https://www.zillow.com/homes/${encodeURIComponent(p.address||"")}_rb/`,"_blank","noopener,noreferrer")}>🔗 Zillow</Btn>
             <Btn small variant="ghost" onClick={()=>window.open(`https://www.google.com/search?q=${encodeURIComponent(`"${p.address||""}" property tax records`)}`,"_blank","noopener,noreferrer")}>🏛 Tax Records</Btn>
@@ -12449,7 +12470,8 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
                   <div style={{fontSize:11,color:B.textSoft,display:"flex",gap:10,flexWrap:"wrap",marginTop:1}}>{c.company&&<span>{c.company}</span>}{c.phone&&<span>📞 <PhoneLink value={c.phone}/></span>}{c.email&&<span>✉ <EmailLink value={c.email}/></span>}</div>
                 </div>)}</div>}
           </div>;})()}
-        </div>;
+          </>}
+        </div>;};
           return groups.map(g=><div key={g.type} style={{marginBottom:24}}>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,paddingBottom:6,borderBottom:`2px solid ${B.gold}`}}>
               <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:700}}>{g.type}</div>
@@ -12568,22 +12590,28 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
           if(!items.length)return null;
           return <div key={cat} style={{marginBottom:20}}>
             <div style={{fontSize:12,fontWeight:800,color:B.textMute,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10}}>{cat}</div>
-            {items.map(v=><div key={v.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid #8b5cf6`,borderRadius:10,padding:"16px 20px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,boxShadow:B.shadow}}>
+            {items.map(v=>{const open=isCardOpen("val-"+v.id),cr=collapseRow(open,()=>toggleCard("val-"+v.id));return <div key={v.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid #8b5cf6`,borderRadius:10,padding:"16px 20px",marginBottom:8,boxShadow:B.shadow}}>
+              <div {...cr} style={{...cr.style,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{v.description}</div>
+                  {v.makeModel&&<div style={{fontSize:12,color:B.textSoft}}>{v.makeModel}{v.year?` · ${v.year}`:""}</div>}
+                </div>
+                <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:B.navy,fontWeight:600,flexShrink:0}}>{fmtMoney(v.estimatedValue)}<Chevron open={open}/></div>
+              </div>
+              {open&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:12,marginTop:8,flexWrap:"wrap"}}>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontWeight:700,color:B.navy,fontSize:14}}>{v.description}</div>
-                {v.makeModel&&<div style={{fontSize:12,color:B.textSoft}}>{v.makeModel}{v.year?` · ${v.year}`:""}</div>}
                 {v.insured?<div style={{fontSize:11,color:"#18a850",fontWeight:600,marginTop:3}}>✓ Insured{v.insuranceCompany?` — ${v.insuranceCompany}`:""}<DocLink doc={valuablesPolicyDoc()} toast={toast} label="📄 policy"/></div>:<div style={{fontSize:11,color:"#b4551f",fontWeight:600,marginTop:3}}>⚠ Not scheduled<DocLink doc={valuablesPolicyDoc()} toast={toast} label="📄 policy"/></div>}
                 <ValuablePolicyDetails v={v} doc={(data.documents||[]).find(d=>d.valuableId===v.id&&d.propertySection==="valuable_policy")} toast={toast}
                   onAttach={selfUpload?()=>{setPropAttachIntent({valuableId:v.id,section:"valuable_policy"});setActiveTab("documents");}:null}/>
               </div>
               <div style={{textAlign:"right",flexShrink:0}}>
-                <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:B.navy,fontWeight:600}}>{fmtMoney(v.estimatedValue)}</div>
                 {selfEdit&&<div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:4}}>
                   <button onClick={()=>setEditingValuable(v)} style={{background:"none",border:"none",color:B.navyMid,fontSize:12,cursor:"pointer",fontFamily:"inherit",fontWeight:600,padding:0}}>Edit</button>
                   <button onClick={()=>delClientValuable(v)} style={{background:"none",border:"none",color:B.textMute,fontSize:12,cursor:"pointer",fontFamily:"inherit",padding:0}}>Remove</button>
                 </div>}
               </div>
-            </div>)}
+              </div>}
+            </div>;})}
           </div>;
         })}
       </div>}
@@ -14326,6 +14354,7 @@ const BLANK_OBLIGATION={
 };
 
 function ObligationsSection({family,data,toast,canEdit,userProfile}){
+  const[isObOpen,toggleOb]=useOpenSet();
   const[obs,setObs]=useState([]);
   const[templates,setTemplates]=useState([]);
   const[instances,setInstances]=useState([]);
@@ -14655,10 +14684,14 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
       {obs.map(ob=>{
         const t=tplFor(ob.template_key);
         const cycles=instances.filter(i=>i.obligation_id===ob.id);
+        const open=isObOpen(ob.id),cr=collapseRow(open,()=>toggleOb(ob.id));
+        const atRisk=cycles.filter(i=>i.status==="at_risk").length;
         return <div key={ob.id} style={{background:B.white,border:`1px solid ${B.borderLight}`,borderLeft:`4px solid ${B.navy}`,borderRadius:12,padding:"16px 18px",boxShadow:B.shadow}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+          <div {...cr} style={{...cr.style,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
             <div style={{minWidth:0}}>
-              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:19,color:B.navy,fontWeight:600}}>{ob.name}</div>
+              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:19,color:B.navy,fontWeight:600}}>{ob.name}
+                {/* Closed, a cycle that needs attention still shows. */}
+                {!open&&atRisk>0&&<span style={{marginLeft:8,fontFamily:"inherit",fontSize:10.5,fontWeight:600,borderRadius:20,padding:"2px 9px",background:"#fde8e8",color:"#8b1a1a",verticalAlign:"middle"}}>At risk</span>}</div>
               <div style={{fontSize:11.5,color:B.textSoft,marginTop:3}}>
                 {OBLIGATION_KINDS.find(k=>k.v===ob.kind)?.label||ob.kind}
                 {ob.counterparty?` · ${ob.counterparty}`:""}
@@ -14666,11 +14699,12 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
               </div>
             </div>
             <div style={{textAlign:"right"}}>
-              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600}}>{ob.amount?fmtMoney(ob.amount):"—"}</div>
+              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600,whiteSpace:"nowrap"}}>{ob.amount?fmtMoney(ob.amount):"—"}<Chevron open={open}/></div>
               <div style={{fontSize:11,color:B.textSoft}}>due {fmt(ob.due_date)} · {RECURRENCES.find(r=>r.v===ob.recurrence)?.label}</div>
             </div>
           </div>
 
+          {open&&<>
           <div style={{fontSize:11.5,color:B.textSoft,marginTop:10,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
             {t
               ? <span style={{background:B.bg,border:`1px solid ${B.borderLight}`,borderRadius:20,padding:"3px 10px"}}>▦ {t.name}</span>
@@ -14731,6 +14765,7 @@ function ObligationsSection({family,data,toast,canEdit,userProfile}){
               </div>}
             </div>;
           })}
+          </>}
         </div>;
       })}
     </div>
