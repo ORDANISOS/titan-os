@@ -208,7 +208,9 @@ const openOnWeb = async go => {
   let url=base;
   try{
     const{data,error}=await sb.functions.invoke("app-web-handoff",{body:{}});
-    if(!error&&data&&typeof data.token_hash==="string"&&data.token_hash)url=`${base}#handoff=${encodeURIComponent(data.token_hash)}`;
+    // A fresh "n" each time: Safari treats an address that differs only after "#" as the same page and doesn't
+    // reload it, so a second tap would never reach the website's code.
+    if(!error&&data&&typeof data.token_hash==="string"&&data.token_hash)url=`${base}&n=${Date.now().toString(36)}#handoff=${encodeURIComponent(data.token_hash)}`;
   }catch(_e){/* open signed out */}
   // iOS drops everything after "#" when a page asks to open a new window, so the pass would never arrive. The App
   // Launcher plugin hands Safari the full address. Older app builds without the plugin open signed out, as before.
@@ -227,10 +229,13 @@ async function consumeWebHandoff(){
     const m=/(?:^#|&)handoff=([^&]+)/.exec(window.location.hash||"");
     if(!m)return;
     tokenHash=decodeURIComponent(m[1]);
-    window.history.replaceState(null,"",window.location.pathname+window.location.search);
+    const q=new URLSearchParams(window.location.search);q.delete("n");
+    window.history.replaceState(null,"",window.location.pathname+(q.toString()?`?${q}`:""));
   }catch(_e){return;}
   try{await sb.auth.verifyOtp({token_hash:tokenHash,type:"magiclink"});}catch(_e){/* sign in normally */}
 }
+// A pass can also arrive without a reload (same page, new "#"): catch it too.
+if(typeof window!=="undefined"&&!IS_NATIVE_APP)window.addEventListener("hashchange",()=>{consumeWebHandoff();});
 function WebPurchaseNotice({title,children,go,button="Continue on the website",style}){
   return <div style={{background:"rgba(206,182,132,0.12)",border:`1px solid ${"#C9A961"}`,borderRadius:12,padding:"14px 16px",...style}}>
     {title&&<div style={{fontWeight:700,color:"#0A2540",fontSize:14,marginBottom:4}}>{title}</div>}
