@@ -7,7 +7,7 @@ import { PDFDocument } from "pdf-lib";
 import { buildActivityReportPdf, AR_PERIODS, fig as arFig } from "./activityReport.js";
 import { derivePropertyEvents, findProbableDuplicates } from "./propertyCashFlow.js";
 import { validateFolderName, buildFolderRows, folderSummary, canDeleteFolder } from "./vaultFolders.js";
-import { PLANS, PLAN_BLURB, planAllows, planLabel, planIsSelfServe } from "./plans.js";
+import { PLANS, PLAN_BLURB, normalisePlan, planAllows, planLabel, planIsSelfServe } from "./plans.js";
 import { Capacitor } from "@capacitor/core";
 import { useBiometricSetting } from "./BiometricLock.jsx";
 import { STARTUP_SOUND_KEY, startupSoundOn } from "./AppAccessGate.jsx";
@@ -16039,12 +16039,15 @@ function PayerCard({familyRow,userProfile,toast,reload}){
   },[familyRow.enterprise_id,familyRow.id,isAdmin]);
   const firmPaid=familyRow.paidBy==="enterprise";
   const label=firmName||"the firm";
+  // Premier includes unlimited workflows, so there are no extra-workflow charges to limit (Will, 2026-10-30: the
+  // limit showed red on Premier households).
+  const unlimited=normalisePlan(familyRow.plan)==="premier";
   const save=async()=>{
     const p=Number(pct)||0;
     if(payer==="enterprise"&&!(p>=0&&p<=100)){toast("The discount must be between 0 and 100 percent","error");return;}
     // A code with 0% used to be dropped without a word (the code is only a label for the percent on the firm's invoice).
     if(payer==="enterprise"&&code.trim()&&!(p>0)){toast(`Enter the percent off for ${code.trim().toUpperCase()}, or clear the code`,"error");return;}
-    if(cap!==""&&!(Number(cap)>=0)){toast("The monthly limit must be a number","error");return;}
+    if(!unlimited&&cap!==""&&!(Number(cap)>=0)){toast("The monthly limit must be a number","error");return;}
     setSaving(true);
     const firm=payer==="enterprise";
     const{error}=await sb.from("families").update({
@@ -16090,15 +16093,17 @@ function PayerCard({familyRow,userProfile,toast,reload}){
         <Field label="Discount code"><Inp placeholder="e.g. FOUNDERS" value={code} onChange={e=>setCode(e.target.value)}/></Field>
         <Field label="Percent off plan fee"><Inp type="number" min="0" max="100" step="0.5" value={pct} onChange={e=>setPct(e.target.value)}/></Field>
       </div>}
-      <Field label="Monthly limit for extra workflows ($)">
+      {unlimited
+        ? <div style={{fontSize:12,color:B.textSoft,lineHeight:1.5,marginBottom:12}}>Premier includes unlimited workflows, so no monthly limit is needed.</div>
+        : <Field label="Monthly limit for extra workflows ($)">
         <Inp type="number" min="0" step="1" placeholder="Plan default" value={cap} onChange={e=>setCap(e.target.value)}/>
         {payer==="enterprise"&&<div style={{fontSize:11,color:cap===""?"#8b1a1a":B.textMute,marginTop:4,lineHeight:1.45}}>
           {cap===""?"Required for this household to add extra workflows while a firm pays. Until it is set, they cannot.":"The most extra-workflow charges this household can add to the firm's invoice each month."}
         </div>}
-      </Field>
+      </Field>}
       {payer==="enterprise"&&<Field label="Note (kept with the change history)"><Inp placeholder="e.g. Covered under the Accurate Advisory agreement" value={note} onChange={e=>setNote(e.target.value)}/></Field>}
       {payer==="enterprise"&&Number(pct)>0&&<div style={{fontSize:11.5,color:B.textSoft,marginBottom:12,lineHeight:1.5}}>The discount applies to the plan fee only. Extra workflows stay at list price.</div>}
-      <div style={{display:"flex",justifyContent:"flex-end"}}><Btn small disabled={saving||!dirty} onClick={save}>{saving?"Saving…":"Save"}</Btn></div>
+      <div style={{display:"flex",justifyContent:"flex-end"}}><Btn small disabled={saving||!dirty} onClick={save}>{saving?"Saving…":dirty?"Save":"✓ Saved"}</Btn></div>
     </>}
   </CollapseBox>;
 }
