@@ -2371,7 +2371,10 @@ function LoginScreen(){
             </div>}
           </>
         ))}
-        {introDone&&<div style={{textAlign:"center",marginTop:24,fontSize:11,color:B.textMute}}>{BRAND.name} · {BRAND.tagline}</div>}
+        {/* ORDANIS's own sign-in closes on its line (Will, 2026-10-30); a firm's skinned sign-in keeps its own name and tagline. */}
+        {introDone&&(BRAND.name==="ORDANIS"
+          ?<div style={{textAlign:"center",marginTop:24,fontFamily:"Georgia,'Times New Roman',serif",fontStyle:"italic",fontSize:14,color:B.textSoft,letterSpacing:"0.01em"}}>Wealth, well administered.</div>
+          :<div style={{textAlign:"center",marginTop:24,fontSize:11,color:B.textMute}}>{BRAND.name} · {BRAND.tagline}</div>)}
       </div>
     </div>
   );
