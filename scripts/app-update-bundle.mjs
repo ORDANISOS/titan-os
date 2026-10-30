@@ -21,9 +21,10 @@ const SITES = {
   xreeruxuwtmjhvvxvjts: "https://portal.ordanisos.com", // production
   tkryueqzvgcigvxgjzsp: "https://ordanis-demo.vercel.app", // demo
 };
-// Demo is the sales-pitch site: its database skin is whichever prospect is being shown (Accurate, today). The demo
-// app is the ORDANIS test app, so its bundle ignores that skin. Production keeps database skins, so a firm's households
-// see their firm's skin in the app just as on the website.
+// Demo is the sales-pitch site: its database skin is whichever prospect is being shown (Accurate, today), and its
+// Vercel settings still carry an old brand name. The demo app is the ORDANIS test app, so its bundle drops both: every
+// VITE_BRAND_* setting is blanked (the app falls back to ORDANIS for each) and the database skin is off. Production
+// keeps its settings and database skins, so a firm's households see their firm's skin in the app as on the website.
 const DEMO_REF = "tkryueqzvgcigvxgjzsp";
 
 const isProdDeploy = process.env.VERCEL_ENV === "production";
@@ -42,14 +43,17 @@ if (!origin) {
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
 const minNative = (pkg.ordanisApp && pkg.ordanisApp.minNative) || "1.0";
 
+const brandBlank = ref === DEMO_REF
+  ? Object.fromEntries(Object.keys(process.env).filter((k) => k.startsWith("VITE_BRAND_")).map((k) => [k, ""]))
+  : {};
 const run = spawnSync("npx", ["vite", "build", "--mode", "app", "--outDir", "dist-app", "--emptyOutDir"], {
   stdio: "inherit",
   env: {
     ...process.env,
+    ...brandBlank,
     VITE_HIDE_SIGNUP: "1",
     VITE_BRAND_TAGLINE: "PRIVATE WEALTH ADMINISTRATION",
     VITE_WEB_PORTAL_URL: origin,
-    ...(ref === DEMO_REF ? { VITE_BRAND_RUNTIME: "" } : {}),
   },
 });
 if (run.status !== 0) {
