@@ -21,6 +21,10 @@ const SITES = {
   xreeruxuwtmjhvvxvjts: "https://portal.ordanisos.com", // production
   tkryueqzvgcigvxgjzsp: "https://ordanis-demo.vercel.app", // demo
 };
+// Demo is the sales-pitch site: its database skin is whichever prospect is being shown (Accurate, today). The demo
+// app is the ORDANIS test app, so its bundle ignores that skin. Production keeps database skins, so a firm's households
+// see their firm's skin in the app just as on the website.
+const DEMO_REF = "tkryueqzvgcigvxgjzsp";
 
 const isProdDeploy = process.env.VERCEL_ENV === "production";
 if (!isProdDeploy && process.env.FORCE_APP_BUNDLE !== "1") {
@@ -45,6 +49,7 @@ const run = spawnSync("npx", ["vite", "build", "--mode", "app", "--outDir", "dis
     VITE_HIDE_SIGNUP: "1",
     VITE_BRAND_TAGLINE: "PRIVATE WEALTH ADMINISTRATION",
     VITE_WEB_PORTAL_URL: origin,
+    ...(ref === DEMO_REF ? { VITE_BRAND_RUNTIME: "" } : {}),
   },
 });
 if (run.status !== 0) {
