@@ -219,6 +219,9 @@ const openOnWeb = async go => {
   }
   window.open(url,"_blank");
 };
+// True for a visit that came from the app's "on the website" buttons (?go=...): the client is there to pay or add
+// something, so the sign-in pop-ups (assistant greeting, naming the assistant, the plan video) stay out of the way.
+let CAME_FROM_APP=false;
 // Website side of the handoff: run before the first session check. Takes the pass out of the address bar at once
 // (so it isn't left in history or shared by copying the link), then signs in with it. A used or expired pass just
 // leaves the person on the sign-in screen.
@@ -11690,7 +11693,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   // ?go=<tab> (sent by the native app's "Continue on the website" buttons) opens that tab once, then is cleared.
   const[activeTab,setActiveTab]=useState(()=>{
     try{const g=new URLSearchParams(window.location.search).get("go");
-      if(g&&["billing","workflows","household"].includes(g)){window.history.replaceState(null,"",window.location.pathname);return g;}}catch(_e){}
+      if(g&&["billing","workflows","household"].includes(g)){CAME_FROM_APP=true;window.history.replaceState(null,"",window.location.pathname);return g;}}catch(_e){}
     return "summary";
   });
   const tabPanelRef=useTabEntrance(activeTab,{scrollWindow:true});
@@ -11931,7 +11934,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     return()=>{cancelled=true;};
   },[promptUid,rawAssistantName]);
   const promptPending=!!promptUid&&!rawAssistantName&&promptLogin===null;
-  const showNamePrompt=!rawAssistantName&&!namePromptDismissed&&(promptLogin===1||promptLogin===2);
+  const showNamePrompt=!CAME_FROM_APP&&!rawAssistantName&&!namePromptDismissed&&(promptLogin===1||promptLogin===2);
   const dismissNamePrompt=()=>{
     setNamePromptDismissed(true);
     if(promptUid&&promptLogin!=null)writeAssistantPromptSession(promptUid,{count:promptLogin,dismissed:true});
@@ -11953,17 +11956,18 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   // Households that belong to a firm are left out: the videos are ORDANIS-branded and a firm's clients
   // should hear about their plan from the firm.
   const hasPlanVideo=!!(userProfile&&userProfile.role==="client"&&PLAN_VIDEO_FILE[planVideoPlan]&&!fam.enterprise_id&&!family.enterprise_id);
+  const offerPlanVideo=hasPlanVideo&&!CAME_FROM_APP;  // the "watch the video" link in the greeting stays
   const[planVideo,setPlanVideo]=useState(null);          // {offers,seen}; null while being counted
   const[planVideoOfferDone,setPlanVideoOfferDone]=useState(false);
   const[planVideoWatching,setPlanVideoWatching]=useState(false);
   useEffect(()=>{
-    if(!promptUid||!hasPlanVideo)return;
+    if(!promptUid||!offerPlanVideo)return;
     let cancelled=false;
     recordPlanVideoOffer(promptUid).then(v=>{if(!cancelled)setPlanVideo(v);});
     return()=>{cancelled=true;};
-  },[promptUid,hasPlanVideo]);
-  const planVideoPending=hasPlanVideo&&planVideo===null;
-  const showPlanVideoOffer=hasPlanVideo&&!!planVideo&&!planVideo.seen&&planVideo.offers<=3&&!planVideoOfferDone&&!showNamePrompt&&!promptPending;
+  },[promptUid,offerPlanVideo]);
+  const planVideoPending=offerPlanVideo&&planVideo===null;
+  const showPlanVideoOffer=offerPlanVideo&&!!planVideo&&!planVideo.seen&&planVideo.offers<=3&&!planVideoOfferDone&&!showNamePrompt&&!promptPending;
   // Deliberately does not touch `planVideo`: the offer pop-up is the one playing the video, and flipping
   // "seen" here would unmount it mid-play. The saved flag and the tab cache are what stop the next offer.
   const planVideoMarked=useRef(false);
@@ -11976,6 +11980,7 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
   const[showAssistantGreeting,setShowAssistantGreeting]=useState(false);
   useEffect(()=>{
     if(!family?.id)return;
+    if(CAME_FROM_APP)return;                    // arrived from the app to pay or add something: no greeting
     if(promptPending)return;                    // wait until we know whether to ask first
     if(showNamePrompt){ _greetedFamilies.add(family.id); return; }
     if(planVideoPending||showPlanVideoOffer)return;   // the video offer goes first; the greeting follows it
