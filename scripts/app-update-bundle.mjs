@@ -55,14 +55,30 @@ if (run.status !== 0) {
 
 const build = JSON.parse(readFileSync("dist-app/version.json", "utf8")).build;
 const files = {};
+// Folders get their own entries, written before their files: the app's unzipper (the update plugin) can't create a
+// folder from a file path alone ("The file 'resources' couldn't be saved").
 const walk = (dir) => {
-  for (const name of readdirSync(dir)) {
+  for (const name of readdirSync(dir).sort()) {
     const p = join(dir, name);
-    if (statSync(p).isDirectory()) walk(p);
-    else files[relative("dist-app", p).split("\\").join("/")] = readFileSync(p);
+    const rel = relative("dist-app", p).split("\\").join("/");
+    if (statSync(p).isDirectory()) { files[`${rel}/`] = new Uint8Array(0); walk(p); }
+    else files[rel] = readFileSync(p);
   }
 };
 walk("dist-app");
+// The old PCM PDFs (public/Resources and public/resources) are website downloads the app never uses. Two folders that
+// differ only in capital letters can't both exist on a phone, and unpacking failed on exactly that, so they stay out.
+for (const k of Object.keys(files)) if (/^resources\//i.test(k)) delete files[k];
+// Any other pair like that would fail the same way on every phone: publish nothing rather than a broken update.
+const seen = new Map();
+for (const k of Object.keys(files)) {
+  const low = k.toLowerCase();
+  if (seen.has(low)) {
+    console.error(`app-update: "${seen.get(low)}" and "${k}" differ only in capital letters; phone update skipped`);
+    process.exit(0);
+  }
+  seen.set(low, k);
+}
 if (!files["index.html"]) {
   console.error("app-update: dist-app has no index.html; skipped");
   process.exit(0);

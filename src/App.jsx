@@ -3745,14 +3745,18 @@ function ClientActivityPanel({familyId,toast}){
 // Phones: the household's sections as a menu rather than a tab row you swipe through. The button shows the current
 // section; tapping it drops a short spinning wheel (Will, 2026-10-30: the full-page list was too long). About five
 // sections show at once, the one in the middle sits in a gold band, the rest fade and tilt away like a picker wheel.
-// Tapping a section spins it to the middle and opens it. Tab ids follow the same rule as the desktop row.
+// When the wheel comes to rest on a different section, that section opens by itself (Will: "don't make the client
+// click it"); tapping a section spins it to the middle and opens it too. Tab ids follow the same rule as the desktop row.
 // items: [{id,label,assistant}] (the family portal's tabs), or the staff household's tab names via `tabs`.
-const WHEEL_ROW=46, WHEEL_ROWS=5;
+const WHEEL_ROW=46, WHEEL_ROWS=5, WHEEL_SETTLE_MS=450;
 function HouseholdSectionMenu({tabs,items,activeTab,onPick,assistantName}){
   const[open,setOpen]=useState(false);
   const[scrollTop,setScrollTop]=useState(0);
   const wheelRef=useRef(null);
   const frame=useRef(0);
+  const settle=useRef(0);      // timer: fires once the wheel has stopped moving
+  const touching=useRef(false); // a finger resting on the wheel is not a pause
+  const picking=useRef(false);
   const list=items||(tabs||[]).map(t=>({id:t==="CHRIS"?"vault":t.toLowerCase().replace(/\s+/g,""),
     label:t==="Ask ORDANIS"?("Ask "+assistantName):t,assistant:t==="Ask ORDANIS"}));
   const currentIdx=Math.max(0,list.findIndex(t=>t.id===activeTab));
@@ -3767,10 +3771,21 @@ function HouseholdSectionMenu({tabs,items,activeTab,onPick,assistantName}){
     const raf=requestAnimationFrame(()=>{el.scrollTop=currentIdx*WHEEL_ROW;setScrollTop(el.scrollTop);});
     const onKey=e=>{if(e.key==="Escape")setOpen(false);};
     window.addEventListener("keydown",onKey);
-    return()=>{window.removeEventListener("keydown",onKey);cancelAnimationFrame(raf);cancelAnimationFrame(frame.current);};
+    picking.current=false;
+    return()=>{window.removeEventListener("keydown",onKey);cancelAnimationFrame(raf);cancelAnimationFrame(frame.current);clearTimeout(settle.current);};
   },[open]);
-  const onScroll=e=>{const t=e.currentTarget.scrollTop;cancelAnimationFrame(frame.current);frame.current=requestAnimationFrame(()=>setScrollTop(t));};
+  // The wheel stopped on a section: open it, unless it's the one already showing (that's where it opens).
+  const settled=()=>{
+    const el=wheelRef.current;
+    if(!el||touching.current||picking.current)return;
+    const t=list[Math.max(0,Math.min(list.length-1,Math.round(el.scrollTop/WHEEL_ROW)))];
+    if(t&&t.id!==activeTab){picking.current=true;onPick(t.id);setOpen(false);}
+  };
+  const armSettle=()=>{clearTimeout(settle.current);settle.current=setTimeout(settled,WHEEL_SETTLE_MS);};
+  const onScroll=e=>{const t=e.currentTarget.scrollTop;cancelAnimationFrame(frame.current);frame.current=requestAnimationFrame(()=>setScrollTop(t));armSettle();};
   const pick=(i,id)=>{
+    if(picking.current)return;
+    picking.current=true;clearTimeout(settle.current);
     const el=wheelRef.current;
     if(el&&Math.abs(el.scrollTop-i*WHEEL_ROW)>2&&!reduceMotion){
       el.scrollTo({top:i*WHEEL_ROW,behavior:"smooth"});
@@ -3794,6 +3809,8 @@ function HouseholdSectionMenu({tabs,items,activeTab,onPick,assistantName}){
         <div aria-hidden="true" style={{position:"absolute",inset:0,pointerEvents:"none",zIndex:2,
           background:"linear-gradient(#fff 0%,rgba(255,255,255,0) 30%,rgba(255,255,255,0) 70%,#fff 100%)"}}/>
         <div ref={wheelRef} className="pcm-wheel" role="listbox" aria-label="Go to section" onScroll={onScroll}
+          onTouchStart={()=>{touching.current=true;clearTimeout(settle.current);}}
+          onTouchEnd={()=>{touching.current=false;armSettle();}} onTouchCancel={()=>{touching.current=false;armSettle();}}
           style={{height:WHEEL_ROW*WHEEL_ROWS,overflowY:"auto",scrollSnapType:"y mandatory",WebkitOverflowScrolling:"touch",scrollbarWidth:"none",
             boxSizing:"border-box",perspective:600}}>
           {/* Spacers (not padding, which Safari's snapping ignores) let the first and last sections reach the middle. */}
