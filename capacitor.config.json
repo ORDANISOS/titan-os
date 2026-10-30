@@ -24,6 +24,21 @@
     "StatusBar": {
       "style": "DARK",
       "overlaysWebView": true
+    },
+    "CapacitorUpdater": {
+      "autoUpdate": false,
+      "updateUrl": "",
+      "statsUrl": "",
+      "channelUrl": "",
+      "allowSetDefaultChannel": false,
+      "allowModifyUrl": false,
+      "allowModifyAppId": false,
+      "allowPreview": false,
+      "shakeMenu": false,
+      "appReadyTimeout": 10000,
+      "autoDeleteFailed": true,
+      "autoDeletePrevious": true,
+      "resetWhenUpdate": true
     }
   }
 }

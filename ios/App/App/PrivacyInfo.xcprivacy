@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- ORDANIS app privacy manifest (Apple requires one for App Store / TestFlight uploads).
-     No tracking. The only "required reason" API is UserDefaults: the Preferences plugin keeps the tester's access
-     code and the Face ID on/off setting on the phone (CA92.1 = data used only by this app). -->
+     No tracking, no data collected. "Required reason" APIs, all for this app's own use:
+     UserDefaults (CA92.1): the access code, the Face ID setting, live-update bookkeeping.
+     File timestamps (C617.1) and disk space (E174.1): the live-update plugin manages downloaded screen bundles
+     inside the app's own storage and checks there is room before downloading one. -->
 <plist version="1.0">
 <dict>
 	<key>NSPrivacyTracking</key>
@@ -19,6 +21,22 @@
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
 				<string>CA92.1</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>C617.1</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryDiskSpace</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>E174.1</string>
 			</array>
 		</dict>
 	</array>

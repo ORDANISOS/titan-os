@@ -61,6 +61,11 @@ Owner: Will Perez (wperez@pcmfamilyoffice.com), PCM Family Office / Ordanis OS L
 - `VITE_HIDE_SIGNUP` is demo-only. `VITE_BRAND_RUNTIME=1` must be set on production for skin by host/firm (verify in Vercel).
 - Plan preview video: private storage bucket `Videos` (ORDANIS_Basic/Core/Premier.mp4), pop-up on client sign-in until played
   (max 3 offers), link in the assistant greeting, firm households excluded. State in `user_profiles.plan_video_offers/plan_video_seen_at`.
+- Native app live updates (`src/liveUpdate.js`, `scripts/app-update-bundle.mjs`): every Vercel production deploy also
+  publishes `/app-update/latest.json` + a zipped app bundle on the same site (demo site -> demo app, portal -> production
+  app). Phones download it on launch and switch on next background. Capgo's servers are switched off in
+  `capacitor.config.json`. A change that needs new native code (plugin, permission, icon) needs a store build: raise
+  `ordanisApp.minNative` in package.json together with MARKETING_VERSION in Xcode.
 - Git hygiene: the working tree has unrelated modified files (`supabase/.temp/*`, function drift copies, `*.bak`). Stage specific files only.
 
 ## Brand and wording

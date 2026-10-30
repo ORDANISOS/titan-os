@@ -41,3 +41,4 @@ dist-verify-dashboard/
 
 # Native app test access codes (plain codes are shown once; keep them out of git)
 .app-access-codes*.txt
+dist-app/

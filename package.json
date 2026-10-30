@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/app-update-bundle.mjs",
     "preview": "vite preview",
     "lint:undef": "npx --yes eslint@9 --config eslint.undef.config.mjs src",
     "test": "npm run lint:undef && node docs/test_family_snapshot.mjs && node docs/test_property_cashflow.mjs && node docs/test_expense_rollup.mjs && node docs/test_activity_report.mjs && node docs/test_vault_folders.mjs && node docs/test_plans.mjs",
@@ -21,6 +21,7 @@
     "@capacitor/splash-screen": "^7.0.5",
     "@capacitor/status-bar": "^7.0.6",
     "@capgo/capacitor-native-biometric": "^7.6.0",
+    "@capgo/capacitor-updater": "7.53.0",
     "@supabase/supabase-js": "^2.39.0",
     "pdf-lib": "^1.17.1",
     "react": "^18.2.0",
@@ -30,7 +31,11 @@
     "@capacitor/cli": "^7.6.10",
     "@vitejs/plugin-react": "^4.2.0",
     "docx": "^9.7.1",
+    "fflate": "0.8.3",
     "pptxgenjs": "^4.0.1",
     "vite": "^5.0.0"
+  },
+  "ordanisApp": {
+    "minNative": "1.0"
   }
 }

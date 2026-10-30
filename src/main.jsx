@@ -5,6 +5,7 @@ import SignupFlow, { SignupWelcome } from './SignupFlow.jsx'
 import AppAccessGate from './AppAccessGate.jsx'
 import BiometricLock from './BiometricLock.jsx'
 import { Capacitor } from '@capacitor/core'
+import { startLiveUpdates } from './liveUpdate.js'
 
 // Inside the iPhone / Android app: full-screen styling (index.html, html.native-app) instead of a browser page.
 if (Capacitor.isNativePlatform()) {
@@ -33,8 +34,17 @@ const isSignup = !hideSignup && path.startsWith('/signup')
 // Where Stripe returns a new client after paying: congratulations and a link to sign in.
 const isWelcome = path === '/welcome'
 
+// Native app only (liveUpdate.js): confirms this copy of the screens started, then checks for a newer one. A sibling of
+// the whole tree on purpose: if anything throws on the first render nothing commits, this effect never runs, and the
+// plugin rolls the phone back to the last good copy.
+function LiveUpdates() {
+  React.useEffect(() => { startLiveUpdates() }, [])
+  return null
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
+    <LiveUpdates />
     {/* Native app only: asks for a tester's access code first. On the website it renders its child untouched. */}
     <AppAccessGate>
       {/* Native app only: Face ID / fingerprint lock on the saved sign-in. */}

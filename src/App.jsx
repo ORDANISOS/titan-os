@@ -3742,28 +3742,79 @@ function ClientActivityPanel({familyId,toast}){
   </div>;
 }
 
-// Phones: the household's sections as a menu (a button showing the current one, opening the full list) rather than
-// a tab row you swipe through. Tab ids follow the same rule as the desktop row.
+// Phones: the household's sections as a menu rather than a tab row you swipe through. The button shows the current
+// section; tapping it drops a short spinning wheel (Will, 2026-10-30: the full-page list was too long). About five
+// sections show at once, the one in the middle sits in a gold band, the rest fade and tilt away like a picker wheel.
+// Tapping a section spins it to the middle and opens it. Tab ids follow the same rule as the desktop row.
 // items: [{id,label,assistant}] (the family portal's tabs), or the staff household's tab names via `tabs`.
+const WHEEL_ROW=46, WHEEL_ROWS=5;
 function HouseholdSectionMenu({tabs,items,activeTab,onPick,assistantName}){
   const[open,setOpen]=useState(false);
+  const[scrollTop,setScrollTop]=useState(0);
+  const wheelRef=useRef(null);
+  const frame=useRef(0);
   const list=items||(tabs||[]).map(t=>({id:t==="CHRIS"?"vault":t.toLowerCase().replace(/\s+/g,""),
     label:t==="Ask ORDANIS"?("Ask "+assistantName):t,assistant:t==="Ask ORDANIS"}));
-  const current=list.find(t=>t.id===activeTab)||list[0]||{label:""};
-  return <div style={{background:B.bg,padding:"8px 12px",borderBottom:`1px solid ${B.border}`}}>
-    <button onClick={()=>setOpen(true)} aria-haspopup="dialog" style={{width:"100%",boxSizing:"border-box",display:"flex",alignItems:"center",gap:10,background:B.white,border:`1px solid ${B.border}`,borderTop:`2px solid ${B.gold}`,borderRadius:10,padding:"11px 14px",fontFamily:"inherit",fontSize:15,fontWeight:600,color:B.navy,cursor:"pointer",textAlign:"left"}}>
+  const currentIdx=Math.max(0,list.findIndex(t=>t.id===activeTab));
+  const current=list[currentIdx]||{label:""};
+  const pad=WHEEL_ROW*Math.floor(WHEEL_ROWS/2);
+  const reduceMotion=typeof window!=="undefined"&&window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Open on the current section, already in the middle.
+  useEffect(()=>{
+    if(!open||!wheelRef.current)return;
+    // After layout, or Safari snaps from a half-measured list and lands on the wrong row.
+    const el=wheelRef.current;
+    const raf=requestAnimationFrame(()=>{el.scrollTop=currentIdx*WHEEL_ROW;setScrollTop(el.scrollTop);});
+    const onKey=e=>{if(e.key==="Escape")setOpen(false);};
+    window.addEventListener("keydown",onKey);
+    return()=>{window.removeEventListener("keydown",onKey);cancelAnimationFrame(raf);cancelAnimationFrame(frame.current);};
+  },[open]);
+  const onScroll=e=>{const t=e.currentTarget.scrollTop;cancelAnimationFrame(frame.current);frame.current=requestAnimationFrame(()=>setScrollTop(t));};
+  const pick=(i,id)=>{
+    const el=wheelRef.current;
+    if(el&&Math.abs(el.scrollTop-i*WHEEL_ROW)>2&&!reduceMotion){
+      el.scrollTo({top:i*WHEEL_ROW,behavior:"smooth"});
+      setTimeout(()=>{onPick(id);setOpen(false);},260);
+    }else{onPick(id);setOpen(false);}
+  };
+  return <div style={{background:B.bg,padding:"8px 12px",borderBottom:`1px solid ${B.border}`,position:"relative",zIndex:open?901:"auto"}}>
+    <button onClick={()=>setOpen(o=>!o)} aria-haspopup="listbox" aria-expanded={open} style={{width:"100%",boxSizing:"border-box",display:"flex",alignItems:"center",gap:10,background:B.white,border:`1px solid ${B.border}`,borderTop:`2px solid ${B.gold}`,borderRadius:10,padding:"11px 14px",fontFamily:"inherit",fontSize:15,fontWeight:600,color:B.navy,cursor:"pointer",textAlign:"left"}}>
       <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{current.label}</span>
-      <span aria-hidden="true" style={{color:B.textSoft,fontSize:13}}>▾</span>
+      <span aria-hidden="true" style={{color:B.textSoft,fontSize:13,transition:"transform .2s ease",transform:open?"rotate(180deg)":"none"}}>▾</span>
     </button>
-    {open&&<Modal title="Go to" onClose={()=>setOpen(false)}>
-      <div style={{display:"flex",flexDirection:"column",gap:2}}>
-        {list.map(t=>{const id=t.id,on=id===activeTab,ai=!!t.assistant;
-          return <button key={id} onClick={()=>{onPick(id);setOpen(false);}} aria-current={on?"page":undefined}
-            style={{display:"flex",alignItems:"center",gap:10,width:"100%",boxSizing:"border-box",textAlign:"left",padding:"13px 14px",borderRadius:8,border:"none",borderLeft:on?`3px solid ${B.gold}`:"3px solid transparent",background:on?"rgba(206,182,132,0.14)":"transparent",color:on?B.navy:B.text,fontFamily:"inherit",fontSize:15,fontWeight:on?700:500,cursor:"pointer"}}>
-            {ai&&<span aria-hidden="true" style={{color:B.gold}}>✦</span>}{t.label}
-          </button>;})}
+    {open&&<>
+      <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,background:"rgba(9,43,73,0.28)",zIndex:-1}}/>
+      <style>{`.pcm-wheel::-webkit-scrollbar{display:none}@keyframes pcmWheelIn{from{opacity:0;transform:translateY(-8px) scale(.98)}to{opacity:1;transform:none}}`}</style>
+      <div style={{position:"absolute",left:12,right:12,top:"calc(100% - 2px)",background:B.white,border:`1px solid ${B.border}`,borderRadius:14,
+        boxShadow:"0 14px 34px rgba(9,43,73,0.22)",overflow:"hidden",animation:reduceMotion?"none":"pcmWheelIn .18s ease-out"}}>
+        {/* The gold band marks the middle row. */}
+        <div aria-hidden="true" style={{position:"absolute",left:10,right:10,top:pad,height:WHEEL_ROW,borderRadius:10,background:"rgba(206,182,132,0.16)",
+          borderTop:`1px solid ${B.gold}`,borderBottom:`1px solid ${B.gold}`,pointerEvents:"none"}}/>
+        {/* Soft fade at the top and bottom edges, so the wheel reads as round. */}
+        <div aria-hidden="true" style={{position:"absolute",inset:0,pointerEvents:"none",zIndex:2,
+          background:"linear-gradient(#fff 0%,rgba(255,255,255,0) 30%,rgba(255,255,255,0) 70%,#fff 100%)"}}/>
+        <div ref={wheelRef} className="pcm-wheel" role="listbox" aria-label="Go to section" onScroll={onScroll}
+          style={{height:WHEEL_ROW*WHEEL_ROWS,overflowY:"auto",scrollSnapType:"y mandatory",WebkitOverflowScrolling:"touch",scrollbarWidth:"none",
+            boxSizing:"border-box",perspective:600}}>
+          {/* Spacers (not padding, which Safari's snapping ignores) let the first and last sections reach the middle. */}
+          <div aria-hidden="true" style={{height:pad}}/>
+          {list.map((t,i)=>{
+            const d=(i*WHEEL_ROW-scrollTop)/WHEEL_ROW; // rows away from the middle
+            const ad=Math.min(Math.abs(d),3), on=t.id===activeTab, mid=Math.abs(d)<0.5;
+            return <button key={t.id} role="option" aria-selected={on} onClick={()=>pick(i,t.id)}
+              style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",height:WHEEL_ROW,boxSizing:"border-box",
+                scrollSnapAlign:"center",border:"none",background:"transparent",fontFamily:"inherit",cursor:"pointer",
+                fontSize:mid?16.5:15,fontWeight:mid||on?700:500,color:mid?B.navy:B.text,
+                opacity:Math.max(0.25,1-ad*0.3),
+                transform:reduceMotion?"none":`rotateX(${Math.max(-60,Math.min(60,-d*20))}deg) scale(${1-ad*0.06})`,
+                transition:"font-size .12s ease"}}>
+              {t.assistant&&<span aria-hidden="true" style={{color:B.gold}}>✦</span>}{t.label}
+              {on&&!mid&&<span aria-hidden="true" style={{width:5,height:5,borderRadius:3,background:B.gold,marginLeft:2}}/>}
+            </button>;})}
+          <div aria-hidden="true" style={{height:pad}}/>
+        </div>
       </div>
-    </Modal>}
+    </>}
   </div>;
 }
 
@@ -12113,17 +12164,18 @@ function ClientDashboard({family,data,userProfile,logout,toast,reload}){
     {/* Header (white banner with logo, family name, sign out) */}
     <div style={{background:B.white,padding:isMobile?"0 16px":"0 32px",borderBottom:`1px solid ${B.borderLight}`}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:isMobile?"12px 0":"16px 0",gap:10,flexWrap:isMobile?"wrap":"nowrap"}}>
-        <div style={{display:"flex",alignItems:"center",gap:6}}>
+        {/* Phones: the logo centered on its own row, then the family name on the left with the buttons on the right. */}
+        <div style={{display:"flex",alignItems:"center",gap:6,flexBasis:isMobile?"100%":"auto",justifyContent:isMobile?"center":"flex-start"}}>
           <PCMLogo compact/>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:isMobile?8:16,flex:isMobile?"1 1 auto":"none",justifyContent:isMobile?"flex-end":"flex-start"}}>
-          <div style={{textAlign:"right",minWidth:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:isMobile?8:16,flex:isMobile?"1 1 100%":"none",justifyContent:"flex-start"}}>
+          <div style={{textAlign:isMobile?"left":"right",minWidth:0,flex:isMobile?1:"none"}}>
             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?16:22,color:B.navy,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{family.name}</div>
             {/* The relationship, on the client's own banner. Small, but on every screen they see.
                 Gold fill for Premier, gold outline for Core — both read as a membership mark rather
                 than as a limit, which matters because the client sees this one and the tier below
                 should not look like a demotion. */}
-            <div style={{fontSize:isMobile?10:11,color:B.textSoft,marginTop:3,display:"flex",alignItems:"center",gap:6,justifyContent:"flex-end",flexWrap:"wrap"}}>
+            <div style={{fontSize:isMobile?10:11,color:B.textSoft,marginTop:3,display:"flex",alignItems:"center",gap:6,justifyContent:isMobile?"flex-start":"flex-end",flexWrap:"wrap"}}>
               <span style={{fontSize:isMobile?9:9.5,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",
                 padding:"2px 7px",borderRadius:3,whiteSpace:"nowrap",
                 background:clientHasExpert?B.gold:"transparent",
