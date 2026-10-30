@@ -199,8 +199,33 @@ const preBg = () => (IS_NATIVE_APP ? "#0A2540" : B.bg);
 // 100vh layout made the page taller than the screen and it could scroll up under the status bar.
 const FULL_H = IS_NATIVE_APP ? "calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))" : "100vh";
 const WEB_PORTAL_URL = String(import.meta.env.VITE_WEB_PORTAL_URL||"https://portal.ordanisos.com").replace(/\/+$/,"");
-// Opens the website in the phone's browser on the given family-portal tab (?go=billing, ?go=workflows, ?go=household).
-const openOnWeb = go => { window.open(`${WEB_PORTAL_URL}/?go=${encodeURIComponent(go||"")}`, "_blank"); };
+// Opens the website in the phone's browser on the given family-portal tab (?go=billing, ?go=workflows, ?go=household),
+// already signed in: the app-web-handoff function gives a single-use sign-in pass for this same person, carried after
+// "#" so it never reaches a server log (Will, 2026-10-30). If the pass can't be had (offline, an old session), the
+// website opens anyway and asks them to sign in, as before. The website exchanges the pass in consumeWebHandoff().
+const openOnWeb = async go => {
+  const base=`${WEB_PORTAL_URL}/?go=${encodeURIComponent(go||"")}`;
+  let url=base;
+  try{
+    const{data,error}=await sb.functions.invoke("app-web-handoff",{body:{}});
+    if(!error&&data&&typeof data.token_hash==="string"&&data.token_hash)url=`${base}#handoff=${encodeURIComponent(data.token_hash)}`;
+  }catch(_e){/* open signed out */}
+  window.open(url,"_blank");
+};
+// Website side of the handoff: run before the first session check. Takes the pass out of the address bar at once
+// (so it isn't left in history or shared by copying the link), then signs in with it. A used or expired pass just
+// leaves the person on the sign-in screen.
+async function consumeWebHandoff(){
+  if(IS_NATIVE_APP)return;
+  let tokenHash="";
+  try{
+    const m=/(?:^#|&)handoff=([^&]+)/.exec(window.location.hash||"");
+    if(!m)return;
+    tokenHash=decodeURIComponent(m[1]);
+    window.history.replaceState(null,"",window.location.pathname+window.location.search);
+  }catch(_e){return;}
+  try{await sb.auth.verifyOtp({token_hash:tokenHash,type:"magiclink"});}catch(_e){/* sign in normally */}
+}
 function WebPurchaseNotice({title,children,go,button="Continue on the website",style}){
   return <div style={{background:"rgba(206,182,132,0.12)",border:`1px solid ${"#C9A961"}`,borderRadius:12,padding:"14px 16px",...style}}>
     {title&&<div style={{fontWeight:700,color:"#0A2540",fontSize:14,marginBottom:4}}>{title}</div>}
@@ -17087,7 +17112,8 @@ export default function App(){
   },[authed,userProfile?.id,userProfile?.role]);
   useEffect(()=>{
     const inviteCheck=session=>{if(ARRIVED_FROM_INVITE&&session?.user){ARRIVED_FROM_INVITE=false;setNeedsPasswordSetup(true);}};
-    sb.auth.getSession().then(({data:{session}})=>{if(session?.user){setAuthed(true);loadProfile(session.user.id);}inviteCheck(session);setAuthLoading(false);});
+    // A one-time pass from the phone app is exchanged first, so the session check below already sees it.
+    consumeWebHandoff().finally(()=>sb.auth.getSession().then(({data:{session}})=>{if(session?.user){setAuthed(true);loadProfile(session.user.id);}inviteCheck(session);setAuthLoading(false);}));
     const{data:{subscription}}=sb.auth.onAuthStateChange((event,session)=>{
       if(session?.user){setAuthed(true);loadProfile(session.user.id);}else{setAuthed(false);setUserProfile(null);}
       // Fired for BOTH a "forgot password" reset link and an invite link (e.g. the Business
