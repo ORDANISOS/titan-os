@@ -3576,13 +3576,27 @@ function AssistantWelcome({family,data,reload,onClose,userProfile,toast,onWatchV
 // into a relationship) it opens straight into the chat; otherwise it first asks
 // which client to talk about. That keeps the button available on every page
 // without ever letting the assistant answer across families.
-function FloatingAssistant({family,families,data,reload,toast,userProfile}){
+// onDemand (staff data on demand, scaling step 2): the client list is searched on the server and the chosen client's
+// records are loaded when picked, instead of coming from the full download.
+function FloatingAssistant({family,families,data,reload,toast,userProfile,onDemand}){
   const[open,setOpen]=useState(false);
   const[picked,setPicked]=useState(null);
   const[q,setQ]=useState("");
   const isMobile=useIsMobile();
   const active=family||picked;
-  const list=(families||[]).filter(f=>!q.trim()||(f.name||"").toLowerCase().includes(q.trim().toLowerCase()));
+  const[remote,setRemote]=useState([]);
+  useEffect(()=>{
+    if(!onDemand||!open||active)return;
+    const t=setTimeout(()=>{
+      sb.rpc("staff_household_page",{p_search:q.trim()||null,p_limit:30,p_offset:0,p_today:localISODate()}).then(({data:rows})=>setRemote((rows||[]).map(r=>toClient(r.family))));
+    },250);
+    return()=>clearTimeout(t);
+  },[onDemand,open,q,active]);
+  const[bundle,setBundle]=useState(null);
+  const loadPicked=useCallback(()=>{if(onDemand&&picked&&!family)loadHouseholdBundle(picked).then(setBundle).catch(()=>toast("Could not load that client","error"));},[onDemand,picked,family]);
+  useEffect(()=>{setBundle(null);loadPicked();},[loadPicked]);
+  const useRemote=onDemand&&!family;
+  const list=useRemote?remote:(families||[]).filter(f=>!q.trim()||(f.name||"").toLowerCase().includes(q.trim().toLowerCase()));
   const assistantName=((active&&active.assistantName)||"").trim()||"ORDANIS";
   const close=()=>{setOpen(false);setPicked(null);setQ("");};
 
@@ -3599,7 +3613,7 @@ function FloatingAssistant({family,families,data,reload,toast,userProfile}){
     {open&&<Modal wide title={active?`Ask ${assistantName} — ${(active.name||"").replace(" [DEMO]","")}`:`Ask ${assistantName}`} onClose={close}>
       {active
         ? <>
-            <FamilyAssistant family={active} data={data} reload={reload} toast={toast} compact/>
+            {useRemote&&!bundle?<Spinner/>:<FamilyAssistant family={active} data={useRemote?bundle:data} reload={useRemote?loadPicked:reload} toast={toast} compact/>}
             {!family&&<div style={{marginTop:14,textAlign:"center"}}>
               <Btn small variant="ghost" onClick={()=>{setPicked(null);setQ("");}}>← Choose a different client</Btn>
             </div>}
@@ -3608,7 +3622,7 @@ function FloatingAssistant({family,families,data,reload,toast,userProfile}){
             <div style={{fontSize:12.5,color:B.textSoft,marginBottom:12,lineHeight:1.5}}>
               {assistantName} answers from one client's records at a time. Which client?
             </div>
-            {(families||[]).length>6&&<Inp autoFocus value={q} onChange={e=>setQ(e.target.value)} placeholder="Search clients…" style={{marginBottom:10}}/>}
+            {(useRemote||(families||[]).length>6)&&<Inp autoFocus value={q} onChange={e=>setQ(e.target.value)} placeholder="Search clients…" style={{marginBottom:10}}/>}
             <div style={{maxHeight:340,overflowY:"auto",display:"flex",flexDirection:"column",gap:7}}>
               {list.map(f=><button key={f.id} onClick={()=>setPicked(f)}
                 style={{textAlign:"left",background:B.bg,border:`1px solid ${B.borderLight}`,borderLeft:`3px solid ${f.color||B.gold}`,
@@ -7301,7 +7315,7 @@ function PortfolioAccountForm({initial,families=[],onSave,onClose}){
 }
 
 // ── PORTFOLIO VIEW (global) ───────────────────────────────────────────────────
-function PortfolioView({data,reload,toast,userProfile}){
+function PortfolioView({data,reload,toast,userProfile,hideScope}){
   const isMobile=useIsMobile();
   const{portfolio_accounts=[]}=data;
   const families=(data.families||[]).filter(isActiveFamily);
@@ -7324,7 +7338,7 @@ function PortfolioView({data,reload,toast,userProfile}){
     {(!isMobile||!selected)&&<div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",borderRight:isMobile?"none":`1px solid ${B.borderLight}`}}>
       <div style={{padding:isMobile?"10px 14px":"12px 20px",borderBottom:`1px solid ${B.borderLight}`,background:B.white,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
         <Sel value={filterFamily} onChange={e=>setFilterFamily(e.target.value)} style={{width:isMobile?"100%":200,order:isMobile?2:0}}><option value="all">All Families</option>{families.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</Sel>
-        <AdvisorScopeBar userProfile={userProfile} value={advScope} onChange={setAdvScope}/>
+        {!hideScope&&<AdvisorScopeBar userProfile={userProfile} value={advScope} onChange={setAdvScope}/>}
         <div style={{flex:1,fontSize:12,color:B.textSoft,order:isMobile?1:0}}>Total: <strong style={{color:B.navy}}>{fmtMoney(totalValue)}</strong>{totalPct!==null&&<span style={{color:Number(totalPct)>=0?"#18a850":"#d43030",fontWeight:700,marginLeft:8}}>{Number(totalPct)>=0?"+":""}{totalPct}%</span>}</div>
         <Btn onClick={()=>setModal("add")}>+ New Account</Btn>
       </div>
@@ -7371,7 +7385,7 @@ function PortfolioView({data,reload,toast,userProfile}){
 }
 
 // ── NOTES VIEW ────────────────────────────────────────────────────────────────
-function NotesView({data,reload,toast,userProfile,prospectMode=false}){
+function NotesView({data,reload,toast,userProfile,prospectMode=false,hideScope}){
   const isMobile=useIsMobile();
   const{contacts,families,notes}=data;
   const noteAttachments=data.note_attachments||[];
@@ -7507,7 +7521,7 @@ function NotesView({data,reload,toast,userProfile,prospectMode=false}){
       {advisorFilter&&<button onClick={()=>setAdvisorFilter("")} style={{border:`1px solid ${B.gold}`,background:"#fbf6ec",color:B.navy,borderRadius:16,padding:"5px 11px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>{(advisorSummary.find(a=>a.email===advisorFilter)?.name)||advisorFilter} ✕</button>}
     </div>}
     {!prospectMode&&userProfile?.role==="admin"&&<div style={{padding:"10px 20px",borderBottom:`1px solid ${B.borderLight}`,background:B.white,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
-      <AdvisorScopeBar userProfile={userProfile} value={cmAdvScope} onChange={setCmAdvScope}/>
+      {!hideScope&&<AdvisorScopeBar userProfile={userProfile} value={cmAdvScope} onChange={setCmAdvScope}/>}
       {cmAdvScope&&<span style={{fontSize:12,color:B.textSoft}}>Showing notes for this ORDANIS Expert's families</span>}
     </div>}
     <div style={{padding:isMobile?"14px 14px":"20px 28px",borderBottom:`1px solid ${B.borderLight}`,background:B.white}}>
@@ -7656,7 +7670,7 @@ function NotesView({data,reload,toast,userProfile,prospectMode=false}){
 }
 
 // ── TASKS VIEW ────────────────────────────────────────────────────────────────
-function TasksView({data,reload,toast,userProfile,prospectMode=false}){
+function TasksView({data,reload,toast,userProfile,prospectMode=false,hideScope}){
   const{contacts,families,tasks}=data;
   const[modal,setModal]=useState(null);const[filter,setFilter]=useState("Pending");const[filterFamily,setFilterFamily]=useState("all");
   const adminProspect=prospectMode&&userProfile?.role==="admin";
@@ -7734,7 +7748,7 @@ function TasksView({data,reload,toast,userProfile,prospectMode=false}){
       {adminProspect&&advisorFilter&&<button onClick={()=>setAdvisorFilter("")} style={{border:`1px solid ${B.gold}`,background:"#fbf6ec",color:B.navy,borderRadius:16,padding:"5px 11px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>{(advisorSummary.find(a=>a.email===advisorFilter)?.name)||advisorFilter} ✕</button>}
       <div style={{display:"flex",gap:5}}>{["Pending","Done","All"].map(s=><button key={s} onClick={()=>setFilter(s)} style={{background:filter===s?B.navy:"transparent",border:`1px solid ${filter===s?B.navy:B.border}`,color:filter===s?B.white:B.textSoft,borderRadius:20,padding:"4px 14px",fontSize:11,cursor:"pointer",fontWeight:700,fontFamily:"inherit"}}>{s}</button>)}</div>
       <Sel value={filterFamily} onChange={e=>setFilterFamily(e.target.value)} style={{width:170}}><option value="all">All Families</option>{families.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</Sel>
-      {!prospectMode&&<AdvisorScopeBar userProfile={userProfile} value={cmAdvScope} onChange={setCmAdvScope}/>}
+      {!prospectMode&&!hideScope&&<AdvisorScopeBar userProfile={userProfile} value={cmAdvScope} onChange={setCmAdvScope}/>}
       <div style={{flex:1,display:"flex",gap:8}}>
         {oc>0&&<Badge scheme={{bg:"#fde8e8",text:"#8b1a1a",dot:"#d43030"}}>{oc} overdue</Badge>}
         {soon>0&&<Badge scheme={{bg:"#fef3e2",text:"#8a5c00",dot:"#d4900a"}}>{soon} due in 30 days</Badge>}
@@ -8590,6 +8604,80 @@ function DashboardOnDemand({userProfile,toast,onOpenFamily}){
   if(!summary||!data)return <Spinner/>;
   return <Dashboard data={data} userProfile={userProfile} reload={reload} toast={toast} onOpenFamily={onOpenFamily}
     summary={summary} scopeState={scopeState} listsLocked={listsLocked} recentNotes={recentNotes}/>;
+}
+
+// ── STAFF LISTS ACROSS HOUSEHOLDS, ON DEMAND (scaling step 2) ─────────────────
+// Portfolio, Notes and Tasks across households: the households in scope (an Expert's own book, an Analyst's Experts,
+// or the Expert an admin picks here) and the listed tables are loaded when the screen opens, then the same screen as
+// before draws them. An admin chooses an Expert first, as on the dashboard.
+function ScopedStaffView({userProfile,toast,tables,what,render}){
+  const isAdmin=userProfile?.role==="admin";
+  const myEmail=(userProfile?.email||"").toLowerCase();
+  const[scope,setScope]=useState(isAdmin||userProfile?.role==="analyst"?"":myEmail);
+  const locked=isAdmin&&!scope;
+  const[data,setData]=useState(null);
+  const[nonce,setNonce]=useState(0);
+  useEffect(()=>{
+    if(locked){setData(null);return;}
+    let gone=false;
+    setData(null);
+    (async()=>{
+      try{
+        const fq=()=>{let q=sb.from("families").select("*").is("archived_at",null);if(scope)q=q.ilike("advisor_email",likeExact(scope));return q.order("name").order("id");};
+        const fams=(await fetchAllRows(fq)).map(toClient);
+        const t=await loadFamiliesTables(fams.map(f=>f.id),tables);
+        const extra=tables.includes("notes")?{note_attachments:await loadNoteAttachments((t.notes||[]).map(n=>n.id))}:{};
+        if(!gone)setData({families:fams,contacts:[],...t,...extra});
+      }catch(e){if(!gone)toast(`Could not load ${what}`,"error");}
+    })();
+    return()=>{gone=true;};
+  },[scope,locked,nonce]);
+  const reload=useCallback(async()=>{setNonce(n=>n+1);},[]);
+  return <div style={{height:"100%",display:"flex",flexDirection:"column",minHeight:0}}>
+    {isAdmin&&<div style={{padding:"10px 20px",borderBottom:`1px solid ${B.borderLight}`,background:B.white,display:"flex",justifyContent:"flex-end"}}>
+      <AdvisorScopeBar userProfile={userProfile} value={scope} onChange={setScope}/>
+    </div>}
+    <div style={{flex:1,minHeight:0}}>
+      {locked?<div style={{padding:40,textAlign:"center",color:B.textSoft,fontSize:14,lineHeight:1.6}}>Choose an ORDANIS Expert above to see {what} for their households.</div>
+        :!data?<Spinner/>:render(data,reload)}
+    </div>
+  </div>;
+}
+
+// Every household the person can see (names, plans, billing fields), for the admin screens that pick or name
+// households. Loaded when one of those screens opens, page by page, instead of at sign-in.
+function useAllFamilies(enabled){
+  const[fams,setFams]=useState(null);
+  const[nonce,setNonce]=useState(0);
+  useEffect(()=>{
+    if(!enabled)return;
+    let gone=false;
+    fetchAllRows(()=>sb.from("families").select("*").order("name").order("id")).then(rows=>{if(!gone)setFams(rows.map(toClient));}).catch(()=>{if(!gone)setFams([]);});
+    return()=>{gone=true;};
+  },[enabled,nonce]);
+  return[fams,()=>setNonce(n=>n+1)];
+}
+
+// Signups & Revenue: every household (archived included, as before) plus, per household, whether it has anything in
+// each feature area (staff_family_activity_flags), shaped like the old download so the screen is unchanged. Loaded
+// when the screen opens.
+function SignupsOnDemand({userProfile,toast}){
+  const[fams,refresh]=useAllFamilies(true);
+  const[flags,setFlags]=useState(null);
+  useEffect(()=>{
+    fetchAllRows(()=>sb.rpc("staff_family_activity_flags")).then(setFlags).catch(()=>{toast("Could not load household activity","error");setFlags([]);});
+  },[fams]);
+  if(!fams||!flags)return <Spinner/>;
+  const rowsFor=k=>flags.filter(f=>f[k]).map(f=>({familyId:f.family_id}));
+  const data={families:fams,properties:rowsFor("has_properties"),portfolio_accounts:rowsFor("has_accounts"),valuables:rowsFor("has_valuables"),
+    documents:rowsFor("has_documents"),tasks:rowsFor("has_tasks"),notes:rowsFor("has_notes"),cash_flow_events:rowsFor("has_billpay").map(r=>({...r,pcmResponsible:true}))};
+  return <SignupsRevenueView data={data} toast={toast} userProfile={userProfile} reload={refresh}/>;
+}
+
+function WithAllFamilies({children}){
+  const[fams,refresh]=useAllFamilies(true);
+  if(!fams)return <Spinner/>;
+  return children(fams,refresh);
 }
 
 // ── USER MANAGEMENT ───────────────────────────────────────────────────────────
@@ -14212,18 +14300,27 @@ function ActivityReportSection({families,toast}){
   </div>;
 }
 
-function ResourcesView({data,userProfile,toast}){
+function ResourcesView({data,userProfile,toast,onDemand}){
   const isMobile=useIsMobile();
   const[familyId,setFamilyId]=useState("");
   const[activeDoc,setActiveDoc]=useState(null);
   const families=(data.families||[]).filter(isActiveFamily);
   const family=families.find(f=>f.id===familyId)||null;
-  const contacts=(data.contacts||[]).filter(c=>c.familyId===familyId);
+  // With staff data on demand, the chosen household's contacts and accounts are loaded when it is picked.
+  const[picked,setPicked]=useState(null);
+  useEffect(()=>{
+    if(!onDemand||!familyId){setPicked(null);return;}
+    let gone=false;
+    loadFamiliesTables([familyId],["contacts","portfolio_accounts"]).then(t=>{if(!gone)setPicked(t);}).catch(()=>{if(!gone)setPicked({contacts:[],portfolio_accounts:[]});});
+    return()=>{gone=true;};
+  },[onDemand,familyId]);
+  const src=onDemand?(picked||{contacts:[],portfolio_accounts:[]}):data;
+  const contacts=(src.contacts||[]).filter(c=>c.familyId===familyId);
   const primaryContact=contacts.find(c=>!c.isAdvisor)||contacts[0]||null;
   // Prefer an actual bank-type account (Checking/Savings/Money Market) for
   // sender/institution defaults — falls back to the highest-balance account
   // of any type if the family has no plain bank account on file.
-  const familyAccounts=(data.portfolio_accounts||[]).filter(a=>a.familyId===familyId);
+  const familyAccounts=(src.portfolio_accounts||[]).filter(a=>a.familyId===familyId);
   const bankAccount=familyAccounts.find(a=>["Checking","Savings","Money Market"].includes(a.accountType))
     || [...familyAccounts].sort((a,b)=>(Number(b.currentBalance)||0)-(Number(a.currentBalance)||0))[0]
     || null;
@@ -17533,14 +17630,11 @@ export default function App(){
     await Promise.all(TABLES.filter(t=>t!=="families").map(fetchTable));
   },[fetchTable]);
 
-  // Scaling step 2: staff screens that load on demand, behind platform_config.staff_on_demand (admins switch it on or
-  // off with no deploy). Until every staff screen has its on-demand version, the switch swaps in the finished screens
-  // while the full download below still runs for the rest; the download stops once the last screen is converted.
+  // Scaling step 2: staff screens load on demand, behind platform_config.staff_on_demand (an admin switches it on or
+  // off with no deploy; it is read at each sign-in). When on, a staff sign-in skips the full download below and each
+  // screen asks for what it shows. Partners keep the full download: their view only ever covers their own linked
+  // household(s).
   const[staffOnDemand,setStaffOnDemand]=useState(false);
-  useEffect(()=>{
-    if(!authed||!userProfile||mfaNeed!==false||userProfile.role==="client"||userProfile.role==="enterprise_admin")return;
-    sb.from("platform_config").select("staff_on_demand").maybeSingle().then(({data:row})=>setStaffOnDemand(!!row?.staff_on_demand));
-  },[authed,userProfile,mfaNeed]);
 
   useEffect(()=>{
     if(!authed||!userProfile||mfaNeed!==false)return; // load nothing until two-step sign-in is done
@@ -17553,7 +17647,13 @@ export default function App(){
         // Client: only load their family's data
         await Promise.all(TABLES.map(fetchTable));
       } else {
-        await reload();
+        let onDemand=false;
+        if(userProfile.role!=="partner"){
+          const{data:cfg}=await sb.from("platform_config").select("staff_on_demand").maybeSingle();
+          onDemand=!!cfg?.staff_on_demand;
+        }
+        setStaffOnDemand(onDemand);
+        if(!onDemand)await reload();
       }
       setLoading(false);
     })();
@@ -17602,8 +17702,20 @@ export default function App(){
   const _mine=e=>_isAdmin||(!!e&&e===_myEmail);
   const cmStats={families:data.families.filter(isActiveFamily).length,portfolio:(data.portfolio_accounts||[]).length,"cm-notes":data.notes.filter(n=>n.familyId).length,"cm-tasks":data.tasks.filter(t=>t.familyId&&!t.done).length};
   const pStats={"p-contacts":data.contacts.filter(c=>!c.familyId&&_mine((c.advisorEmail||"").toLowerCase())).length,"p-pipeline":data.deals.filter(d=>!d.familyId&&d.stage!=="Closed Lost"&&_mine(_dealAdv(d))).length,"p-notes":data.notes.filter(n=>!n.familyId&&_mine(_contactAdv(n.contactId))).length,"p-tasks":data.tasks.filter(t=>!t.familyId&&!t.done&&_mine(_contactAdv(t.contactId))).length};
-  const allStats={...cmStats,...pStats,users:0};
-  const overdue=data.tasks.filter(t=>t.familyId&&!t.done&&t.dueDate&&dueEnd(t.dueDate)<new Date()).length;
+  // With staff data on demand the sidebar counts come from the server (active households), refreshed on each tab change.
+  const[navCounts,setNavCounts]=useState(null);
+  useEffect(()=>{
+    if(!staffOnDemand)return;
+    (async()=>{
+      const[{data:sm},{count:nc}]=await Promise.all([
+        sb.rpc("staff_dashboard_summary",{p_scope:null,p_today:localISODate()}),
+        sb.from("notes").select("id",{count:"exact",head:true}).not("family_id","is",null),
+      ]);
+      if(sm)setNavCounts({families:Number(sm.families)||0,portfolio:Number(sm.accounts)||0,"cm-notes":nc||0,"cm-tasks":Number(sm.open_tasks)||0,overdue:Number(sm.overdue)||0});
+    })();
+  },[staffOnDemand,tab]);
+  const allStats=staffOnDemand?{...(navCounts||{}),users:0}:{...cmStats,...pStats,users:0};
+  const overdue=staffOnDemand?(navCounts?.overdue||0):data.tasks.filter(t=>t.familyId&&!t.done&&t.dueDate&&dueEnd(t.dueDate)<new Date()).length;
   // Plan requests waiting for an admin, shown as a badge on the sidebar item. Refreshed on every tab
   // change and after each decision, so it never needs its own polling.
   const[pendingPlanRequests,setPendingPlanRequests]=useState(0);
@@ -17681,9 +17793,9 @@ export default function App(){
       </nav>
       <div style={{padding:"10px 16px",borderTop:`1px solid ${B.borderLight}`}}>
         {userProfile&&<div style={{marginBottom:8}}><div style={{fontSize:11,color:B.navy,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{userProfile.fullName||userProfile.email}</div><div style={{fontSize:9,color:B.navyMid,letterSpacing:"0.1em",textTransform:"uppercase",marginTop:1}}>{roleLabel(userProfile.role)}</div></div>}
-        <div style={{fontSize:9,color:B.textMute,marginBottom:4}}>{data.families.filter(isActiveFamily).length} families · {(data.portfolio_accounts||[]).length} accounts</div>
+        <div style={{fontSize:9,color:B.textMute,marginBottom:4}}>{staffOnDemand?(navCounts?.families||0):data.families.filter(isActiveFamily).length} families · {staffOnDemand?(navCounts?.portfolio||0):(data.portfolio_accounts||[]).length} accounts</div>
         <div style={{display:"flex",justifyContent:"space-between"}}>
-          <button onClick={()=>reload()} style={{background:"none",border:"none",color:B.navyMid,fontSize:9,cursor:"pointer",padding:0,fontFamily:"inherit"}}>↺ Refresh</button>
+          <button onClick={()=>staffOnDemand?setNavNonce(n=>n+1):reload()} style={{background:"none",border:"none",color:B.navyMid,fontSize:9,cursor:"pointer",padding:0,fontFamily:"inherit"}}>↺ Refresh</button>
           <SecurityButton role={userProfile?.role} toast={showToast} label="🔒 Security" style={{background:"none",border:"none",color:B.navyMid,fontSize:9,cursor:"pointer",padding:0,fontFamily:"inherit"}}/>
           <button onClick={logout} style={{background:"none",border:"none",color:B.textMute,fontSize:9,cursor:"pointer",padding:0,fontFamily:"inherit"}}>Sign Out</button>
         </div>
@@ -17725,23 +17837,37 @@ export default function App(){
           {tab==="families"    &&(staffOnDemand
             ?<FamiliesPagedView key={navNonce} toast={showToast} userProfile={userProfile} navIntent={navIntent} onNavConsumed={()=>setNavIntent(null)}/>
             :<FamiliesView key={navNonce} data={data} reload={reload} toast={showToast} userProfile={userProfile} navIntent={navIntent} onNavConsumed={()=>setNavIntent(null)}/>)}
-          {tab==="portfolio"   &&<PortfolioView key={navNonce} data={data} reload={reload} toast={showToast} userProfile={userProfile}/>}
-          {tab==="cm-notes"    &&<NotesView key={navNonce} data={{...data,notes:data.notes.filter(n=>n.familyId)}} reload={reload} toast={showToast} userProfile={userProfile}/>}
-          {tab==="cm-tasks"    &&<TasksView key={navNonce} data={{...data,tasks:data.tasks.filter(t=>t.familyId)}} reload={reload} toast={showToast} userProfile={userProfile}/>}
+          {tab==="portfolio"   &&(staffOnDemand
+            ?<ScopedStaffView key={navNonce} userProfile={userProfile} toast={showToast} tables={["portfolio_accounts"]} what="portfolio accounts" render={(d,r)=><PortfolioView data={d} reload={r} toast={showToast} userProfile={userProfile} hideScope/>}/>
+            :<PortfolioView key={navNonce} data={data} reload={reload} toast={showToast} userProfile={userProfile}/>)}
+          {tab==="cm-notes"    &&(staffOnDemand
+            ?<ScopedStaffView key={navNonce} userProfile={userProfile} toast={showToast} tables={["contacts","notes"]} what="notes" render={(d,r)=><NotesView data={d} reload={r} toast={showToast} userProfile={userProfile} hideScope/>}/>
+            :<NotesView key={navNonce} data={{...data,notes:data.notes.filter(n=>n.familyId)}} reload={reload} toast={showToast} userProfile={userProfile}/>)}
+          {tab==="cm-tasks"    &&(staffOnDemand
+            ?<ScopedStaffView key={navNonce} userProfile={userProfile} toast={showToast} tables={["contacts","tasks"]} what="tasks" render={(d,r)=><TasksView data={d} reload={r} toast={showToast} userProfile={userProfile} hideScope/>}/>
+            :<TasksView key={navNonce} data={{...data,tasks:data.tasks.filter(t=>t.familyId)}} reload={reload} toast={showToast} userProfile={userProfile}/>)}
           {/* Admin-only screens are gated on the role here as well as in the
               sidebar. The sidebar alone isn't sufficient: `tab` is state on a
               component that never unmounts, so it survives a sign-out and the
               next user would otherwise land on whatever the previous one had
               open. */}
-          {tab==="users"       &&isAdminRole&&<UserManagementView key={navNonce} userProfile={userProfile} data={data} toast={showToast}/>}
-          {tab==="signups"     &&isAdminRole&&<SignupsRevenueView key={navNonce} data={data} toast={showToast} userProfile={userProfile} reload={reload}/>}
-          {tab==="planrequests"&&isAdminRole&&<PlanRequestsView key={navNonce} data={data} toast={showToast} reload={reload} onChanged={loadPendingPlanRequests}/>}
+          {tab==="users"       &&isAdminRole&&(staffOnDemand
+            ?<WithAllFamilies key={navNonce}>{fams=><UserManagementView userProfile={userProfile} data={{families:fams}} toast={showToast}/>}</WithAllFamilies>
+            :<UserManagementView key={navNonce} userProfile={userProfile} data={data} toast={showToast}/>)}
+          {tab==="signups"     &&isAdminRole&&(staffOnDemand
+            ?<SignupsOnDemand key={navNonce} userProfile={userProfile} toast={showToast}/>
+            :<SignupsRevenueView key={navNonce} data={data} toast={showToast} userProfile={userProfile} reload={reload}/>)}
+          {tab==="planrequests"&&isAdminRole&&(staffOnDemand
+            ?<WithAllFamilies key={navNonce}>{(fams,refresh)=><PlanRequestsView data={{families:fams}} toast={showToast} reload={refresh} onChanged={loadPendingPlanRequests}/>}</WithAllFamilies>
+            :<PlanRequestsView key={navNonce} data={data} toast={showToast} reload={reload} onChanged={loadPendingPlanRequests}/>)}
           {tab==="enterprises" &&isAdminRole&&<EnterprisesView key={navNonce} toast={showToast} userProfile={userProfile} onOpenBranding={BRAND_ADMIN?()=>setTab("branding"):null}/>}
           {tab==="firmbilling" &&isAdminRole&&<FirmBillingView key={navNonce} toast={showToast}/>}
           {tab==="staterules"  &&isAdminRole&&<StateRulesView key={navNonce} userProfile={userProfile} toast={showToast}/>}
           {tab==="utilization" &&isAdminRole&&<UtilizationView key={navNonce} toast={showToast}/>}
           {tab==="branding"    &&isAdminRole&&BRAND_ADMIN&&<BrandingView key={navNonce} toast={showToast}/>}
-          {tab==="resources"   &&<ResourcesView key={navNonce} data={data} userProfile={userProfile} toast={showToast}/>}
+          {tab==="resources"   &&(staffOnDemand
+            ?<WithAllFamilies key={navNonce}>{fams=><ResourcesView data={{families:fams}} userProfile={userProfile} toast={showToast} onDemand/>}</WithAllFamilies>
+            :<ResourcesView key={navNonce} data={data} userProfile={userProfile} toast={showToast}/>)}
           {tab==="p-contacts"  &&<ProspectContactsView key={navNonce} data={data} reload={reload} toast={showToast} userProfile={userProfile}/>}
           {tab==="p-pipeline"  &&<ProspectPipelineView key={navNonce} data={data} reload={reload} toast={showToast} userProfile={userProfile}/>}
           {tab==="p-notes"     &&<NotesView key={navNonce} data={{...data,notes:data.notes.filter(n=>!n.familyId),families:[]}} reload={reload} toast={showToast} userProfile={userProfile} prospectMode={true}/>}
@@ -17749,7 +17875,7 @@ export default function App(){
         </>}
       </div>
     </div>
-    <FloatingAssistant families={data.families||[]} data={data} reload={reload} toast={showToast} userProfile={userProfile}/>
+    <FloatingAssistant families={data.families||[]} data={data} reload={reload} toast={showToast} userProfile={userProfile} onDemand={staffOnDemand}/>
     {toastState&&<Toast msg={toastState.msg} type={toastState.type}/>}<UpdateBanner/>
   </div>;
 }
