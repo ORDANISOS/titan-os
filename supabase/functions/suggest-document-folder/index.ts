@@ -28,11 +28,15 @@
 // alone is not enough. Document text is never written to the logs.
 
 import { createClient } from "npm:@supabase/supabase-js@2.49.4";
+import { logAiUsage } from "../_shared/ai-usage.ts";
 
 const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-const MODEL = Deno.env.get("SUGGEST_FOLDER_MODEL") || "claude-sonnet-4-6";
+// Claude Sonnet 5.5 (Will, 2026-10-30). It thinks before answering by default; effort "low" keeps that short on
+// everyday requests, and max_tokens leaves room for thinking plus the reply. A decline comes back as stop_reason
+// "refusal" (HTTP 200) and is handled before the content is read.
+const MODEL = Deno.env.get("SUGGEST_FOLDER_MODEL") || "claude-sonnet-5-5";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -93,12 +97,14 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get("Authorization") ?? "";
   const token = authHeader.replace(/^Bearer\s+/i, "");
   if (!token) return json({ error: "Not authenticated." }, 401);
+  let userId = "";
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: { user }, error } = await supabase.auth.getUser(token);
     if (error || !user) return json({ error: "Not authenticated." }, 401);
+    userId = user.id;
   } catch {
     return json({ error: "Not authenticated." }, 401);
   }
@@ -186,7 +192,10 @@ Rules:
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 700,
+        max_tokens: 2000,
+        // Reading and filing need no thinking: it took 33 s and crashed the folder suggestion on demo (2026-10-30).
+        thinking: { type: "between_tools" },
+        output_config: { effort: "low" },
         system,
         messages: [{
           role: "user",
@@ -200,7 +209,8 @@ Rules:
     });
 
     const data = await res.json();
-    if (!res.ok || data.error) {
+    if (res.ok && !data.error) logAiUsage({ fn: "suggest-document-folder", model: data.model || MODEL, usage: data.usage, userId });
+    if (!res.ok || data.error || data.stop_reason === "refusal") {
       // Status and error type only: an error body can quote the request.
       console.error("suggest-document-folder: upstream", res.status, data?.error?.type ?? "");
       return json(EMPTY);

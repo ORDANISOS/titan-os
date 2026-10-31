@@ -10,11 +10,15 @@
 // advisor-or-above only.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { logAiUsage } from "../_shared/ai-usage.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-const MODEL = Deno.env.get("EXTRACT_MODEL") || "claude-sonnet-4-6";
+// Claude Sonnet 5.5 (Will, 2026-10-30). It thinks before answering by default; effort "low" keeps that short on
+// everyday requests, and max_tokens leaves room for thinking plus the reply. A decline comes back as stop_reason
+// "refusal" (HTTP 200) and is handled before the content is read.
+const MODEL = Deno.env.get("EXTRACT_MODEL") || "claude-sonnet-5-5";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -111,7 +115,10 @@ Deno.serve(async (req) => {
       headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 1200,
+        max_tokens: 4000,
+        // Reading and filing need no thinking: it took 33 s and crashed the folder suggestion on demo (2026-10-30).
+        thinking: { type: "between_tools" },
+        output_config: { effort: "low" },
         system,
         messages: [{
           role: "user",
@@ -132,6 +139,8 @@ Deno.serve(async (req) => {
     }
 
     const ai = await resp.json();
+    logAiUsage({ fn: "extract-statement-fields", model: ai.model || MODEL, usage: ai.usage, userId: user.id });
+    if (ai.stop_reason === "refusal") return json({ error: "The reading service declined this statement." }, 502);
     const raw = (ai.content || []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
 
     let parsed: any = null;

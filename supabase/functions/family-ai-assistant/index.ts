@@ -46,12 +46,16 @@
 // are written in the same voice.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { logAiUsage } from "../_shared/ai-usage.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const MODEL = Deno.env.get("ASSISTANT_MODEL") || "claude-sonnet-4-6";
+// Claude Sonnet 5.5 (Will, 2026-10-30). It thinks before answering by default; effort "low" keeps that short on
+// everyday requests, and max_tokens leaves room for thinking plus the reply. A decline comes back as stop_reason
+// "refusal" (HTTP 200) and is handled before the content is read.
+const MODEL = Deno.env.get("ASSISTANT_MODEL") || "claude-sonnet-5-5";
 const BRAND_NAME_ENV = Deno.env.get("BRAND_NAME") || "";
 
 const corsHeaders = {
@@ -179,6 +183,7 @@ Deno.serve(async (req) => {
     // that the assistant says honestly that it can't answer with confidence (2026-10-28, Will's decision).
     let planHasExpert = true;
     let onboardingLabel = "";
+    let usageFamilyId: string | null = null;
     try {
       const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
       const { data: prof } = await admin
@@ -190,6 +195,7 @@ Deno.serve(async (req) => {
       const snapFamilyId = (snapshot as Record<string, unknown>)?.familyId;
       const familyId = prof?.family_id ||
         (typeof snapFamilyId === "string" && UUID_RE.test(snapFamilyId) ? snapFamilyId : null);
+      usageFamilyId = familyId;
 
       if (familyId) {
         const { data: fam } = await admin
@@ -406,7 +412,8 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 1024,
+        max_tokens: 4000,
+        output_config: { effort: "low" },
         system: systemPrompt,
         messages,
       }),
@@ -419,6 +426,10 @@ Deno.serve(async (req) => {
     }
 
     const aiData = await aiResp.json();
+    logAiUsage({ fn: "family-ai-assistant", model: aiData.model || MODEL, usage: aiData.usage, userId: user.id, familyId: usageFamilyId });
+    if (aiData.stop_reason === "refusal") {
+      return json({ answer: "That's one I can't help with here. Your ORDANIS Expert is happy to take it from you directly." });
+    }
     const answer = (aiData.content || [])
       .filter((b: { type: string }) => b.type === "text")
       .map((b: { text: string }) => b.text)

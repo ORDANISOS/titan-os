@@ -25,14 +25,18 @@
 //
 // Deploy:  supabase functions deploy extract-document-text
 // Secret:  reuses ANTHROPIC_API_KEY (already set)
-// Optional: supabase secrets set DOC_EXTRACT_MODEL=claude-sonnet-4-6
+// Optional: supabase secrets set DOC_EXTRACT_MODEL=claude-sonnet-5-5
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { logAiUsage } from "../_shared/ai-usage.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-const MODEL = Deno.env.get("DOC_EXTRACT_MODEL") || "claude-sonnet-4-6";
+// Claude Sonnet 5.5 (Will, 2026-10-30). It thinks before answering by default; effort "low" keeps that short on
+// everyday requests, and max_tokens leaves room for thinking plus the reply. A decline comes back as stop_reason
+// "refusal" (HTTP 200) and is handled before the content is read.
+const MODEL = Deno.env.get("DOC_EXTRACT_MODEL") || "claude-sonnet-5-5";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -120,7 +124,10 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 8192,
+        max_tokens: 16000,
+        // Reading and filing need no thinking: it took 33 s and crashed the folder suggestion on demo (2026-10-30).
+        thinking: { type: "between_tools" },
+        output_config: { effort: "low" },
         messages: [{ role: "user", content }],
       }),
     });
@@ -139,6 +146,8 @@ Deno.serve(async (req) => {
     }
 
     const aiData = await aiResp.json();
+    logAiUsage({ fn: "extract-document-text", model: aiData.model || MODEL, usage: aiData.usage, userId: user.id });
+    if (aiData.stop_reason === "refusal") return json({ error: "The extraction service declined this document." }, 502);
     let text = (aiData.content || [])
       .filter((b: { type: string }) => b.type === "text")
       .map((b: { text: string }) => b.text)

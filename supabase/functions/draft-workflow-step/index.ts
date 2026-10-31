@@ -12,12 +12,16 @@
 // wire detail is the failure mode that actually matters here.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { logAiUsage } from "../_shared/ai-usage.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const MODEL = Deno.env.get("ASSISTANT_MODEL") || "claude-sonnet-4-6";
+// Claude Sonnet 5.5 (Will, 2026-10-30). It thinks before answering by default; effort "low" keeps that short on
+// everyday requests, and max_tokens leaves room for thinking plus the reply. A decline comes back as stop_reason
+// "refusal" (HTTP 200) and is handled before the content is read.
+const MODEL = Deno.env.get("ASSISTANT_MODEL") || "claude-sonnet-5-5";
 
 // The firm name. Resolution order matters:
 //   1. what the caller's deployment sent (its VITE_BRAND_NAME — authoritative,
@@ -230,7 +234,7 @@ Deno.serve(async (req) => {
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: MODEL, max_tokens: 1600, system, messages: [{ role: "user", content: facts }] }),
+      body: JSON.stringify({ model: MODEL, max_tokens: 6000, output_config: { effort: "low" }, system, messages: [{ role: "user", content: facts }] }),
     });
     if (!resp.ok) {
       const detail = await resp.text().catch(() => "");
@@ -238,6 +242,8 @@ Deno.serve(async (req) => {
       return json({ error: "The drafting service returned an error.", detail: detail.slice(0, 300) }, 502);
     }
     const ai = await resp.json();
+    logAiUsage({ fn: "draft-workflow-step", model: ai.model || MODEL, usage: ai.usage, userId: user.id, familyId: step.family_id });
+    if (ai.stop_reason === "refusal") return json({ error: "The drafting service declined this step. Please write it by hand." }, 502);
     const raw = (ai.content || []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
 
     let out: any = null;
