@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef, useId, Component, Fragment } from "react";
 import { createPortal } from "react-dom";
 import { createClient } from "@supabase/supabase-js";
-import { PDFDocument } from "pdf-lib";
+// pdf-lib is loaded the first time a form template is read or filled (scaling step 3), not with the app.
+const loadPdfDocument=()=>import("pdf-lib").then(m=>m.PDFDocument,()=>{throw new Error("ORDANIS was updated since this page opened. Please reload the page and try again.");});
 import { buildActivityReportPdf, AR_PERIODS, fig as arFig } from "./activityReport.js";
 import { derivePropertyEvents, findProbableDuplicates } from "./propertyCashFlow.js";
 import { validateFolderName, buildFolderRows, folderSummary, canDeleteFolder } from "./vaultFolders.js";
@@ -13566,6 +13567,7 @@ function PartnerDashboard({data,userProfile,logout,toast,reload}){
 // Reads the AcroForm field names present in a PDF. Used both to validate a
 // template at upload time and to check one before filling it.
 async function readPdfFieldNames(bytes){
+  const PDFDocument=await loadPdfDocument();
   const pdfDoc=await PDFDocument.load(bytes);
   return pdfDoc.getForm().getFields().map(f=>f.getName());
 }
@@ -13580,6 +13582,7 @@ async function readPdfFieldNames(bytes){
 // possible outcome for a document someone is about to sign, so a missing field
 // is now a hard error naming exactly what was missing.
 async function fillPdfTemplate(bytes,fieldValues,checkboxValues={},opts={}){
+  const PDFDocument=await loadPdfDocument();
   const pdfDoc=await PDFDocument.load(bytes);
   const form=pdfDoc.getForm();
   const missing=[];

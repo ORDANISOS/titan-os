@@ -15,7 +15,7 @@
 //
 // The report is generated on demand during a meeting. An edge function means a cold
 // start and a round trip on a platform where "Run Now" has already produced a 504
-// once, and pdf-lib is already bundled for the AcroForm templates. Rendering
+// once, and pdf-lib is already in the app for the AcroForm templates. Rendering
 // locally is instant, uses the brand already loaded in the session, and cannot
 // time out.
 //
@@ -35,7 +35,14 @@
 // tasks completed" — which reads as busywork and invites "I'm paying you to upload
 // files?". Counts appear only as supporting detail under a claim.
 
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+// pdf-lib is about a quarter of the app's download, so it is fetched the first time a report is built rather than
+// with the app (scaling step 3). The helpers below use rgb only while a report is being built, after this has run.
+let PDFDocument, StandardFonts, rgb;
+async function loadPdfLib() {
+  if (PDFDocument) return;
+  try { ({ PDFDocument, StandardFonts, rgb } = await import("pdf-lib")); }
+  catch (_e) { throw new Error("ORDANIS was updated since this page opened. Please reload the page and try again."); }
+}
 
 const PAGE = [612, 792], MARGIN = 54;
 const CONTENT = PAGE[0] - MARGIN * 2;
@@ -150,6 +157,7 @@ export async function buildActivityReportPdf({
       `"${label}". Nothing was produced, because either heading could be the wrong one.`);
   }
 
+  await loadPdfLib();
   const doc = await PDFDocument.create();
   const body = await doc.embedFont(StandardFonts.Helvetica);
   const bodyB = await doc.embedFont(StandardFonts.HelveticaBold);

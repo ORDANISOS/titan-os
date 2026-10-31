@@ -1,7 +1,9 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
-import SignupFlow, { SignupWelcome } from './SignupFlow.jsx'
+// The sign-up screens are their own download (scaling step 3): signed-in clients and staff never fetch them.
+const SignupFlow = React.lazy(() => import('./SignupFlow.jsx'))
+const SignupWelcome = React.lazy(() => import('./SignupFlow.jsx').then(m => ({ default: m.SignupWelcome })))
 import AppAccessGate from './AppAccessGate.jsx'
 import BiometricLock from './BiometricLock.jsx'
 import { Capacitor } from '@capacitor/core'
@@ -49,7 +51,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <AppAccessGate>
       {/* Native app only: Face ID / fingerprint lock on the saved sign-in. */}
       <BiometricLock>
-        {isWelcome ? <SignupWelcome /> : isSignup ? <SignupFlow /> : <App />}
+        {isWelcome || isSignup
+          ? <React.Suspense fallback={null}>{isWelcome ? <SignupWelcome /> : <SignupFlow />}</React.Suspense>
+          : <App />}
       </BiometricLock>
     </AppAccessGate>
   </React.StrictMode>
