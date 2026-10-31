@@ -384,23 +384,41 @@ Deno.serve(async (req) => {
     ].join("\n");
 
     // ── Assemble messages (trim history to last 8 turns) ──────────────────────
-    const messages: Array<{ role: string; content: string }> = [];
+    // Prompt caching (Will, 2026-10-30): the snapshot goes FIRST, in the opening user turn, marked for caching, so
+    // the instructions + snapshot are a fixed prefix across a conversation. Follow-ups within 5 minutes read that
+    // prefix at a tenth of the price. It stays in a user turn (data, not instructions). The snapshot only changes
+    // when the household's records or the date change; then the next question simply re-caches it.
+    const turns: Array<{ role: string; content: string }> = [];
     if (Array.isArray(history)) {
       for (const h of history.slice(-8)) {
         if (
           h && (h.role === "user" || h.role === "assistant") &&
           typeof h.content === "string" && h.content.trim()
         ) {
-          messages.push({ role: h.role, content: h.content });
+          turns.push({ role: h.role, content: h.content });
         }
       }
     }
-    messages.push({
-      role: "user",
-      content:
-        `Current dashboard snapshot (JSON):\n\n${snapshotStr}\n\n` +
-        `Question: ${question}`,
-    });
+    turns.push({ role: "user", content: `Question: ${question}` });
+    // The API needs user first and alternating roles: drop a leading greeting, join back-to-back turns.
+    while (turns.length && turns[0].role !== "user") turns.shift();
+    const merged: Array<{ role: string; content: string }> = [];
+    for (const t of turns) {
+      const last = merged[merged.length - 1];
+      if (last && last.role === t.role) last.content += `\n\n${t.content}`;
+      else merged.push({ ...t });
+    }
+    const messages: Array<{ role: string; content: unknown }> = merged.map((t, i) =>
+      i === 0
+        ? {
+          role: "user",
+          content: [
+            { type: "text", text: `Current dashboard snapshot (JSON):\n\n${snapshotStr}`, cache_control: { type: "ephemeral" } },
+            { type: "text", text: t.content },
+          ],
+        }
+        : t
+    );
 
     // ── Call Anthropic ────────────────────────────────────────────────────
     const aiResp = await fetch("https://api.anthropic.com/v1/messages", {
