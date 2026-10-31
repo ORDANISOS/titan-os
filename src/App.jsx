@@ -8269,7 +8269,10 @@ function ReviewQueue({families,toast,userProfile}){
   const[rows,setRows]=useState([]);
   const[busy,setBusy]=useState(null);
   const[review,setReview]=useState(null);
-  const famName=id=>(families.find(f=>f.id===id)?.name||"").replace(" [DEMO]","");
+  // Names come from the households already loaded; with staff data on demand that list can be empty, so any missing
+  // ones are looked up for just the steps shown.
+  const[extraNames,setExtraNames]=useState({});
+  const famName=id=>(families.find(f=>f.id===id)?.name||extraNames[id]||"").replace(" [DEMO]","");
 
   const load=async()=>{
     // RLS already limits this to the caller's own families, so no client-side
@@ -8291,6 +8294,11 @@ function ReviewQueue({families,toast,userProfile}){
       .order("due_on")
       .limit(40);
     setRows(data||[]);
+    const missing=[...new Set((data||[]).map(r=>r.family_id).filter(id=>id&&!families.some(f=>f.id===id)))];
+    if(missing.length){
+      const{data:fs}=await sb.from("families").select("id,name").in("id",missing);
+      const m={};(fs||[]).forEach(f=>{m[f.id]=f.name;});setExtraNames(m);
+    }
   };
   useEffect(()=>{load();},[]);
 
@@ -8347,7 +8355,9 @@ function ReviewQueue({families,toast,userProfile}){
   </div>;
 }
 
-function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
+// summary / scopeState / listsLocked / recentNotes come from DashboardOnDemand (scaling step 2); without them the
+// dashboard works from the full download exactly as before.
+function Dashboard({data,userProfile,reload,toast,onOpenFamily,summary,scopeState,listsLocked,recentNotes}){
   const isMobile=useIsMobile();
   const{families:_allFamilies,contacts:_contacts,properties:_properties,deals:_deals,notes:_notes,tasks:_tasks,portfolio_accounts:_accts=[]}=data;
   const isAdmin=userProfile?.role==="admin";
@@ -8355,7 +8365,8 @@ function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
   // Admins default to "All ORDANIS Experts" and can switch; non-admins are locked to their own scope so unscoped prospect records (family_id null) don't leak in.
   // An Analyst's households all belong to other people (their Experts), so an own-email scope would show
   // nothing; their data is already limited to their Experts' households by the database.
-  const[scope,setScope]=useState(isAdmin||userProfile?.role==="analyst"?"":myEmail);
+  const[ownScope,setOwnScope]=useState(isAdmin||userProfile?.role==="analyst"?"":myEmail);
+  const[scope,setScope]=scopeState||[ownScope,setOwnScope];
   const _families=(_allFamilies||[]).filter(f=>!(f.archived_at||f.archivedAt));
   const _famIds=new Set(_families.filter(f=>!scope||(f.advisorEmail||"").toLowerCase()===scope).map(f=>f.id));
   const _cAdv=id=>{const c=_contacts.find(x=>x.id===id);return (c?.advisorEmail||"").toLowerCase();};
@@ -8407,8 +8418,15 @@ function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
   };
   const stageCounts=STAGES.map(s=>({stage:s,count:deals.filter(d=>d.stage===s).length,value:deals.filter(d=>d.stage===s).reduce((sum,d)=>sum+(Number(d.value)||0),0)}));
   const maxC=Math.max(1,...stageCounts.map(s=>s.count));
-  const gf=id=>families.find(f=>f.id===id);
+  const gf=id=>families.find(f=>f.id===id)||(recentNotes&&recentNotes.famById[id]);
   const hr=new Date().getHours();
+  // The four totals cards: the server's figures when on demand, otherwise counted here as before.
+  const S=summary||{families:families.length,contacts:contacts.length,realEstate:totalRE,properties:properties.length,portfolio:totalPortfolio,accounts:portfolio_accounts.length,openTasks:pending.length,overdue:overdue.length,dueSoon:dueSoon.length};
+  const lockedCard=title=><div key={title} style={{background:B.bgCard,borderRadius:12,padding:24,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow}}>
+    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600,marginBottom:4}}>{title}</div>
+    <GoldLine/>
+    <div style={{fontSize:13,color:B.textSoft,lineHeight:1.6}}>Choose an ORDANIS Expert at the top of the page to see this list for their households.</div>
+  </div>;
 
   return <div style={{overflowY:"auto",height:"100%",padding:isMobile?"18px 14px 32px":"26px 30px 48px"}}>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -8421,7 +8439,7 @@ function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
       <AdvisorScopeBar userProfile={userProfile} value={scope} onChange={setScope}/>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(140px,100%),1fr))",gap:14,marginBottom:24}}>
-      {[{label:"Families",value:families.length,sub:`${contacts.length} contacts`,accent:B.navy},{label:"Real Estate",value:fmtMoney(totalRE),sub:`${properties.length} properties`,accent:B.gold},{label:"Portfolio",value:fmtMoney(totalPortfolio),sub:`${portfolio_accounts.length} accounts`,accent:B.navyMid},{label:"Open Tasks",value:pending.length,sub:overdue.length>0?`${overdue.length} overdue`:dueSoon.length>0?`${dueSoon.length} due soon`:"All on track",accent:overdue.length>0?"#d43030":dueSoon.length>0?"#d4900a":B.navyMid}].map(s=><div key={s.label} style={{background:B.bgCard,borderRadius:12,padding:"20px 22px",border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,borderTop:`3px solid ${s.accent}`}}>
+      {[{label:"Families",value:S.families,sub:`${S.contacts} contacts`,accent:B.navy},{label:"Real Estate",value:fmtMoney(S.realEstate),sub:`${S.properties} properties`,accent:B.gold},{label:"Portfolio",value:fmtMoney(S.portfolio),sub:`${S.accounts} accounts`,accent:B.navyMid},{label:"Open Tasks",value:S.openTasks,sub:S.overdue>0?`${S.overdue} overdue`:S.dueSoon>0?`${S.dueSoon} due soon`:"All on track",accent:S.overdue>0?"#d43030":S.dueSoon>0?"#d4900a":B.navyMid}].map(s=><div key={s.label} style={{background:B.bgCard,borderRadius:12,padding:"20px 22px",border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,borderTop:`3px solid ${s.accent}`}}>
         <div style={{fontSize:10,color:B.textMute,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:6}}>{s.label}</div>
         <div style={{fontSize:26,fontFamily:"'Cormorant Garamond',serif",color:B.navy,fontWeight:600,lineHeight:1}}>{s.value}</div>
         <div style={{fontSize:11,color:B.textSoft,marginTop:5}}>{s.sub}</div>
@@ -8432,7 +8450,9 @@ function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
       {/* PIPELINE_CARD_REMOVED — the deal pipeline card was admin-only, so the
           dashboard showed a prospecting CRM to admins and not to anyone else.
           ORDANIS does not sell pipeline management. */}
-      {bills.length>0&&<div style={{background:B.bgCard,borderRadius:12,padding:24,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,marginBottom:18}}>
+      {listsLocked&&lockedCard("Bills Due")}
+      {listsLocked&&lockedCard("Upcoming Deadlines")}
+      {!listsLocked&&bills.length>0&&<div style={{background:B.bgCard,borderRadius:12,padding:24,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow,marginBottom:18}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:4,gap:12,flexWrap:"wrap"}}>
           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>Bills Due</div>
           <div style={{fontSize:12,color:B.textSoft}}><span style={{fontWeight:700,color:B.navy}}>{fmtMoney(billsTotal)}</span> across {bills.length} bill{bills.length===1?"":"s"}</div>
@@ -8463,7 +8483,7 @@ function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
         {bills.length>10&&<div style={{fontSize:11,color:B.textMute,paddingTop:8}}>+{bills.length-10} more in Cash Flow</div>}
         <div style={{fontSize:11,color:B.textMute,paddingTop:10}}>Mark each bill paid in Cash Flow once settled.</div>
       </div>}
-      <div style={{background:B.bgCard,borderRadius:12,padding:24,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow}}>
+      {!listsLocked&&<div style={{background:B.bgCard,borderRadius:12,padding:24,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow}}>
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600,marginBottom:4}}>Upcoming Deadlines</div>
         <GoldLine/>
         {deadlines.length===0&&<Empty text="No upcoming deadlines right now."/>}
@@ -8483,10 +8503,11 @@ function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
           <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,color:B.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:d.done?"line-through":"none"}}>{d.label}</div><div style={{fontSize:11,color:B.textMute}}>{d.done?`✓ ${DEADLINE_TAG[d.type]||d.type} · done${d.completedBy?` by ${d.completedBy}`:""}`:[DEADLINE_TAG[d.type]||d.type,d.familyName].filter(Boolean).join(" · ")}</div></div>
           <div style={{textAlign:"right",flexShrink:0}}><div style={{fontSize:11,color:col,fontWeight:700,whiteSpace:"nowrap"}}>{!d.done&&d.overdue?"⚠ ":""}{fmt(d.dateISO)}</div><div style={{fontSize:10,color:B.textMute}}>{d.done?"handled":d.overdue?`${Math.abs(d.days)}d ago`:d.days===0?"today":`in ${d.days}d`}</div></div>
         </div>;})}
-      </div>
+      </div>}
     </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(280px,100%),1fr))",gap:18}}>
-      <div style={{background:B.bgCard,borderRadius:12,padding:24,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow}}>
+      {listsLocked&&lockedCard("Portfolio by Family")}
+      {!listsLocked&&<div style={{background:B.bgCard,borderRadius:12,padding:24,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow}}>
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600,marginBottom:4}}>Portfolio by Family</div>
         <GoldLine/>
         {families.map(f=>{const val=properties.filter(p=>p.familyId===f.id).reduce((s,p)=>s+(Number(p.currentValue)||Number(p.purchasePrice)||0),0)+portfolio_accounts.filter(a=>a.familyId===f.id).reduce((s,a)=>s+(Number(a.currentBalance)||0),0);const pct=totalRE+totalPortfolio>0?Math.round((val/(totalRE+totalPortfolio))*100):0;const goP=()=>{if(onOpenFamily)onOpenFamily(f.id,"portfolio");};
@@ -8500,11 +8521,11 @@ function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
           <div style={{height:6,background:B.borderLight,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:B.navy,borderRadius:3}}/></div>
         </div>;})}
         {families.length===0&&<Empty text="No families yet."/>}
-      </div>
+      </div>}
       <div style={{background:B.bgCard,borderRadius:12,padding:24,border:`1px solid ${B.borderLight}`,boxShadow:B.shadow}}>
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600,marginBottom:4}}>Recent Notes</div>
         <GoldLine/>
-        {[...notes].sort((a,b)=>b.createdAt>a.createdAt?1:-1).slice(0,4).map(n=>{const fam=gf(n.familyId);const goN=()=>{if(onOpenFamily&&n.familyId)onOpenFamily(n.familyId,"notes");};
+        {(recentNotes?recentNotes.rows:[...notes].sort((a,b)=>b.createdAt>a.createdAt?1:-1).slice(0,4)).map(n=>{const fam=gf(n.familyId);const goN=()=>{if(onOpenFamily&&n.familyId)onOpenFamily(n.familyId,"notes");};
         const openN=!!(onOpenFamily&&n.familyId);
         return <div key={n.id}
           onClick={openN?goN:undefined}
@@ -8517,10 +8538,58 @@ function Dashboard({data,userProfile,reload,toast,onOpenFamily}){
           <div style={{fontSize:13,color:B.textMid,lineHeight:1.5,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{n.body}</div>
           <div style={{display:"flex",gap:8,marginTop:3}}><span style={{fontSize:11,color:B.textMute}}>{fmt(n.createdAt)}</span>{fam&&<span style={{fontSize:11,color:B.gold,fontWeight:700}}>{fam.name}</span>}</div>
         </div>;})}
-        {notes.length===0&&<Empty text="No notes yet. Jot down anything worth remembering."/>}
+        {(recentNotes?recentNotes.rows:notes).length===0&&<Empty text="No notes yet. Jot down anything worth remembering."/>}
       </div>
     </div>
   </div>;
+}
+
+// ── STAFF DASHBOARD ON DEMAND (scaling step 2) ────────────────────────────────
+// The totals cards come from staff_dashboard_summary. Bills Due, Upcoming Deadlines and Portfolio by Family need the
+// households' records, so they load for the households in scope: an Expert's own book, an Analyst's Experts, or the
+// Expert an admin picks. An admin on "All ORDANIS Experts" sees the totals and is asked to pick an Expert for those
+// lists (Will, 2026-10-31). Everything is then drawn by the same Dashboard as before.
+const DASHBOARD_TABLES=["contacts","properties","deals","notes","tasks","portfolio_accounts","loans","cash_flow_events","cash_flow_payment_log","deadline_acks"];
+const likeExact=v=>String(v||"").replace(/[\\%_]/g,c=>"\\"+c);
+function DashboardOnDemand({userProfile,toast,onOpenFamily}){
+  const isAdmin=userProfile?.role==="admin";
+  const myEmail=(userProfile?.email||"").toLowerCase();
+  const scopeState=useState(isAdmin||userProfile?.role==="analyst"?"":myEmail);
+  const scope=scopeState[0];
+  const listsLocked=isAdmin&&!scope;
+  const[summary,setSummary]=useState(null);
+  const[data,setData]=useState(null);
+  const[recentNotes,setRecentNotes]=useState(undefined);
+  const[nonce,setNonce]=useState(0);
+  useEffect(()=>{
+    let gone=false;
+    (async()=>{
+      try{
+        const{data:s,error}=await sb.rpc("staff_dashboard_summary",{p_scope:scope||null,p_today:localISODate()});
+        if(error)throw error;
+        if(!gone)setSummary({families:Number(s.families)||0,contacts:Number(s.contacts)||0,realEstate:Number(s.real_estate)||0,properties:Number(s.properties)||0,portfolio:Number(s.portfolio)||0,accounts:Number(s.accounts)||0,openTasks:Number(s.open_tasks)||0,overdue:Number(s.overdue)||0,dueSoon:Number(s.due_soon)||0});
+        if(listsLocked){
+          // Just the four newest notes, with their household names.
+          const{data:ns,error:ne}=await sb.from("notes").select("*").not("family_id","is",null).order("created_at",{ascending:false}).limit(4);
+          if(ne)throw ne;
+          const ids=[...new Set((ns||[]).map(n=>n.family_id))];
+          const{data:fs}=ids.length?await sb.from("families").select("id,name").in("id",ids):{data:[]};
+          const famById={};(fs||[]).forEach(f=>{famById[f.id]=f;});
+          if(!gone){setRecentNotes({rows:(ns||[]).map(toClient),famById});setData({families:[],...Object.fromEntries(DASHBOARD_TABLES.map(t=>[t,[]]))});}
+          return;
+        }
+        let fq=()=>{let q=sb.from("families").select("*").is("archived_at",null);if(scope)q=q.ilike("advisor_email",likeExact(scope));return q.order("name").order("id");};
+        const fams=(await fetchAllRows(fq)).map(toClient);
+        const t=await loadFamiliesTables(fams.map(f=>f.id),DASHBOARD_TABLES);
+        if(!gone){setRecentNotes(undefined);setData({families:fams,...t});}
+      }catch(e){if(!gone)toast("Could not load the dashboard","error");}
+    })();
+    return()=>{gone=true;};
+  },[scope,nonce]);
+  const reload=useCallback(async()=>{setNonce(n=>n+1);},[]);
+  if(!summary||!data)return <Spinner/>;
+  return <Dashboard data={data} userProfile={userProfile} reload={reload} toast={toast} onOpenFamily={onOpenFamily}
+    summary={summary} scopeState={scopeState} listsLocked={listsLocked} recentNotes={recentNotes}/>;
 }
 
 // ── USER MANAGEMENT ───────────────────────────────────────────────────────────
@@ -17650,7 +17719,9 @@ export default function App(){
 
       <div style={{flex:1,minHeight:0,overflow:"hidden",background:B.bg,paddingBottom:"0"}}>
         {loading&&tab!=="families"&&tab!=="users"?<Spinner/>:<>
-          {tab==="dashboard"   &&<Dashboard key={navNonce} data={data} userProfile={userProfile} reload={reload} toast={showToast} onOpenFamily={(familyId,subTab)=>{setNavIntent({familyId,subTab});setTab("families");}}/>}
+          {tab==="dashboard"   &&(staffOnDemand
+            ?<DashboardOnDemand key={navNonce} userProfile={userProfile} toast={showToast} onOpenFamily={(familyId,subTab)=>{setNavIntent({familyId,subTab});setTab("families");}}/>
+            :<Dashboard key={navNonce} data={data} userProfile={userProfile} reload={reload} toast={showToast} onOpenFamily={(familyId,subTab)=>{setNavIntent({familyId,subTab});setTab("families");}}/>)}
           {tab==="families"    &&(staffOnDemand
             ?<FamiliesPagedView key={navNonce} toast={showToast} userProfile={userProfile} navIntent={navIntent} onNavConsumed={()=>setNavIntent(null)}/>
             :<FamiliesView key={navNonce} data={data} reload={reload} toast={showToast} userProfile={userProfile} navIntent={navIntent} onNavConsumed={()=>setNavIntent(null)}/>)}
