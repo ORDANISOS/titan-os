@@ -889,6 +889,51 @@ const toClient=obj=>{
 
 const TABLES=["families","contacts","properties","deals","notes","tasks","portfolio_accounts","account_balances","valuables","loans","documents","cash_flow_events","cash_flow_payment_log","note_attachments","deadline_acks","family_contacts","property_contacts","family_partners"];
 const FAMILY_SCOPED=["contacts","properties","deals","notes","tasks","portfolio_accounts","account_balances","valuables","loans","documents","cash_flow_events","cash_flow_payment_log","deadline_acks","family_contacts","property_contacts","family_partners"];
+
+// ── STAFF DATA ON DEMAND (scaling step 2, docs/PLAN-SCALING-STEP2.md) ──────────
+// Supabase returns at most 1,000 rows per request and says nothing when it stops, so anything that can be longer is
+// read page by page until a short page comes back. build() must return a fresh, ordered query each time.
+async function fetchAllRows(build){
+  const out=[];const size=1000;
+  for(let from=0;;from+=size){
+    const{data,error}=await build().range(from,from+size-1);
+    if(error)throw error;
+    out.push(...(data||[]));
+    if(!data||data.length<size)return out;
+  }
+}
+// The caller's own calendar date, so "overdue" on the server matches what the screen always showed.
+const localISODate=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
+// Everything one household's dashboard needs, in the same shape the old full download had (so FamilyDashboard works
+// on it unchanged, exactly as it does for a client). famRow is the household's own record (client-side names).
+async function loadHouseholdBundle(famRow,tables=FAMILY_SCOPED){
+  const lists=await Promise.all(tables.map(t=>fetchAllRows(()=>sb.from(t).select("*").eq("family_id",famRow.id).order("created_at",{ascending:false}).order("id"))));
+  const bundle={families:[famRow],note_attachments:[]};
+  FAMILY_SCOPED.forEach(t=>{bundle[t]=[];});
+  tables.forEach((t,i)=>{bundle[t]=lists[i].map(toClient);});
+  if(tables.includes("notes"))bundle.note_attachments=await loadNoteAttachments(bundle.notes.map(n=>n.id));
+  return bundle;
+}
+async function loadNoteAttachments(noteIds){
+  const out=[];
+  for(let i=0;i<noteIds.length;i+=200){
+    const ids=noteIds.slice(i,i+200);
+    out.push(...await fetchAllRows(()=>sb.from("note_attachments").select("*").in("note_id",ids).order("created_at",{ascending:false}).order("id")));
+  }
+  return out.map(toClient);
+}
+// Several households' rows for a few tables (the Expert print report). Ids go in groups so the request stays short.
+async function loadFamiliesTables(famIds,tables){
+  const out={};
+  for(const t of tables){
+    out[t]=[];
+    for(let i=0;i<famIds.length;i+=150){
+      const ids=famIds.slice(i,i+150);
+      out[t].push(...(await fetchAllRows(()=>sb.from(t).select("*").in("family_id",ids).order("created_at",{ascending:false}).order("id"))).map(toClient));
+    }
+  }
+  return out;
+}
 // Display label of the signed-in user, set at login; used to stamp task completions.
 let CURRENT_USER_LABEL="";
 let CURRENT_USER_ROLE="";
@@ -7034,6 +7079,200 @@ function FamiliesView({data,reload,toast,userProfile,navIntent,onNavConsumed}){
           </div>;
         })}
       </div>
+      </>}
+    </div>
+    {modal==="add"&&<Modal title="New Family" onClose={()=>setModal(null)}><FamilyForm userProfile={userProfile} advisors={advisors} onSave={add} onClose={()=>setModal(null)}/></Modal>}
+    {modal&&modal!=="add"&&<Modal title="Edit Family" onClose={()=>setModal(null)}><FamilyForm initial={modal} userProfile={userProfile} advisors={advisors} onSave={edit} onClose={()=>setModal(null)}/></Modal>}
+  </div>;
+}
+
+// ── STAFF: ONE HOUSEHOLD, LOADED WHEN OPENED (scaling step 2) ─────────────────
+// Loads the household's records when it is opened and hands them to the same FamilyDashboard the old full download
+// fed. reload(table) refreshes that table for this household only.
+function StaffHousehold({family,userProfile,toast,onBack,initialTab,onFamilyChanged}){
+  const[bundle,setBundle]=useState(null);
+  const[err,setErr]=useState("");
+  const famRef=useRef(family);
+  const loadAll=useCallback(async()=>{
+    try{setBundle(await loadHouseholdBundle(famRef.current));setErr("");}
+    catch(e){setErr(e.message||"Could not open this household.");}
+  },[]);
+  useEffect(()=>{loadAll();},[loadAll]);
+  const reload=useCallback(async table=>{
+    try{
+      if(!table){await loadAll();return;}
+      if(table==="families"){
+        const{data:row,error}=await sb.from("families").select("*").eq("id",famRef.current.id).maybeSingle();
+        if(error)throw error;
+        if(row){famRef.current=toClient(row);setBundle(b=>b&&{...b,families:[famRef.current]});if(onFamilyChanged)onFamilyChanged(famRef.current);}
+        return;
+      }
+      if(table==="note_attachments"){
+        const ids=(bundle?.notes||[]).map(n=>n.id);
+        const rows=await loadNoteAttachments(ids);
+        setBundle(b=>b&&{...b,note_attachments:rows});
+        return;
+      }
+      if(!FAMILY_SCOPED.includes(table))return;
+      const rows=(await fetchAllRows(()=>sb.from(table).select("*").eq("family_id",famRef.current.id).order("created_at",{ascending:false}).order("id"))).map(toClient);
+      setBundle(b=>b&&{...b,[table]:rows});
+    }catch(e){toast(`Error loading ${table||"this household"}`,"error");}
+  },[loadAll,bundle,toast,onFamilyChanged]);
+  if(err)return <div style={{padding:40,textAlign:"center"}}><div style={{color:"#8b1a1a",marginBottom:14}}>{err}</div><Btn onClick={onBack}>Back to families</Btn></div>;
+  if(!bundle)return <Spinner/>;
+  return <ViewErrorBoundary label="the family dashboard" onBack={onBack}>
+    <PrivateGate familyId={family.id} onBack={onBack}><FamilyDashboard family={bundle.families[0]} data={bundle} reload={reload} toast={toast} onBack={onBack} userProfile={userProfile} initialTab={initialTab}/></PrivateGate>
+  </ViewErrorBoundary>;
+}
+
+// ── STAFF: FAMILIES LIST, ONE PAGE AT A TIME (scaling step 2) ─────────────────
+// Used instead of FamiliesView when platform_config.staff_on_demand is on. The list, its counts, search and the Expert
+// filter come from staff_household_page (runs as the signed-in person, so the same access rules apply); the admin
+// "By ORDANIS Expert" cards from staff_expert_rollup.
+const FAMILIES_PAGE=50;
+function FamiliesPagedView({userProfile,toast,navIntent,onNavConsumed}){
+  const isMobile=useIsMobile();
+  const isAdmin=userProfile?.role==="admin";
+  const[advisors,setAdvisors]=useState([]);
+  useEffect(()=>{
+    if(isAdmin)sb.from("user_profiles").select("id,email,full_name,role").in("role",["advisor","admin"]).then(({data:rows,error})=>{if(!error&&rows)setAdvisors(rows);});
+  },[isAdmin]);
+  const[selected,setSelected]=useState(null);
+  const[intentTab,setIntentTab]=useState(null);
+  useEffect(()=>{
+    if(!navIntent||!navIntent.familyId)return;
+    sb.from("families").select("*").eq("id",navIntent.familyId).maybeSingle().then(({data:row})=>{
+      if(row){setSelected(toClient(row));setIntentTab(navIntent.subTab||null);}
+    });
+    if(onNavConsumed)onNavConsumed();
+  },[navIntent]);
+  const[modal,setModal]=useState(null);
+  const[search,setSearch]=useState("");
+  const[query,setQuery]=useState("");
+  useEffect(()=>{const t=setTimeout(()=>setQuery(search.trim()),300);return()=>clearTimeout(t);},[search]);
+  const[viewMode,setViewMode]=useState("families");
+  const[advisorFilter,setAdvisorFilter]=useState("");
+  const[showArchived,setShowArchived]=useState(false);
+  const[sort,setSort]=useState("name");
+  const[page,setPage]=useState(0);
+  useEffect(()=>{setPage(0);},[query,advisorFilter,showArchived,sort]);
+  const[rows,setRows]=useState([]);
+  const[total,setTotal]=useState(0);
+  const[loading,setLoading]=useState(true);
+  const[archivedCount,setArchivedCount]=useState(0);
+  const[rollup,setRollup]=useState([]);
+  const[nonce,setNonce]=useState(0);
+  const refresh=()=>setNonce(n=>n+1);
+  useEffect(()=>{
+    let gone=false;
+    setLoading(true);
+    sb.rpc("staff_household_page",{p_search:query||null,p_expert:advisorFilter||null,p_show_archived:showArchived,p_sort:sort,p_limit:FAMILIES_PAGE,p_offset:page*FAMILIES_PAGE,p_today:localISODate()}).then(({data,error})=>{
+      if(gone)return;
+      if(error){toast("Could not load families","error");setLoading(false);return;}
+      setRows((data||[]).map(r=>({fam:toClient(r.family),properties:Number(r.properties)||0,accounts:Number(r.accounts)||0,tasks:Number(r.open_tasks)||0,overdue:Number(r.overdue)||0,value:Number(r.value)||0})));
+      setTotal(Number((data||[])[0]?.total_count)||0);
+      setLoading(false);
+    });
+    return()=>{gone=true;};
+  },[query,advisorFilter,showArchived,sort,page,nonce]);
+  useEffect(()=>{
+    if(!isAdmin)return;
+    sb.from("families").select("id",{count:"exact",head:true}).not("archived_at","is",null).then(({count})=>setArchivedCount(count||0));
+  },[isAdmin,nonce]);
+  useEffect(()=>{
+    if(!isAdmin||viewMode!=="advisors")return;
+    sb.rpc("staff_expert_rollup",{p_today:localISODate()}).then(({data,error})=>{
+      if(error){toast("Could not load the ORDANIS Expert summary","error");return;}
+      const groups={};
+      (data||[]).forEach(r=>{const key=r.email||"__unassigned__";groups[key]={email:r.email||"",name:r.email?r.name:"Unassigned",unassigned:!r.email,families:Number(r.families)||0,value:Number(r.value)||0,openTasks:Number(r.open_tasks)||0,overdue:Number(r.overdue)||0};});
+      advisors.forEach(a=>{if(!groups[a.email])groups[a.email]={email:a.email,name:a.full_name||a.email,unassigned:false,families:0,value:0,openTasks:0,overdue:0};});
+      setRollup(Object.values(groups).sort((a,b)=>(b.value-a.value)||(b.families-a.families)));
+    });
+  },[isAdmin,viewMode,advisors,nonce]);
+  // The print report needs that Expert's households and their records: loaded when asked for, not at sign-in.
+  const printReport=async a=>{
+    try{
+      const fams=(await fetchAllRows(()=>sb.from("families").select("*").eq("advisor_email",a.email).is("archived_at",null).order("name").order("id"))).map(toClient);
+      const t=await loadFamiliesTables(fams.map(f=>f.id),["contacts","deals","tasks","notes","properties","portfolio_accounts"]);
+      printAdvisorReport(a,{families:fams,...t});
+    }catch(e){toast(e.message||"Could not build the report","error");}
+  };
+  const add=async f=>{const{error}=await sb.from("families").insert({name:f.name,plan:f.plan,advisor_name:f.advisorName||null,advisor_email:f.advisorEmail||null,notes:f.notes||null});if(error){toast(error.message,"error");return false;}else{toast("Family added");refresh();}};
+  const edit=async f=>{const{error}=await sb.from("families").update({name:f.name,plan:f.plan,advisor_name:f.advisorName||null,advisor_email:f.advisorEmail||null,notes:f.notes||null}).eq("id",modal.id);if(error){toast(error.message,"error");return false;}else{toast("Updated");refresh();}};
+  const back=()=>{setSelected(null);setIntentTab(null);refresh();};
+
+  if(selected)return <StaffHousehold key={selected.id} family={selected} userProfile={userProfile} toast={toast} onBack={back} initialTab={intentTab}/>;
+
+  const pages=Math.max(1,Math.ceil(total/FAMILIES_PAGE));
+  const pill=on=>({border:`1px solid ${on?B.gold:B.borderLight}`,background:on?"#fbf6ec":"transparent",color:on?B.navy:B.textSoft,borderRadius:16,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"});
+  return <div style={{height:"100%",display:"flex",flexDirection:"column",minHeight:0}}>
+    <div style={{padding:isMobile?"14px 16px 14px 72px":"14px 24px",borderBottom:`1px solid ${B.borderLight}`,background:B.white,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+      {isAdmin&&<div style={{display:"flex",background:B.bg,borderRadius:8,padding:3,border:`1px solid ${B.borderLight}`}}>
+        {[{k:"families",l:"Families"},{k:"advisors",l:"By ORDANIS Expert"}].map(t=><button key={t.k} onClick={()=>setViewMode(t.k)} style={{border:"none",borderRadius:6,padding:"7px 14px",fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",background:viewMode===t.k?B.white:"transparent",color:viewMode===t.k?B.navy:B.textSoft,boxShadow:viewMode===t.k?B.shadow:"none"}}>{t.l}</button>)}
+      </div>}
+      {viewMode==="families"&&<>
+        <Inp value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search families…" style={{flex:1,minWidth:160}}/>
+        <button onClick={()=>setSort(s=>s==="name"?"urgent":"name")} style={pill(sort==="urgent")} title="Change the order of the list">{sort==="urgent"?"Most urgent first":"A–Z"}</button>
+        {advisorFilter&&<button onClick={()=>setAdvisorFilter("")} style={pill(true)}>{advisorFilter} ✕</button>}
+        {isAdmin&&archivedCount>0&&<button onClick={()=>setShowArchived(v=>!v)} style={{...pill(false),background:showArchived?"#fde8e8":"transparent"}}>{showArchived?"Hide":"Show"} archived ({archivedCount})</button>}
+        <Btn onClick={()=>setModal("add")}>+ New Family</Btn>
+      </>}
+      {viewMode==="advisors"&&<div style={{flex:1,fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:B.navy,fontWeight:600}}>ORDANIS Expert Summary</div>}
+    </div>
+    <div style={{flex:1,overflowY:"auto",padding:"16px 24px"}}>
+      {viewMode==="advisors"&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(320px,100%),1fr))",gap:16}}>
+        {rollup.length===0&&<Empty text="No ORDANIS Experts or families yet."/>}
+        {rollup.map(a=><div key={a.email||"unassigned"} onClick={()=>{if(!a.unassigned){setAdvisorFilter(a.email);setViewMode("families");}}}
+          style={{background:B.white,borderRadius:12,border:`1px solid ${B.borderLight}`,borderTop:`3px solid ${a.unassigned?B.textMute:B.gold}`,padding:20,cursor:a.unassigned?"default":"pointer",boxShadow:B.shadow}}>
+          <div style={{marginBottom:12}}>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:a.unassigned?B.textMute:B.navy,fontWeight:600,marginBottom:2}}>{a.name}</div>
+            <div style={{fontSize:12,color:B.textSoft}}>{a.email||"Families with no ORDANIS Expert assigned"}</div>
+          </div>
+          <div style={{height:1,background:`linear-gradient(90deg,${a.unassigned?B.textMute:B.gold},transparent)`,marginBottom:12}}/>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(170px,100%),1fr))",gap:8}}>
+            {[{l:"AUM (Est.)",v:fmtMoney(a.value)},{l:"Families",v:a.families},{l:"Open Tasks",v:a.openTasks},{l:"Overdue",v:a.overdue}].map(item=><div key={item.l} style={{background:B.bg,borderRadius:6,padding:"8px 10px"}}>
+              <div style={{fontSize:9,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:2}}>{item.l}</div>
+              <div style={{fontSize:15,fontFamily:"'Cormorant Garamond',serif",color:item.l==="Overdue"&&a.overdue>0?"#8b1a1a":B.navy,fontWeight:600}}>{item.v}</div>
+            </div>)}
+          </div>
+          <div style={{marginTop:10,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+            {!a.unassigned&&<div style={{fontSize:12,color:B.gold,fontWeight:600}}>View families →</div>}
+            {!a.unassigned&&<button onClick={e=>{e.stopPropagation();printReport(a);}} style={{marginLeft:"auto",border:`1px solid ${B.navy}`,background:B.white,color:B.navy,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>🖨 Print Report</button>}
+          </div>
+        </div>)}
+      </div>}
+      {viewMode!=="advisors"&&<>
+        {loading&&rows.length===0&&<Spinner/>}
+        {!loading&&rows.length===0&&<Empty text={query?"No families match that search.":advisorFilter?"No families for this ORDANIS Expert.":"No families yet. Add your first one."}/>}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(300px,100%),1fr))",gap:16,opacity:loading?0.6:1}}>
+          {rows.map(({fam:f,...s})=><div key={f.id} onClick={()=>setSelected(f)} style={{background:B.white,borderRadius:12,border:`1px solid ${B.borderLight}`,borderTop:`3px solid ${B.gold}`,padding:20,cursor:"pointer",boxShadow:B.shadow}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+                  <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:B.navy,fontWeight:600}}>{f.name}</div>
+                  <span style={{fontSize:9,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",padding:"3px 7px",borderRadius:4,background:planAllows(f.plan,"workflows")?B.gold:B.borderLight,color:planAllows(f.plan,"workflows")?B.navy:B.textSoft}}>{planLabel(f.plan)}</span>
+                  {(f.archived_at||f.archivedAt)&&<span style={{fontSize:9,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",padding:"3px 7px",borderRadius:4,background:"#fde8e8",color:"#8b1a1a"}}>Archived</span>}
+                </div>
+                <div style={{fontSize:12,color:B.textSoft}}>{planAllows(f.plan,"assignedExpert")?(f.advisorName||"No ORDANIS Expert assigned"):"Self-directed"}</div>
+              </div>
+              <div style={{display:"flex",gap:6}} onClick={e=>e.stopPropagation()}><Btn small variant="ghost" onClick={()=>setModal(f)}>Edit</Btn></div>
+            </div>
+            <div style={{height:1,background:`linear-gradient(90deg,${B.gold},transparent)`,marginBottom:12}}/>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(280px,100%),1fr))",gap:8,marginBottom:12}}>
+              {[{l:"Est. Value",v:fmtMoney(s.value)},{l:"Properties",v:s.properties},{l:"Accounts",v:s.accounts},{l:"Open Tasks",v:s.tasks}].map(item=><div key={item.l} style={{background:B.bg,borderRadius:6,padding:"8px 10px"}}>
+                <div style={{fontSize:9,color:B.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:2}}>{item.l}</div>
+                <div style={{fontSize:15,fontFamily:"'Cormorant Garamond',serif",color:B.navy,fontWeight:600}}>{item.v}</div>
+              </div>)}
+            </div>
+            {s.overdue>0&&<Badge scheme={{bg:"#fde8e8",text:"#8b1a1a",dot:"#d43030"}}>{s.overdue} overdue task{s.overdue>1?"s":""}</Badge>}
+            <div style={{marginTop:10,fontSize:12,color:B.gold,fontWeight:600}}>Click to open dashboard →</div>
+          </div>)}
+        </div>
+        {total>FAMILIES_PAGE&&<div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:12,margin:"20px 0 8px"}}>
+          <Btn small variant="ghost" disabled={page===0||loading} onClick={()=>setPage(p=>Math.max(0,p-1))}>← Previous</Btn>
+          <span style={{fontSize:13,color:B.textSoft}}>Page {page+1} of {pages} · {total.toLocaleString()} families</span>
+          <Btn small variant="ghost" disabled={page>=pages-1||loading} onClick={()=>setPage(p=>Math.min(pages-1,p+1))}>Next →</Btn>
+        </div>}
       </>}
     </div>
     {modal==="add"&&<Modal title="New Family" onClose={()=>setModal(null)}><FamilyForm userProfile={userProfile} advisors={advisors} onSave={add} onClose={()=>setModal(null)}/></Modal>}
@@ -17225,6 +17464,15 @@ export default function App(){
     await Promise.all(TABLES.filter(t=>t!=="families").map(fetchTable));
   },[fetchTable]);
 
+  // Scaling step 2: staff screens that load on demand, behind platform_config.staff_on_demand (admins switch it on or
+  // off with no deploy). Until every staff screen has its on-demand version, the switch swaps in the finished screens
+  // while the full download below still runs for the rest; the download stops once the last screen is converted.
+  const[staffOnDemand,setStaffOnDemand]=useState(false);
+  useEffect(()=>{
+    if(!authed||!userProfile||mfaNeed!==false||userProfile.role==="client"||userProfile.role==="enterprise_admin")return;
+    sb.from("platform_config").select("staff_on_demand").maybeSingle().then(({data:row})=>setStaffOnDemand(!!row?.staff_on_demand));
+  },[authed,userProfile,mfaNeed]);
+
   useEffect(()=>{
     if(!authed||!userProfile||mfaNeed!==false)return; // load nothing until two-step sign-in is done
     (async()=>{
@@ -17403,7 +17651,9 @@ export default function App(){
       <div style={{flex:1,minHeight:0,overflow:"hidden",background:B.bg,paddingBottom:"0"}}>
         {loading&&tab!=="families"&&tab!=="users"?<Spinner/>:<>
           {tab==="dashboard"   &&<Dashboard key={navNonce} data={data} userProfile={userProfile} reload={reload} toast={showToast} onOpenFamily={(familyId,subTab)=>{setNavIntent({familyId,subTab});setTab("families");}}/>}
-          {tab==="families"    &&<FamiliesView key={navNonce} data={data} reload={reload} toast={showToast} userProfile={userProfile} navIntent={navIntent} onNavConsumed={()=>setNavIntent(null)}/>}
+          {tab==="families"    &&(staffOnDemand
+            ?<FamiliesPagedView key={navNonce} toast={showToast} userProfile={userProfile} navIntent={navIntent} onNavConsumed={()=>setNavIntent(null)}/>
+            :<FamiliesView key={navNonce} data={data} reload={reload} toast={showToast} userProfile={userProfile} navIntent={navIntent} onNavConsumed={()=>setNavIntent(null)}/>)}
           {tab==="portfolio"   &&<PortfolioView key={navNonce} data={data} reload={reload} toast={showToast} userProfile={userProfile}/>}
           {tab==="cm-notes"    &&<NotesView key={navNonce} data={{...data,notes:data.notes.filter(n=>n.familyId)}} reload={reload} toast={showToast} userProfile={userProfile}/>}
           {tab==="cm-tasks"    &&<TasksView key={navNonce} data={{...data,tasks:data.tasks.filter(t=>t.familyId)}} reload={reload} toast={showToast} userProfile={userProfile}/>}
