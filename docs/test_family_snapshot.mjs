@@ -44,8 +44,11 @@ const ok = (n, c, d) => { if (c) { pass++; console.log(`  ok   ${n}`); } else { 
 
 // ── Build a callable copy of the real App.jsx ─────────────────────────────────
 mkdirSync(tmp, { recursive: true });
-const appSrc = readFileSync(join(repo, "src/App.jsx"), "utf8")
-  + "\n\nexport { buildFamilySnapshot, buildVendorOptions, FIRM_DEFAULTS };\n";
+// App.jsx now exports some names itself (shared with staff.jsx), so only the ones it doesn't already export are added.
+const appText = readFileSync(join(repo, "src/App.jsx"), "utf8");
+const alreadyExported = new Set([...appText.matchAll(/^export \{([^}]*)\}/gm)].flatMap(m => m[1].split(",").map(s => s.trim())));
+const testExports = ["buildFamilySnapshot", "buildVendorOptions", "FIRM_DEFAULTS"].filter(n => !alreadyExported.has(n));
+const appSrc = appText + (testExports.length ? `\n\nexport { ${testExports.join(", ")} };\n` : "");
 writeFileSync(join(tmp, "App.jsx"), appSrc);
 // Copy EVERY sibling module, not a hardcoded list. App.jsx gained an import of
 // vaultFolders.js and the hardcoded list silently broke the bundle — the test failed for a
